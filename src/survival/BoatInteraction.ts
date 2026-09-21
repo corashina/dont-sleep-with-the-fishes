@@ -44,6 +44,7 @@ export interface BoatInteractionAnchor {
   readonly brokenQuantity?: number;
   readonly backingInstanceId?: import('../game/ItemState').ItemInstanceId | null;
   readonly hitArea?: BoatInteractionHitArea;
+  readonly hitTest?: (x: number, y: number) => boolean;
 }
 
 export function projectBoatObjectBoundsInto(

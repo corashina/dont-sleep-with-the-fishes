@@ -239,9 +239,8 @@ export class FlyingSaucerPresentation implements FocusedEventPresentation {
   }
 
   private finish(kind: Animation): void {
-    this.cruising = kind === 'reveal';
+    this.cruising = kind !== 'beam';
     this.root.userData.state = kind === 'beam' ? 'hit' : kind === 'pass' ? 'passed' : 'revealed';
-    if (kind === 'pass') this.root.visible = false;
   }
 
   private acquireCamera(): void {

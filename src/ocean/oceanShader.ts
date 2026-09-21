@@ -78,7 +78,7 @@ interface OceanShaderQuality {
 const LOW_DEFINES = Object.freeze({});
 const HIGH_DEFINES = Object.freeze({ HIGH_QUALITY_WATER: 1 });
 
-const OCEAN_SHADER_QUALITY = Object.freeze({
+export const OCEAN_SHADER_QUALITY = Object.freeze({
   low: Object.freeze({
     deepColor: 0x162c35,
     shallowColor: 0x42656a,

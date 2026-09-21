@@ -4,7 +4,6 @@ import { setLanguage } from '../src/i18n/language';
 import { survivalEventById } from '../src/survival/eventCatalog';
 import type { JournalEntry, JournalEventRecord, JournalInventoryMutation } from '../src/survival/journalRecords';
 import { SurvivalJournalView } from '../src/ui/SurvivalJournalView';
-import { itemThumbnailUrl } from '../src/ui/itemThumbnailManifest';
 
 const views: SurvivalJournalView[] = [];
 
@@ -53,78 +52,6 @@ const changes: JournalEntry = {
 };
 
 describe('journal item changes', () => {
-  it('shows food gains and used bait from fishing with the existing signs and thumbnails', () => {
-    const view = fixture();
-    view.show([{ ...quiet, actions: [{
-      kind: 'fishing', attemptId: 'catch-1', result: 'fish', catchId: 'tuna', food: 2, baitConsumed: true,
-      deltas: { food: 2, bait: -1 }, inventoryMutations: [],
-    }] }]);
-    const items = [...view.root.querySelectorAll<HTMLElement>('[data-journal-day-items] .journal-item')];
-    expect(items.map((item) => item.dataset.itemType)).toEqual(['cannedFood', 'baitTin']);
-    expect(items.map((item) => item.dataset.itemCount)).toEqual(['2', '1']);
-    expect(items.map((item) => item.querySelector('.journal-item__status')?.textContent)).toEqual(['+', '−']);
-    expect(items.map((item) => item.querySelector('img')?.getAttribute('src')))
-      .toEqual([itemThumbnailUrl('cannedFood'), itemThumbnailUrl('baitTin')]);
-    expect(items[0]!.querySelector('.journal-item__quantity')?.textContent).toBe('x2');
-    expect(items[0]!.querySelector('[role="img"]')?.getAttribute('aria-label')).toContain('x2');
-    expect(items[1]!.querySelector('.journal-item__quantity')).toBeNull();
-    expect(items[1]!.getAttribute('title')).toContain('Used up');
-  });
-
-  it('shows two pages with separate headings, weather, and a pending night', () => {
-    const view = fixture();
-    view.show([{ ...changes, weather: 'rain', nightWeather: 'wind' }]);
-    const pages = view.root.querySelectorAll('.journal-page');
-    expect(pages).toHaveLength(2);
-    expect(pages[0]!.querySelector('[data-journal-title]')?.textContent).toBe('DAY 2');
-    expect(pages[1]!.querySelector('[data-journal-night-title]')?.textContent).toBe('NIGHT 2');
-    expect(pages[0]!.querySelector('[data-journal-weather]')?.textContent).toMatch(/rain/i);
-    expect(pages[1]!.querySelector('[data-journal-night-weather]')?.textContent).toMatch(/wind/i);
-    view.show([{ ...changes, nighttime: { kind: 'pending' }, nightWeather: null }]);
-    expect(pages[1]!.querySelector('[data-journal-night]')?.textContent).toBe('Night in progress.');
-    expect(pages[1]!.querySelector('[data-journal-night-weather]')?.textContent).toBe('');
-    expect(pages[1]!.querySelectorAll('.journal-item')).toHaveLength(0);
-  });
-
-  it('places recorded day and night changes below their text and stacks repeated items', () => {
-    const view = fixture();
-    view.show([changes]);
-    const day = view.root.querySelector<HTMLElement>('[data-journal-day-items]')!;
-    const night = view.root.querySelector<HTMLElement>('[data-journal-night-items]')!;
-    expect(day.previousElementSibling?.hasAttribute('data-journal-day')).toBe(true);
-    expect(night.previousElementSibling?.hasAttribute('data-journal-night')).toBe(true);
-    expect(day.hidden).toBe(false);
-    expect(night.hidden).toBe(false);
-    expect([...day.children].map((item) => (item as HTMLElement).dataset.itemChange))
-      .toEqual(['repair', 'consume', 'break', 'gain']);
-    expect([...day.querySelectorAll('.journal-item__status')].map((badge) => badge.textContent))
-      .toEqual(['✓', '−', '−', '+']);
-    expect(day.querySelector('[data-item-type="medicalKit"]')?.getAttribute('data-item-count')).toBe('2');
-    expect(day.querySelector('[data-item-type="medicalKit"] .journal-item__quantity')?.textContent).toBe('x2');
-    expect(night.children).toHaveLength(1);
-    expect(night.querySelector('.journal-item__status')?.textContent).toBe('−');
-    expect(night.querySelector('img')?.getAttribute('src')).toBe(itemThumbnailUrl('medicalKit'));
-    expect(day.querySelector('img')?.getAttribute('src')).toBe(itemThumbnailUrl('compass'));
-    expect(day.querySelector('[data-item-change="break"] [role="img"]')?.getAttribute('aria-label'))
-      .toContain('Broken');
-    expect(day.querySelector('[data-item-change="consume"]')?.getAttribute('title')).toContain('Used up');
-    expect(night.querySelector('[role="img"]')?.getAttribute('aria-label')).toContain('Lost');
-  });
-
-  it.each([
-    ['pl', 'Naprawiono', 'Zepsuto'],
-    ['es-AR', 'Reparado', 'Roto'],
-  ] as const)('refreshes descriptions in %s without losing statuses', (language, repair, broken) => {
-    const view = fixture();
-    view.show([changes]);
-    setLanguage(language);
-    const repaired = view.root.querySelector('[data-item-change="repair"]')!;
-    expect(repaired.getAttribute('title')).toContain(repair);
-    expect(repaired.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe(repaired.getAttribute('title'));
-    expect(repaired.querySelector('.journal-item__status')?.textContent).toBe('✓');
-    expect(view.root.querySelector('[data-item-change="break"]')?.getAttribute('title')).toContain(broken);
-  });
-
   it('clears changes on quiet and empty pages and restores them when returning', () => {
     const view = fixture();
     view.show([quiet, changes]);

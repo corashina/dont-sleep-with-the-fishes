@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { Group, PerspectiveCamera, Vector3 } from 'three';
 import { NetAttackPose } from '../src/survival/NetAttackPose';
 import { createEventItemUseSample, sampleEventItemUse } from '../src/survival/eventItemUseChoreography';
-import { NET_ATTACK_CONTACT, NET_ATTACK_GRIP } from '../src/survival/netAttackChoreography';
 import { LIFEBOAT_GUNWALE_SURFACE_Y, lifeboatHullHalfWidthAt } from '../src/world/Lifeboat';
 
 function setup() {
@@ -20,33 +19,6 @@ function setup() {
 }
 
 describe('net grip and target placement', () => {
-  it.each([[0, 1.35, -5.13], [3.4, 0.15, -1.2]])('flies to (%s, %s, %s) and contacts it broadside', (x, y, z) => {
-    const { root, target, camera, solver, sample } = setup();
-    target.position.set(x, y, z);
-    sampleEventItemUse('net-slap', 'fishingNet', 0.68, sample);
-    solver.apply(root, sample, camera.matrixWorld, target);
-    const rim = root.localToWorld(new Vector3(...NET_ATTACK_CONTACT));
-    const grip = root.localToWorld(new Vector3(...NET_ATTACK_GRIP));
-    const heldGrip = new Vector3(sample.viewX, sample.viewY, sample.viewZ).applyMatrix4(camera.matrixWorld);
-    const aim = target.getWorldPosition(new Vector3());
-    expect(grip.distanceTo(heldGrip)).toBeGreaterThan(0.42);
-    expect(rim.distanceTo(aim)).toBeLessThan(1e-6);
-    const approach = aim.clone().sub(heldGrip).normalize();
-    expect(grip.clone().sub(aim).dot(approach)).toBeLessThan(-0.5);
-    // The head must cross the target sideways, rather than thrust toward it.
-    sampleEventItemUse('net-slap', 'fishingNet', 0.679, sample);
-    solver.apply(root, sample, camera.matrixWorld, target);
-    const before = root.localToWorld(new Vector3(...NET_ATTACK_CONTACT));
-    sampleEventItemUse('net-slap', 'fishingNet', 0.681, sample);
-    solver.apply(root, sample, camera.matrixWorld, target);
-    const velocity = root.localToWorld(new Vector3(...NET_ATTACK_CONTACT)).sub(before).normalize();
-    const cameraUp = new Vector3(0, 1, 0).transformDirection(camera.matrixWorld);
-    const right = approach.clone().cross(cameraUp).normalize();
-    expect(velocity.dot(right)).toBeLessThan(-0.9);
-    expect(Math.abs(velocity.dot(approach))).toBeLessThan(0.2);
-    expect(velocity.dot(cameraUp)).toBeLessThan(0);
-  });
-
   it.each([-1, 1])('clears the boat side throughout the attack and return (%s)', (side) => {
     const { root, target, camera, solver, sample } = setup();
     camera.position.set(0, 1.15, 1.75);

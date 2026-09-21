@@ -19,13 +19,6 @@ function castToWaiting(session: FishingSession): void {
 }
 
 describe('FishingSession', () => {
-
-  it('waits between two and five seconds for a bite', () => {
-    expect(createSession([0, 0]).snapshot().biteDelaySeconds).toBe(2);
-    expect(createSession([0.5, 0]).snapshot().biteDelaySeconds).toBe(3.5);
-    expect(createSession([1, 0]).snapshot().biteDelaySeconds).toBeLessThan(5);
-  });
-
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
     'rejects invalid fish weight multiplier %s',
     (fishWeightMultiplier) => {

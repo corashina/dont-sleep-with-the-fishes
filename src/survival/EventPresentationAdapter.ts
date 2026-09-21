@@ -38,6 +38,7 @@ export interface EventPresentationAdapter {
   interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;
   resultRoot(id: string): Object3D | null;
+  prepareReaction?(reaction: EventPresentationReaction): void;
   react(reaction: EventPresentationReaction): Promise<void>;
   update(time: number, delta: number): void;
   settleForVisibilityChange(): void;

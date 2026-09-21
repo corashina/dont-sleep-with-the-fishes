@@ -261,6 +261,7 @@ export class SurvivalPhase implements GamePhase {
   private itemAnimationLab = false;
   private itemAnimationLabCameraControls: ItemAnimationLabCameraControls | null = null;
   private rearCameraView = false;
+  private readonly endingPreviewCue: 'death' | 'sinking' | null;
 
   constructor(
     context: SurvivalPhaseContext,
@@ -277,6 +278,10 @@ export class SurvivalPhase implements GamePhase {
     onReturnToMenu: () => void,
     testDependencies?: SurvivalPhaseTestDependencies,
   ) {
+    this.endingPreviewCue = start.kind === 'ending-preview'
+      && (start.endingId === 'death' || start.endingId === 'sinking')
+      ? start.endingId
+      : null;
     const initialEventId = start.kind === 'fresh' ? start.initialEventId : undefined;
     const initialEventResultId = start.kind === 'fresh'
       ? start.initialEventResultId
@@ -839,7 +844,11 @@ export class SurvivalPhase implements GamePhase {
       else if (eventId === 'chest-attack') this.audio.chestAttackCue(cue);
       else this.audio.checkBackCue(cue);
     });
-    this.world.setLightningStrikeListener?.(() => this.audio.thunder());
+    this.world.setThunderListener?.(() => this.audio.thunder());
+    this.world.setSinkingSoundListener?.((cue) => {
+      if (cue === 'strain') this.ui.beginEndingSequence?.();
+      this.audio.sinkingCue(cue);
+    });
     this.wireUI();
   }
 
@@ -1045,16 +1054,35 @@ export class SurvivalPhase implements GamePhase {
         this.reportFocusedError(this.presentRescueEnding(snapshot.ending));
         return;
       }
+      if (this.shouldPresentLossEnding(snapshot.ending.id)) {
+        this.reportFocusedError(this.presentLossEnding(snapshot.ending, snapshot.ending.id));
+        return;
+      }
       this.audio.ending(snapshot.ending.id);
       this.ui.showEnding?.(snapshot.ending);
     }
+  }
+
+  private shouldPresentLossEnding(id: SurvivalEndingId): boolean {
+    return id === 'sinking' || this.endingPreviewCue !== null;
+  }
+
+  private async presentLossEnding(
+    ending: Exclude<NonNullable<SurvivalSnapshot['ending']>, { id: 'dorothy' | 'rescue' }>,
+    cue: 'death' | 'sinking',
+  ): Promise<void> {
+    const generation = this.lifecycleGeneration;
+    await (this.world.play?.(cue) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    this.audio.ending(ending.id);
+    this.ui.showEnding?.(ending);
   }
 
   private async presentRescueEnding(
     ending: Extract<NonNullable<SurvivalSnapshot['ending']>, { id: 'rescue' }>,
   ): Promise<void> {
     const generation = this.lifecycleGeneration;
-    this.ui.beginRescueEnding?.();
+    this.ui.beginEndingSequence?.();
     this.audio.clearEvent();
     this.world.clearEvent?.();
     this.eventBundles.releaseActive();

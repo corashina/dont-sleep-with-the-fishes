@@ -31,6 +31,7 @@ export type FocusedEventInteractionTarget = {
   readonly tooltip?: boolean;
   readonly minimumHitWidth?: number;
   readonly minimumHitHeight?: number;
+  readonly preciseHitTest?: boolean;
 } & (
   | { readonly choiceId: string; readonly focusEventId?: never }
   | { readonly focusEventId: InspectableEventId; readonly choiceId?: never }
@@ -43,6 +44,10 @@ export interface FocusedEventPresentation {
   stage(variantSeed?: number): void;
   reveal(): Promise<void>;
   playChoice(choice: EventChoicePresentation): Promise<void>;
+  prepareResult?(
+    result: EventResultPresentation,
+    outcome: ActionOutcome,
+  ): void;
   react(
     result: EventResultPresentation,
     outcome: ActionOutcome,

@@ -63,6 +63,7 @@ import {
 import { alignDirectionalLightWithSun, SURVIVAL_CELESTIAL_DIRECTION } from '../world/celestialLight';
 import { Skybox } from '../world/Skybox';
 import { WeatherEffects } from '../world/WeatherEffects';
+import { BoatRainEffects } from '../world/BoatRainEffects';
 import type { SkyPalette, SkyState } from '../world/skyPalette';
 import {
   type BoatInteractionAnchor,
@@ -70,6 +71,7 @@ import {
 } from './BoatInteraction';
 import { BoatInteractionProjector } from './BoatInteractionProjector';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
+import { SIREN_SCENE_OFFSET_Z } from './SirenAppearance';
 import { BoatCameraController } from './BoatCameraController';
 import { CarlitosPresentation, CARLITOS_FEED_DURATION } from './CarlitosPresentation';
 import { ChestDisplay } from './ChestDisplay';
@@ -143,6 +145,7 @@ import {
 } from './SurvivalEventModelLibrary';
 import { RepairToolboxAnimation } from './RepairToolboxAnimation';
 import { RescueEndingPresentation } from './RescueEndingPresentation';
+import { SinkingEndingPresentation, SINKING_DURATION, type SinkingSoundCue } from './SinkingEndingPresentation';
 import { FishingCatchLibrary, type FishingCatchModelLoader } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 
@@ -162,7 +165,7 @@ const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {
   dawn: 1.1,
   rescue: 0,
   death: 1.5,
-  sinking: 1.5,
+  sinking: SINKING_DURATION,
 };
 const EMPTY_EVENT_PHYSICAL_RESPONSE: EventPhysicalResponsePresentation = Object.freeze({
   choiceId: 'sleep',
@@ -281,6 +284,7 @@ function blocksEventItemUse(
   choiceId: string,
   itemId: ItemId | null,
 ): boolean {
+  if (eventId === 'something-under-us' && itemId === 'flashlight') return true;
   if (eventId === 'windy-night' && choiceId === 'fishingNet' && itemId === 'fishingNet') return true;
   return eventId === 'flowers' && choiceId === 'bucket' && itemId === 'bucket';
 }
@@ -326,11 +330,18 @@ function physicalResponseFromEventChoice(
 
 export class BoatWorld {
   private rescueEnding: RescueEndingPresentation | null = null;
+  private sinkingEnding: SinkingEndingPresentation | null = null;
+  private sinkingSoundListener: ((cue: SinkingSoundCue) => void) | null = null;
+
+  setSinkingSoundListener(listener: (cue: SinkingSoundCue) => void): void {
+    this.sinkingSoundListener = listener;
+  }
   readonly scene: Scene;
   private readonly camera: PerspectiveCamera;
   private readonly ocean: OceanRenderer;
   private readonly sky: Skybox;
   private readonly weatherEffects: WeatherEffects;
+  private readonly boatRainEffects: BoatRainEffects;
   private readonly motionRig = new Group();
   private readonly cueCameraRig = new Group();
   private readonly featuredEventCameraRig = new Group();
@@ -348,6 +359,7 @@ export class BoatWorld {
   private readonly ownedTextures = new Set<Texture>();
   private readonly oceanAtmosphere = {
     phase: 'day' as 'day' | 'night',
+    denseFog: false,
     fogColor: new Color(),
     horizonColor: new Color(),
     skyColor: new Color(),
@@ -473,10 +485,10 @@ export class BoatWorld {
   private activeSequence: ActiveSequence | null = null;
   private settledCue: PresentationCue | null = null;
   private weatherEventOperation = 0;
-  private lightningStrikePending = false;
-  private lightningStrikeListener: (() => void) | null = null;
-  private readonly queueLightningStrike = (): void => {
-    this.lightningStrikePending = true;
+  private thunderPending = false;
+  private thunderListener: (() => void) | null = null;
+  private readonly queueThunder = (): void => {
+    this.thunderPending = true;
   };
   private disposed = false;
   constructor(
@@ -512,6 +524,7 @@ export class BoatWorld {
     this.originalCameraQuaternion = camera.quaternion.clone();
     let sky: Skybox | null = null;
     let weatherEffects: WeatherEffects | null = null;
+    let boatRainEffects: BoatRainEffects | null = null;
     let sleepPillow: SleepPillow | null = null;
     let hangingLantern: HangingLantern | null = null;
     let carlitos: CarlitosPresentation | null = null;
@@ -535,7 +548,7 @@ export class BoatWorld {
       this.sky = sky;
       weatherEffects = new WeatherEffects(this.scene);
       this.weatherEffects = weatherEffects;
-      weatherEffects.setLightningStrikeListener(this.queueLightningStrike);
+      weatherEffects.setThunderListener(this.queueThunder);
 
       const resolvedLifeboatAssets = this.resolveLifeboatAssets(lifeboatAssets);
       const build = createLifeboat(resolvedLifeboatAssets);
@@ -554,6 +567,8 @@ export class BoatWorld {
       );
       this.oceanExclusions = [this.oceanExclusion];
       collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
+      boatRainEffects = new BoatRainEffects(this.boat);
+      this.boatRainEffects = boatRainEffects;
       this.flowersDeckTarget.name = 'flowers-deck-target';
       this.flowersDeckTarget.position.set(
         FLOWERS_DECK_TARGET.x,
@@ -704,6 +719,7 @@ export class BoatWorld {
       this.interactionProjector = new BoatInteractionProjector(
         this.camera,
         {
+          boatRoot: this.boat,
           supplyRecords: this.supplyDisplay.records(),
           carlitosRoot: this.carlitos.root,
           carlitosInteractionRoot: this.carlitos.interactionRoot,
@@ -741,6 +757,7 @@ export class BoatWorld {
           () => hangingLantern?.dispose(),
           () => sleepPillow?.dispose(),
           () => weatherEffects?.dispose(),
+          () => boatRainEffects?.dispose(),
           () => sky?.dispose(),
           () => this.scene.clear(),
           () => camera.removeFromParent(),
@@ -943,6 +960,7 @@ export class BoatWorld {
     this.weatherProfile = presentationWeatherProfile(id);
     this.skyState.weather = this.weatherProfile.skyWeather;
     this.weatherEffects.setWeather(id);
+    this.boatRainEffects.setIntensity(this.weatherProfile.rainIntensity);
   }
 
   settlePresentationEnvironment(time: number): void {
@@ -958,12 +976,13 @@ export class BoatWorld {
       fog.density,
       this.oceanAtmosphere,
     );
+    this.weatherEffects.setLightningView(this.camera);
     this.weatherEffects.update(time, 0, this.worldCameraPosition);
     this.ocean.follow(this.worldCameraPosition.x, this.worldCameraPosition.z);
   }
 
-  setLightningStrikeListener(listener: () => void): void {
-    this.lightningStrikeListener = listener;
+  setThunderListener(listener: () => void): void {
+    this.thunderListener = listener;
   }
 
   setEventCueHandler(handler: (cue: EventPresentationCue) => void): void {
@@ -1038,9 +1057,12 @@ export class BoatWorld {
     );
   }
 
-  setEventEligibleItems(instanceIds: ReadonlySet<ItemInstanceId> | null): void {
+  setEventEligibleItems(
+    instanceIds: ReadonlySet<ItemInstanceId> | null,
+    itemTypes?: ReadonlySet<ItemId>,
+  ): void {
     if (this.disposed) return;
-    this.supplyDisplay.setEventEligibleItems(instanceIds);
+    this.supplyDisplay.setEventEligibleItems(instanceIds, itemTypes);
   }
 
   setAvailableDayActions(actions: readonly DayActionId[]): void {
@@ -1194,11 +1216,7 @@ export class BoatWorld {
     const route = eventPresentationRoute(eventId);
     if (route === null) throw new Error(`Missing event presentation route: ${eventId}`);
     this.ensureEventPresenter(eventId as SurvivalEventId);
-    const carlitosEventSide = this.carlitosSeatSideForEvent(
-      eventId,
-      resolvedVariantSeed ?? 0,
-    );
-    this.setCarlitosEventSide(carlitosEventSide);
+    this.setEventScenery(eventId, resolvedVariantSeed ?? 0);
     this.activeFeaturedEventId = route === 'featured'
       ? eventId as FeaturedEventId
       : null;
@@ -1302,7 +1320,10 @@ export class BoatWorld {
     return this.playFeaturedPresentation(driftingItemRetrieveKey(eventId)).then(() => {
       if (this.disposed) return;
       const eventCargo = this.eventPresentationHost.resultRoot(eventId);
-      if (eventCargo !== null) eventCargo.visible = false;
+      // Keep a new chest visible until event cleanup syncs it into boat storage.
+      if (eventCargo !== null && (eventId !== 'drifting-chest' || coverPersistentChest)) {
+        eventCargo.visible = false;
+      }
       if (coverPersistentChest) this.chestDisplay.restorePose();
     });
   }
@@ -1329,6 +1350,20 @@ export class BoatWorld {
     height: number,
   ): ProjectedBoatBounds | null {
     return this.interactionProjector.projectEventInteraction(eventId, width, height);
+  }
+
+  prepareEventOutcome(eventId: string, outcome: ActionOutcome): void {
+    if (this.disposed) return;
+    if (!isEventPresentationRoute(eventId, 'focused')) {
+      throw new Error(`Only focused event outcomes can be prepared: ${eventId}`);
+    }
+    this.ensureEventPresenter(eventId);
+    this.eventPresentationHost.prepareReaction({
+      outcome,
+      physicalResponse: EMPTY_EVENT_PHYSICAL_RESPONSE,
+      result: null,
+      choice: null,
+    });
   }
 
   async reactToEventOutcome(
@@ -1367,6 +1402,7 @@ export class BoatWorld {
 
   clearEvent(): void {
     if (this.disposed) return;
+    this.weatherEffects.setMistOffsetZ(0);
     this.cameraController.cancelFocusedEventView();
     this.weatherEventOperation += 1;
     this.setCarlitosEventSide(null);
@@ -1493,9 +1529,18 @@ export class BoatWorld {
 
   play(cue: PresentationCue): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    if (cue === 'sinking' && this.settledCue === 'sinking') return Promise.resolve();
     this.cancelActiveSequence();
+    this.sinkingEnding?.dispose();
+    this.sinkingEnding = null;
     this.settledCue = null;
     this.applyBasePresentation();
+    if (cue === 'sinking') {
+      this.sinkingEnding = new SinkingEndingPresentation(
+        this.boatEffectsRoot, this.cueCameraRig, this.camera,
+        (sound) => this.sinkingSoundListener?.(sound),
+      );
+    }
     const duration = CUE_DURATION[cue];
     if (duration === 0) return Promise.resolve();
 
@@ -1563,6 +1608,8 @@ export class BoatWorld {
     else this.updateAmbientScenePresentation(time);
     this.diveController.applyPostEntryHoldCamera();
     this.rescueEnding?.update(advancePresentation ? delta : 0, time, amplitudeScale);
+    // Event poses can write the boat rig. The terminal pose owns the final frame.
+    this.sinkingEnding?.apply(this.activeSequence?.elapsed ?? SINKING_DURATION);
     setSceneBinocularMaskStrength(
       this.scene,
       this.itemEffects.binocularMaskStrength,
@@ -1576,8 +1623,10 @@ export class BoatWorld {
     this.oceanExclusion.worldToLocal.copy(this.boat.matrixWorld).invert();
     this.ocean.setExclusions(this.oceanExclusions);
     this.camera.getWorldPosition(this.worldCameraPosition);
+    this.weatherEffects.setLightningView(this.camera);
     this.weatherEffects.update(time, delta, this.worldCameraPosition);
-    this.dispatchPendingLightningStrike();
+    this.boatRainEffects.update(time, delta);
+    this.dispatchPendingThunder();
     this.ocean.follow(this.worldCameraPosition.x, this.worldCameraPosition.z);
   }
 
@@ -1585,6 +1634,7 @@ export class BoatWorld {
     const fog = this.scene.fog as FogExp2;
     const atmosphere = this.sky.palette;
     this.oceanAtmosphere.phase = this.skyState.phase;
+    this.oceanAtmosphere.denseFog = this.weatherProfile.id === 'fog';
     this.oceanAtmosphere.fogColor.copy(fog.color);
     this.oceanAtmosphere.horizonColor.copy(atmosphere.horizonColor);
     this.oceanAtmosphere.skyColor.copy(atmosphere.zenithColor);
@@ -1634,10 +1684,10 @@ export class BoatWorld {
     );
   }
 
-  private dispatchPendingLightningStrike(): void {
-    if (!this.lightningStrikePending) return;
-    this.lightningStrikePending = false;
-    this.lightningStrikeListener?.();
+  private dispatchPendingThunder(): void {
+    if (!this.thunderPending) return;
+    this.thunderPending = false;
+    this.thunderListener?.();
   }
 
   private currentFocusedEventAimTarget(): Object3D | null {
@@ -1650,6 +1700,7 @@ export class BoatWorld {
     if (this.disposed) return;
     runCleanupSteps([
       () => this.rescueEnding?.dispose(),
+      () => this.sinkingEnding?.dispose(),
       () => this.setHighlightedItem(null),
       () => this.toolHoverOutline.dispose(),
       () => this.fishingAvailableOutline.dispose(),
@@ -1661,8 +1712,8 @@ export class BoatWorld {
       () => {
         this.disposed = true;
         this.weatherEventOperation += 1;
-        this.lightningStrikePending = false;
-        this.lightningStrikeListener = null;
+        this.thunderPending = false;
+        this.thunderListener = null;
       },
       () => this.interactionProjector.dispose(),
       () => this.cancelActiveSequence(),
@@ -1687,6 +1738,7 @@ export class BoatWorld {
       () => this.fishingPresentation.disposeCatches(),
       () => this.ocean.dispose(),
       () => this.weatherEffects.dispose(),
+      () => this.boatRainEffects.dispose(),
       () => this.fishingPresentation.disposeParticles(),
       () => this.sky.dispose(),
       () => this.fishingPresentation.detach(),
@@ -1766,7 +1818,7 @@ export class BoatWorld {
     this.key.intensity = atmosphere.keyLightIntensity * lightScale;
     const night = this.skyState.phase === 'night';
     this.dayCloudBounce.intensity = night
-      ? 0
+      ? this.weatherProfile.rainIntensity * 0.45
       : DAY_CLOUD_BOUNCE_INTENSITY * lightScale;
     this.hangingLantern.setNight(night);
     if (this.scene.background instanceof Color) {
@@ -1826,7 +1878,7 @@ export class BoatWorld {
         this.camera.rotateX(-pulse * 0.045);
         break;
       case 'sinking':
-        this.motionRig.position.y -= eased * 1.05;
+        this.sinkingEnding?.apply(clamp(progress, 0, 1) * SINKING_DURATION);
         break;
       default:
         break;
@@ -1875,6 +1927,11 @@ export class BoatWorld {
     const sequence = this.activeSequence;
     this.activeSequence = null;
     sequence?.resolve();
+  }
+
+  private setEventScenery(eventId: string, variantSeed: number): void {
+    this.weatherEffects.setMistOffsetZ(eventId === 'eerie-melody' ? SIREN_SCENE_OFFSET_Z : 0);
+    this.setCarlitosEventSide(this.carlitosSeatSideForEvent(eventId, variantSeed));
   }
 
   private carlitosSeatSideForEvent(

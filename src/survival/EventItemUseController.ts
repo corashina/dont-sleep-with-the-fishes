@@ -10,6 +10,7 @@ import {
   eventItemActionCueProgresses,
   eventItemOutcomeDuration,
   eventItemUseDurationForItem,
+  isReturningSingleUseContext,
   sampleEventItemOutcome,
   sampleEventItemUse,
   type EventItemDisposition,
@@ -54,6 +55,7 @@ type ActiveItemReaction = {
   readonly request: EventItemUseRequest;
   readonly actor: BorrowedSupplyActor;
   readonly disposition: EventItemDisposition;
+  readonly retainUntilClear: boolean;
   elapsed: number;
   readonly duration: number;
   readonly resolve: () => void;
@@ -70,6 +72,7 @@ const RETURN_TO_STORAGE_CONTEXTS: ReadonlySet<EventItemUseContext> = new Set([
 function stowAfterReaction(reaction: ActiveItemReaction): boolean {
   if (reaction.disposition === 'depart') return true;
   if (reaction.request.itemId === 'knife') return false;
+  if (isReturningSingleUseContext(reaction.request.context)) return false;
   return !RETURN_TO_STORAGE_CONTEXTS.has(reaction.request.context);
 }
 
@@ -110,7 +113,6 @@ export class EventItemUseController {
       request.itemId,
       request.aimTarget,
       request.context === 'bucket-helmet'
-        || request.context === 'umbrella-shield'
         || request.context === 'map-leak-patch',
       request.context === 'umbrella-shield' ? 'x' : null,
       request.context === 'bucket-helmet' || request.context === 'knife-stab'
@@ -149,13 +151,19 @@ export class EventItemUseController {
       this.held = null;
       return Promise.resolve();
     }
-    if (held.request.context === 'umbrella-overhead') {
-      // Keep shelter overhead until the event flow clears the covered scene.
-      sampleEventItemUse('umbrella-overhead', 'umbrella', 1, this.sample);
+    if (held.request.context === 'umbrella-overhead' || held.request.context === 'anchor-drop'
+      || held.request.context === 'swim-ring-deploy') {
+      // Keep deployed items until the event flow clears the scene.
+      sampleEventItemUse(held.request.context, held.request.itemId, 1, this.sample);
       this.applyRequestSample(held.request);
       return Promise.resolve();
     }
-    return this.startReaction(held, dispositionFor(held.request, result));
+    return this.startReaction(
+      held,
+      dispositionFor(held.request, result),
+      result.consumedInstanceIds.includes(held.request.instanceId)
+        && isReturningSingleUseContext(held.request.context),
+    );
   }
 
   recover(): Promise<void> {
@@ -171,6 +179,7 @@ export class EventItemUseController {
   private startReaction(
     held: HeldItem,
     disposition: EventItemDisposition,
+    retainUntilClear = false,
   ): Promise<void> {
     sampleEventItemOutcome(
       held.request.context,
@@ -191,6 +200,7 @@ export class EventItemUseController {
         request: held.request,
         actor: held.actor,
         disposition,
+        retainUntilClear,
         elapsed: 0,
         duration: eventItemOutcomeDuration(held.request.itemId, disposition),
         resolve,
@@ -247,6 +257,12 @@ export class EventItemUseController {
     this.applyRequestSample(reaction.request);
     if (reaction.elapsed < reaction.duration) return;
     this.activeReaction = null;
+    if (reaction.retainUntilClear) {
+      // Keep the spent actor at rest until the covered event scene clears.
+      this.adapter.clear();
+      reaction.resolve();
+      return;
+    }
     this.release(
       reaction.actor,
       reaction.request,

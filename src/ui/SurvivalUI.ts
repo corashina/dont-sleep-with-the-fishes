@@ -38,96 +38,6 @@ import {
 } from './SurvivalUiViewModel';
 import { runCleanupSteps } from './UiCleanup';
 
-const ROUTINE_DIALOG_MARGIN = 20;
-const ROUTINE_DIALOG_GAP = 22;
-
-interface RoutineDialogPlacement {
-  readonly anchorId: string;
-  readonly fallbackX: number;
-  readonly fallbackY: number;
-  readonly width: number;
-  readonly height: number;
-}
-
-interface RoutineDialogTarget {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-  readonly projected: boolean;
-}
-
-function routineDialogViewport(root: HTMLElement): readonly [number, number] {
-  const bounds = root.getBoundingClientRect();
-  const width = Math.max(1, bounds.width || root.clientWidth || window.innerWidth);
-  const height = Math.max(1, bounds.height || root.clientHeight || window.innerHeight);
-  return [width, height];
-}
-
-function routineDialogTarget(
-  target: ProjectedBoatBounds | null,
-  anchor: BoatInteractionAnchor | null | undefined,
-  placement: RoutineDialogPlacement,
-  viewportWidth: number,
-  viewportHeight: number,
-): RoutineDialogTarget {
-  const projectedTarget = target?.visible === true ? target : null;
-  const projectedAnchor = projectedTarget ?? anchor;
-  if (projectedAnchor?.visible !== true) {
-    return {
-      x: viewportWidth * placement.fallbackX,
-      y: viewportHeight * placement.fallbackY,
-      width: 0,
-      height: 0,
-      projected: false,
-    };
-  }
-  const hitArea = projectedTarget ?? (projectedAnchor as BoatInteractionAnchor).hitArea;
-  return {
-    x: projectedAnchor.x,
-    y: projectedAnchor.y,
-    width: hitArea?.width ?? 54,
-    height: hitArea?.height ?? 54,
-    projected: true,
-  };
-}
-
-function routineDialogHorizontal(
-  target: RoutineDialogTarget,
-  cardWidth: number,
-  viewportWidth: number,
-): readonly ['left' | 'right', number] {
-  const right = target.x + target.width / 2 + ROUTINE_DIALOG_GAP;
-  const left = target.x - target.width / 2 - ROUTINE_DIALOG_GAP - cardWidth;
-  const rightFits = right + cardWidth <= viewportWidth - ROUTINE_DIALOG_MARGIN;
-  const leftFits = left >= ROUTINE_DIALOG_MARGIN;
-  return rightFits || !leftFits ? ['right', right] : ['left', left];
-}
-
-function routineDialogVertical(
-  target: RoutineDialogTarget,
-  cardHeight: number,
-  viewportHeight: number,
-): readonly ['above' | 'below' | 'center', number] {
-  const centered = target.y - cardHeight / 2;
-  const below = target.y + target.height / 2 + ROUTINE_DIALOG_GAP;
-  const above = target.y - target.height / 2 - ROUTINE_DIALOG_GAP - cardHeight;
-  const centeredFits = centered >= ROUTINE_DIALOG_MARGIN
-    && centered + cardHeight <= viewportHeight - ROUTINE_DIALOG_MARGIN;
-  if (centeredFits) return ['center', centered];
-  if (below + cardHeight <= viewportHeight - ROUTINE_DIALOG_MARGIN) return ['below', below];
-  if (above >= ROUTINE_DIALOG_MARGIN) return ['above', above];
-  return target.y < viewportHeight / 2 ? ['below', below] : ['above', above];
-}
-
-const REPAIR_DIALOG_PLACEMENT: RoutineDialogPlacement = {
-  anchorId: 'repair-tools',
-  fallbackX: 0.32,
-  fallbackY: 0.6,
-  width: 430,
-  height: 360,
-};
-
 const requireElement = createElementRequirement('survival UI');
 
 export class SurvivalUI {
@@ -343,7 +253,6 @@ export class SurvivalUI {
 
     document.addEventListener('click', this.handleDocumentClick, true);
     document.addEventListener('keydown', this.handleKeyDown);
-    window.addEventListener('resize', this.handleWindowResize);
     this.unsubscribeLanguage = onLanguageChange(() => {
       this.refreshAnnouncement();
       if (this.currentSnapshot !== null && this.currentUnavailable !== null) {
@@ -366,7 +275,6 @@ export class SurvivalUI {
   setAnchors(anchors: readonly BoatInteractionAnchor[]): void {
     if (this.disposed) return;
     this.anchorView.setAnchors(anchors);
-    this.positionOpenRoutineDialogs();
   }
 
   setJournalUnread(unread: boolean): void {
@@ -639,11 +547,11 @@ export class SurvivalUI {
     }
   }
 
-  beginRescueEnding(): void {
+  beginEndingSequence(): void {
     if (this.disposed) return;
     this.clearEventPresentation();
     this.hideJournal();
-    this.root.classList.add('is-rescuing');
+    this.root.classList.add('is-ending-sequence');
     this.coverView.settleCoverTransition();
     this.coverView.sleepCover.classList.remove('is-covered');
     this.coverView.sleepCover.style.opacity = '0';
@@ -714,7 +622,6 @@ export class SurvivalUI {
       () => this.modalViews.removeListenersForDispose(),
       () => document.removeEventListener('click', this.handleDocumentClick, true),
       () => document.removeEventListener('keydown', this.handleKeyDown),
-      () => window.removeEventListener('resize', this.handleWindowResize),
       () => { this.onAction = () => undefined; },
       () => { this.onEventItem = () => undefined; },
       () => { this.onEventChoice = () => undefined; },
@@ -766,16 +673,8 @@ export class SurvivalUI {
     this.modalViews.setRepairBusy(this.busy);
   }
 
-  private readonly handleWindowResize = (): void => {
-    if (this.disposed) return;
-    this.positionOpenRoutineDialogs();
-  };
-
   private showLayer(layer: HTMLElement, origin: HTMLElement | null = null): void {
     this.anchorView.clearHighlight();
-    if (layer === this.modalViews.repairRoot) {
-      this.positionRoutineDialog(layer, REPAIR_DIALOG_PLACEMENT);
-    }
     this.modalFocus.activate(layer, origin);
     this.syncViewModalState();
   }
@@ -794,56 +693,6 @@ export class SurvivalUI {
 
   private syncRadioPause(): void {
     this.onRadioPauseChange(this.journalRadioPause || this.carlitosRadioPause);
-  }
-
-  private positionOpenRoutineDialogs(): void {
-    if (this.modalViews.repairRoot.classList.contains('is-visible')) {
-      this.positionRoutineDialog(this.modalViews.repairRoot, REPAIR_DIALOG_PLACEMENT);
-    }
-  }
-
-  private positionRoutineDialog(
-    layer: HTMLElement,
-    placement: RoutineDialogPlacement,
-    target: ProjectedBoatBounds | null = null,
-  ): void {
-    const [viewportWidth, viewportHeight] = routineDialogViewport(this.root);
-    const maximumWidth = Math.max(1, viewportWidth - ROUTINE_DIALOG_MARGIN * 2);
-    const maximumHeight = Math.max(1, viewportHeight - ROUTINE_DIALOG_MARGIN * 2);
-    const cardWidth = Math.min(placement.width, maximumWidth);
-    const cardHeight = Math.min(placement.height, maximumHeight);
-    const dialogTarget = routineDialogTarget(
-      target,
-      this.anchorView.anchor(placement.anchorId),
-      placement,
-      viewportWidth,
-      viewportHeight,
-    );
-    const [horizontalPlacement, unclampedX] = routineDialogHorizontal(
-      dialogTarget,
-      cardWidth,
-      viewportWidth,
-    );
-    const [verticalPlacement, unclampedY] = routineDialogVertical(
-      dialogTarget,
-      cardHeight,
-      viewportHeight,
-    );
-
-    const x = Math.min(
-      viewportWidth - ROUTINE_DIALOG_MARGIN - cardWidth,
-      Math.max(ROUTINE_DIALOG_MARGIN, unclampedX),
-    );
-    const y = Math.min(
-      viewportHeight - ROUTINE_DIALOG_MARGIN - cardHeight,
-      Math.max(ROUTINE_DIALOG_MARGIN, unclampedY),
-    );
-    layer.style.setProperty('--routine-x', `${Math.round(x)}px`);
-    layer.style.setProperty('--routine-y', `${Math.round(y)}px`);
-    layer.style.setProperty('--routine-width', `${Math.round(cardWidth)}px`);
-    layer.dataset.placement = horizontalPlacement;
-    layer.dataset.verticalPlacement = verticalPlacement;
-    layer.dataset.anchorState = dialogTarget.projected ? 'projected' : 'fallback';
   }
 
   private activateDayAction(action: DayActionId, origin: HTMLButtonElement | null): void {

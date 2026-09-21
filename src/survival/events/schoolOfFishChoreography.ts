@@ -30,6 +30,7 @@ export interface SchoolVariant {
   readonly orbitRadiusZ: number;
   readonly depth: number;
   readonly approachScale: number;
+  readonly scatterScale: number;
   readonly speed: number;
   readonly bank: number;
   readonly flashOffset: number;
@@ -45,7 +46,7 @@ export interface SchoolSample extends MutableTransformPose {
   schoolAlpha: number;
   surfaceFlash: number;
   splash: number;
-  catchStrength: number;
+  scatter: number;
   foodDelta: number;
   effect: number;
   effectKind: SchoolItemEffectKind;
@@ -94,6 +95,7 @@ export function createSchoolVariants(count: number, seed: number): readonly Scho
         + variantUnit(safeSeed, index, 3) * 0.7,
       depth: 0.04 + variantUnit(safeSeed, index, 4) * 0.16,
       approachScale: 0.45 + variantUnit(safeSeed, index, 5) * 0.45,
+      scatterScale: 0.7 + variantUnit(safeSeed, index, 6) * 0.5,
       speed: 0.34 + variantUnit(safeSeed, index, 8) * 0.26,
       bank: (variantUnit(safeSeed, index, 9) - 0.5) * 0.26,
       flashOffset: variantUnit(safeSeed, index, 10),
@@ -108,7 +110,7 @@ function resetSchoolSample(output: SchoolSample): void {
   output.schoolAlpha = 0;
   output.surfaceFlash = 0;
   output.splash = 0;
-  output.catchStrength = 0;
+  output.scatter = 0;
   output.foodDelta = 0;
   output.effect = 0;
   output.effectKind = 'none';
@@ -129,7 +131,7 @@ export function identitySchoolSample(): SchoolSample {
     schoolAlpha: 0,
     surfaceFlash: 0,
     splash: 0,
-    catchStrength: 0,
+    scatter: 0,
     foodDelta: 0,
     effect: 0,
     effectKind: 'none',
@@ -224,12 +226,12 @@ export function sampleSchoolReaction(
   const t = clamp01(progress);
   const settle = smoothstep(t / 0.7);
 
-  output.gather = 1;
-  output.schoolAlpha = 1 - smoothstep(t);
+  output.gather = 1 - settle;
+  output.schoolAlpha = 1;
+  output.scatter = smoothstep((t - 0.08) / 0.8);
   output.splash = pulse(t, 0.04, 0.3, 0.72);
   output.surfaceFlash = pulse(t, 0.08, 0.42, 0.84);
   output.foodDelta = exactFoodDelta;
-  output.catchStrength = exactFoodDelta > 0 ? smoothstep((t - 0.08) / 0.62) : 0;
 
   if (brokenItem) {
     output.y = -0.2 * settle;
@@ -250,7 +252,9 @@ export function sampleSchoolFishPose(
 ): void {
   const safeTime = Number.isFinite(time) ? time : 0;
   const angle = variant.orbitAngle + safeTime * variant.speed;
-  const radiusScale = 1 + (1 - school.gather) * variant.approachScale;
+  const radiusScale = 1
+    + (1 - school.gather) * variant.approachScale
+    + school.scatter * variant.scatterScale;
   output.x = SCHOOL_CENTER_X
     + Math.cos(angle) * variant.orbitRadiusX * radiusScale;
   output.z = SCHOOL_CENTER_Z

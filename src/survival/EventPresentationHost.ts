@@ -125,6 +125,10 @@ export class EventPresentationHost {
     return this.active?.resultRoot(id) ?? null;
   }
 
+  prepareReaction(reaction: EventPresentationReaction): void {
+    this.active?.prepareReaction?.(reaction);
+  }
+
   react(reaction: EventPresentationReaction): Promise<void> {
     return this.active?.react(reaction) ?? Promise.resolve();
   }

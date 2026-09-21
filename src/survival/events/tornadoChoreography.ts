@@ -130,14 +130,5 @@ export function sampleTornadoReaction(
     output.supplyTravel = smoothstep((t - 0.12) / 0.7);
   }
 
-  const effect = 1 - smoothstep((t - 0.02) / 0.52);
-  const spin = 1 - smoothstep((t - 0.08) / 0.65);
-  const lateOpacity = 1 - smoothstep((t - 0.62) / 0.38);
-  output.visibility = lateOpacity;
-  output.funnelScale = 1;
-  output.spinRate = spin;
-  output.spinPhase = spin;
-  output.sway = spin;
-  output.effectStrength = effect;
   return true;
 }

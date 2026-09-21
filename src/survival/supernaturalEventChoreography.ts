@@ -16,8 +16,6 @@ export interface SupernaturalRevealSample {
   ghostVisibility: number;
   ghostVisibilities: [number, number, number, number, number];
   flareFlash: number;
-  fogCurtain: number;
-  melodyClarity: number;
 }
 
 export interface SupernaturalItemSample extends MutableTransformPose {
@@ -45,7 +43,6 @@ export interface SupernaturalReactionSample {
   ghostVisibility: number;
   ghostAdvance: number;
   flareFlash: number;
-  fogCurtain: number;
   sirenLunge: number;
   sirenStrike: number;
 }
@@ -201,8 +198,6 @@ function resetReveal(output: SupernaturalRevealSample): void {
   output.ghostVisibilities[3] = 0;
   output.ghostVisibilities[4] = 0;
   output.flareFlash = 0;
-  output.fogCurtain = 0;
-  output.melodyClarity = 0;
 }
 
 function resetItem(output: SupernaturalItemSample): void {
@@ -222,27 +217,8 @@ function resetReaction(output: SupernaturalReactionSample): void {
   output.ghostVisibility = 0;
   output.ghostAdvance = 0;
   output.flareFlash = 0;
-  output.fogCurtain = 0;
   output.sirenLunge = 0;
   output.sirenStrike = 0;
-}
-
-function applyRevealEnvelope(output: SupernaturalRevealSample, envelope: number): void {
-  output.cameraX *= envelope;
-  output.cameraY *= envelope;
-  output.cameraZ *= envelope;
-  output.cameraYaw *= envelope;
-  output.cameraPitch *= envelope;
-  output.cameraRoll *= envelope;
-  output.ghostVisibility *= envelope;
-  output.ghostVisibilities[0] *= envelope;
-  output.ghostVisibilities[1] *= envelope;
-  output.ghostVisibilities[2] *= envelope;
-  output.ghostVisibilities[3] *= envelope;
-  output.ghostVisibilities[4] *= envelope;
-  output.flareFlash *= envelope;
-  output.fogCurtain *= envelope;
-  output.melodyClarity *= envelope;
 }
 
 export function supernaturalRevealDuration(eventId: string): number | null {
@@ -271,11 +247,6 @@ export function sampleSupernaturalReveal(
     return true;
   }
 
-  if (t === 1) return true;
-  const curtain = smoothstep((t - 0.12) / 0.42);
-  output.fogCurtain = curtain;
-  output.melodyClarity = smoothstep((t - 0.26) / 0.42);
-  applyRevealEnvelope(output, smoothstep(t / 0.1) * (1 - smoothstep((t - 0.82) / 0.18)));
   return true;
 }
 
@@ -387,8 +358,7 @@ function sampleSirenReaction(
     output.cameraRoll = 0.09 * output.sirenStrike;
     return;
   }
-  output.fogCurtain = pulse(t, 0.08, 0.48, 0.92);
-  output.cameraPitch = -0.06 * output.fogCurtain;
+  output.cameraPitch = -0.06 * pulse(t, 0.08, 0.48, 0.92);
 }
 
 function applyReactionEnvelope(
@@ -404,7 +374,6 @@ function applyReactionEnvelope(
   output.ghostVisibility *= envelope;
   output.ghostAdvance *= envelope;
   output.flareFlash *= envelope;
-  output.fogCurtain *= envelope;
   output.sirenLunge *= envelope;
   output.sirenStrike *= envelope;
 }

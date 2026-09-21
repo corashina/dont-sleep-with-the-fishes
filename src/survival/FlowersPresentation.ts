@@ -11,7 +11,6 @@ import {
 import type { EventNetCatch } from './EventItemUseController';
 import { eventItemMotionProfile } from './eventItemMotionProfile';
 import { KeyedEventPresentation } from './KeyedEventPresentation';
-import { SceneFade } from '../rendering/SceneFade';
 import type { SurvivalEventModels } from './SurvivalEventModelLibrary';
 
 const PAD_POSITIONS = Object.freeze([
@@ -33,7 +32,6 @@ export class FlowersPresentation extends KeyedEventPresentation {
   private readonly pads: Group[] = [];
   private readonly scoopTarget = new Object3D();
   private caught = false;
-  private readonly departureFade = new SceneFade();
   readonly netCatch: EventNetCatch = {
     capture: (net) => this.captureInNet(net),
     release: () => this.releaseFromNet(),
@@ -75,7 +73,6 @@ export class FlowersPresentation extends KeyedEventPresentation {
   }
 
   protected reset(): void {
-    this.departureFade.reset();
     this.caught = false;
     this.subject.position.set(0, 0, 0);
     this.pads.forEach((pad, index) => {
@@ -93,7 +90,6 @@ export class FlowersPresentation extends KeyedEventPresentation {
       if (!this.caught) this.moveFirstToDeck(1);
       return;
     }
-    if (this.settledKind === 'flowers.drift') return;
     this.floatPads(time);
   }
 
@@ -106,20 +102,13 @@ export class FlowersPresentation extends KeyedEventPresentation {
       if (!this.caught) this.moveFirstToDeck(eased);
     } else if (kind === 'flowers.drift') {
       this.floatPads(time);
-      this.departureFade.apply(1 - eased);
+      this.subject.position.x = -eased * 1.4;
+      this.subject.position.z = eased * 2.2;
+      this.subject.position.y = -eased * 0.22;
     }
   }
 
-  protected finishAnimation(kind: string): void {
-    if (kind === 'flowers.drift') this.root.visible = false;
-  }
-
-  protected prepareAnimation(kind: string): void {
-    if (kind === 'flowers.drift') this.departureFade.begin([this.subject]);
-  }
-
   protected disposeOwned(): void {
-    this.departureFade.reset();
     // Restore the flower from the boat before removing this presentation.
     this.subject.add(this.pads[0]!);
   }

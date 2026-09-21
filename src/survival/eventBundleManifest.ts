@@ -27,6 +27,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   'monster-in-the-fog': { models: ['fogMonster'], sounds: [] },
   plane: { models: [], sounds: ['planeFlyby'] },
   'flying-saucer': { models: [], sounds: ['ufoFlyby'] },
+  'something-under-us': { models: [], sounds: ['underUsPresence'] },
   ghosts: { models: ['ghost'], sounds: ['ghostSpiritBreath'] },
   'eerie-melody': {
     models: ['siren'],
@@ -34,7 +35,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   },
   thunderstorm: {
     models: [],
-    sounds: ['thunderLightning', 'thunderLightningCrack', 'thunderLightningDry'],
+    sounds: ['stormRumble', 'thunderLightning', 'thunderLightningCrack', 'thunderLightningDry'],
   },
   'bad-sleep': { models: [], sounds: ['yawn'] },
   'drifting-supplies': {

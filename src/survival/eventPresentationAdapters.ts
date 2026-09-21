@@ -91,6 +91,7 @@ interface AdapterOperations {
   interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;
   resultRoot(id: string): Object3D | null;
+  prepareReaction?: (reaction: EventPresentationReaction) => void;
   react(reaction: EventPresentationReaction): Promise<void>;
   update(time: number, delta: number): void;
   settleForVisibilityChange(): void;
@@ -140,6 +141,9 @@ function createAdapter(
     },
     resultRoot(id): Object3D | null {
       return disposed ? null : operations.resultRoot(id);
+    },
+    prepareReaction(reaction): void {
+      if (!disposed) operations.prepareReaction?.(reaction);
     },
     react(reaction): Promise<void> {
       return disposed ? Promise.resolve() : operations.react(reaction);
@@ -351,6 +355,7 @@ export const createFocusedAdapter: EventPresentationAdapterFactory = (
     interactionTargets: () => layer.interactionTargets(eventId),
     interactionRoot: (id) => layer.interactionRoot(id),
     resultRoot: noRoot,
+    prepareReaction: ({ outcome }) => layer.prepareResult(eventId, outcome),
     react: ({ outcome }) => layer.react(eventId, outcome),
     update: (time, delta) => layer.update(time, delta),
     settleForVisibilityChange: () => layer.settleForVisibilityChange(),

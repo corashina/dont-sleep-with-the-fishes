@@ -43,12 +43,12 @@ export function createItemAnimationLabJournal(): readonly JournalEntry[] {
     // Find medicine by day and lose the map at night.
     createJournalEntry(2, 'overcast', [], sampleEvent('drifting-supplies', 'retrieve', 0, 'medicalKit-1'),
       createJournalNightEventRecord(sampleEvent('windy-night', 'map'))),
-    // Use the medicine, then break the knife defending the boat.
+    // Use the medicine, gain two food, then break the knife defending the boat.
     createJournalEntry(3, 'squall', [
       { kind: 'dayAction', action: 'treat', deltas: { health: 10 },
         inventoryMutations: [{ kind: 'consume', instanceIds: ['medicalKit-1'] }] },
-      { kind: 'fishing', attemptId: 'lab-journal-fishing', result: 'fish', catchId: 'cod', food: 1, baitConsumed: true,
-        deltas: { food: 1, bait: -1 }, inventoryMutations: [] },
+      { kind: 'fishing', attemptId: 'lab-journal-fishing', result: 'fish', catchId: 'tuna', food: 2, baitConsumed: true,
+        deltas: { food: 2, bait: -1 }, inventoryMutations: [] },
     ], null, createJournalNightEventRecord(sampleEvent('swarm-of-sharks', 'knife', 1))),
     // Repair the knife and exchange the fishing net for an umbrella.
     createJournalEntry(4, 'calm', [

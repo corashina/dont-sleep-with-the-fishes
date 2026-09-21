@@ -1,11 +1,11 @@
-import { Group, Mesh, type Object3D } from 'three';
+import { Group, Mesh, Scene, type Object3D } from 'three';
 import { describe,expect,it } from 'vitest';
+import { sceneHoverOutlineTargets } from '../src/rendering/HoverOutline';
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { createTestPropModels } from './helpers/propModels';
 
 describe('boat supply display', () => {
-
   // Importance: 95. Event copies must not retain stale damage after repair.
   it('keeps borrowed geometry consistent through break and repair', () => {
     const saved = [{ instanceId: 'knife-1', type: 'knife' }] as const;
@@ -31,6 +31,32 @@ describe('boat supply display', () => {
         expect(firstMesh(actor.root).geometry).toBe(copy.geometry);
         actor.release();
       }
+    } finally {
+      display.dispose();
+      models.dispose();
+    }
+  });
+
+  it('outlines eligible trade item types, including aggregate supplies', () => {
+    const map = { instanceId: 'map-1', type: 'map' } as const;
+    const models = createTestPropModels();
+    const scene = new Scene();
+    const supplies = new Group();
+    scene.add(supplies);
+    const display = new BoatSupplyDisplay(models, supplies, [map]);
+    const base = new SurvivalSession([map], { seed: 1 }).snapshot();
+    try {
+      display.sync({ ...base, food: 1, bait: 1 });
+      display.setEventEligibleItems(
+        new Set(),
+        new Set(['cannedFood', 'baitTin', 'map']),
+      );
+
+      expect(sceneHoverOutlineTargets(scene).map(({ name }) => name).sort()).toEqual([
+        'boat-supply:baitTin',
+        'boat-supply:cannedFood',
+        'boat-supply:map',
+      ]);
     } finally {
       display.dispose();
       models.dispose();

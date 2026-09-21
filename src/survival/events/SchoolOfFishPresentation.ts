@@ -12,7 +12,6 @@ import {
 import type { ItemInstanceId } from '../../game/ItemState';
 import { createWaveSample as waveSample, type WaveSample } from '../../ocean/WaveField';
 import { setFlatShading } from '../../rendering/modelPresentation';
-import { SceneFade } from '../../rendering/SceneFade';
 import {
   disposeResourceSets,
   runCleanupSteps,
@@ -53,6 +52,7 @@ interface FishActor {
 const MAX_FISH = 24;
 const MIN_FISH = 18;
 const WATERLINE = 0.08;
+const BINOCULAR_WATER_X = 4.65;
 const BODY_SURFACE_OFFSET = -0.14;
 const SURFACE_EFFECT_LIFT = 0.02;
 const SCHOOL_BODY_TINT = new Color(0xc4d9dc);
@@ -74,6 +74,7 @@ const DEFAULT_VARIANT: SchoolVariant = {
   orbitRadiusZ: 1,
   depth: 0.3,
   approachScale: 0.6,
+  scatterScale: 0.8,
   speed: 1,
   bank: 0,
   flashOffset: 0,
@@ -111,13 +112,11 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   readonly itemAimTarget = new Group();
 
   private readonly fishActors: FishActor[] = [];
-  private readonly fishFade = new SceneFade();
+  private readonly binocularWave = waveSample();
   private sampleTime = 0;
   private readonly surfaceFins: Mesh[] = [];
   private readonly surfaceFlashes: Mesh[] = [];
   private readonly splashes: Mesh[] = [];
-  private readonly catchModel: EventModelInstance;
-  private readonly catchActor: Group;
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly silverMaterial = new MeshStandardMaterial({
@@ -186,10 +185,8 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
 
     const models: EventModelInstance[] = [];
     try {
-      for (let index = 0; index <= MAX_FISH; index += 1) {
-        const modelId = index === MAX_FISH
-          ? 'schoolFish'
-          : SCHOOL_FISH_MODEL_SEQUENCE[index % SCHOOL_FISH_MODEL_SEQUENCE.length]!;
+      for (let index = 0; index < MAX_FISH; index += 1) {
+        const modelId = SCHOOL_FISH_MODEL_SEQUENCE[index % SCHOOL_FISH_MODEL_SEQUENCE.length]!;
         models.push(environment.eventModels.create(modelId));
       }
     } catch (error) {
@@ -251,14 +248,6 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       this.worldRoot.add(splash);
     }
 
-    this.catchModel = models[MAX_FISH]!;
-    this.catchActor = this.catchModel.root;
-    this.catchActor.name = 'school-catch-actor';
-    this.catchActor.position.set(1.52, 0.86, -0.42);
-    this.catchActor.rotation.set(0.08, -0.34, -0.12);
-    this.catchActor.userData.catchModelId = 'schoolFish';
-    setFlatShading(this.catchActor);
-    this.boatRoot.add(this.catchActor);
     this.hideScene();
   }
 
@@ -266,7 +255,6 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     if (this.disposed || context.eventId !== 'school-of-fish') return;
     this.clear();
     this.sampleTime = 0;
-    this.fishFade.begin(this.fishActors.map(({ root }) => root));
     const variants = createSchoolVariants(MAX_FISH, context.variantSeed);
     this.activeFish = activeFishCount(context.variantSeed);
     for (let index = 0; index < this.fishActors.length; index += 1) {
@@ -304,6 +292,10 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     }
     this.animation.cancel();
     this.activeChoiceId = choiceId;
+    if (choiceId === 'spyglass') {
+      // Nearby fish can pass behind the hull. Look across the outer school instead.
+      this.worldRoot.add(this.itemAimTarget);
+    }
     sampleSchoolItemUse(choiceId, 0, this.sample);
     this.applySample(this.sampleTime);
     return this.animation.start('item', schoolItemDuration(choiceId), {
@@ -322,7 +314,6 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     this.reactionState.foodDelta = result.resourceDeltas.food ?? 0;
     this.reactionState.brokenItem = selectedBroken;
     this.worldRoot.userData.foodDelta = this.reactionState.foodDelta;
-    this.catchActor.userData.foodDelta = this.reactionState.foodDelta;
     sampleSchoolReaction(this.reactionState, 0, this.sample);
     this.applySample(this.sampleTime);
     return this.animation.start('reaction', SCHOOL_REACTION_DURATION);
@@ -347,16 +338,16 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
-    this.fishFade.reset();
     this.animation.cancel();
     this.activeChoiceId = null;
     this.staged = false;
+    this.fishActors[0]!.root.add(this.itemAimTarget);
+    this.itemAimTarget.position.set(0, 0, 0);
     this.hideScene();
   }
 
   dispose(): void {
     if (this.disposed) return;
-    this.fishFade.reset();
     this.disposed = true;
     this.animation.cancel();
     this.activeChoiceId = null;
@@ -368,7 +359,6 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       () => this.boatRoot.removeFromParent(),
       () => this.worldRoot.removeFromParent(),
       ...this.fishActors.map(({ model }) => () => model.dispose()),
-      () => this.catchModel.dispose(),
       () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
     ]);
   }
@@ -387,9 +377,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     }
   }
 
-  private applyFish(time: number, showCatch: boolean): void {
-    this.fishFade.apply(this.sample.schoolAlpha);
-    this.finMaterial.opacity = 0.46 * this.sample.schoolAlpha;
+  private applyFish(time: number): void {
     for (let index = 0; index < this.fishActors.length; index += 1) {
       const fish = this.fishActors[index]!;
       const variant = fish.variant;
@@ -409,14 +397,20 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       const bodyScale = pose.scale * 1.15;
       fish.root.scale.setScalar(bodyScale);
       fish.root.visible = this.sample.schoolAlpha > 0
-        && index < this.activeFish && (!showCatch || index !== 0);
+        && index < this.activeFish;
     }
   }
 
   private applySample(time: number): void {
-    const showCatch = this.sample.catchStrength > 0.008
-      && this.sample.foodDelta > 0;
-    this.applyFish(time, showCatch);
+    this.applyFish(time);
+    if (this.itemAimTarget.parent === this.worldRoot) {
+      this.environment.sampleWorldWaveInto(this.binocularWave, time, BINOCULAR_WATER_X, 0, 1);
+      this.itemAimTarget.position.set(
+        BINOCULAR_WATER_X + this.binocularWave.displacementX,
+        WATERLINE + this.binocularWave.height,
+        this.binocularWave.displacementZ,
+      );
+    }
     for (let index = 0; index < this.surfaceFins.length; index += 1) {
       const fin = this.surfaceFins[index]!;
       const fishIndex = (index * 3 + 1) % this.activeFish;
@@ -467,11 +461,6 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       const splashScale = 0.28 + splashStrength * (0.82 + index * 0.04);
       splash.scale.set(splashScale, splashScale, splashScale);
     }
-
-    this.catchActor.visible = showCatch;
-    const catchScale = 0.68 + this.sample.catchStrength * 0.32;
-    this.catchActor.scale.set(catchScale, catchScale, catchScale);
-    this.catchActor.position.y = 0.66 + this.sample.catchStrength * 0.2;
   }
 
   private hideScene(): void {
@@ -480,11 +469,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     this.silverMaterial.opacity = 0;
     this.splashMaterial.opacity = 0;
     this.finMaterial.opacity = 0.24;
-    this.catchActor.visible = false;
-    this.catchActor.position.y = 0.86;
-    this.catchActor.scale.set(1, 1, 1);
     this.worldRoot.userData.foodDelta = 0;
-    this.catchActor.userData.foodDelta = 0;
     for (const fish of this.fishActors) {
       fish.root.visible = false;
       fish.root.position.set(0, 0, 0);

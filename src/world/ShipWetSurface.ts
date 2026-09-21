@@ -1,9 +1,10 @@
 import type { MeshStandardMaterial } from 'three';
 
 /** A thin, uneven water film. Reuses scene lights without reflection renders. */
-export function applyShipWetSurface(material: MeshStandardMaterial, strength: number): void {
+export function applyShipWetSurface(material: MeshStandardMaterial, strength: number): { value: number } {
+  const wetness = { value: strength };
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.shipWetStrength = { value: strength };
+    shader.uniforms.shipWetStrength = wetness;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vShipSurfaceUv;')
       .replace('#include <uv_vertex>', '#include <uv_vertex>\nvShipSurfaceUv = uv;');
@@ -43,4 +44,5 @@ export function applyShipWetSurface(material: MeshStandardMaterial, strength: nu
       `);
   };
   material.customProgramCacheKey = () => 'dorothy-wet-surface-v1';
+  return wetness;
 }

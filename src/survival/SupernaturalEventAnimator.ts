@@ -31,6 +31,7 @@ import {
 } from './eventPhysicalResponseChoreography';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import { SeaMistCurtain } from './SeaMistCurtain';
+import { createSirenReef, SIREN_SCENE_OFFSET_Z, styleSiren } from './SirenAppearance';
 import type { ActionOutcome } from './survivalTypes';
 import { StationaryEventCamera } from './StationaryEventCamera';
 import {
@@ -87,11 +88,12 @@ function itemDuration(eventId: string, choiceId: string): number | null {
   if (choiceId === 'spyglass') return eventItemUseDuration('binocular-look');
   return null;
 }
-const SIREN_ROCK_X = -6.3;
-const SIREN_ROCK_Z = -14.8;
+const SIREN_ROCK_X = -5.8;
+const SIREN_ROCK_Z = -12.2 + SIREN_SCENE_OFFSET_Z;
 const SIREN_WATERLINE_Y = 0;
 const SIREN_ROCK_SUBMERGENCE = 0.28;
-const SIREN_BODY_SETTLE = 1.05;
+const SIREN_BODY_SETTLE = 0.7;
+const SIREN_FOG_OPACITY = 0.56;
 const GHOST_FOG_OPACITY = 0.18;
 const GHOST_FOG_SCALE = [4.5, 5.2, 1.8] as const;
 const GHOST_FOG_X = 18;
@@ -116,20 +118,6 @@ function replaceMaterials(root: Group, material: Material): void {
     object.receiveShadow = true;
   });
   disposeResourceSets(replacedTextures, replacedMaterials);
-}
-
-function tuneReadableMaterials(root: Group, emissiveScale: number): void {
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    const materials = Array.isArray(object.material) ? object.material : [object.material];
-    materials.forEach((material) => {
-      if (!(material instanceof MeshStandardMaterial)) return;
-      material.emissive.copy(material.color).multiplyScalar(emissiveScale);
-      material.emissiveIntensity = 0.72;
-      material.roughness = Math.max(0.68, material.roughness);
-      material.needsUpdate = true;
-    });
-  });
 }
 
 function collectMaterialTextures(
@@ -181,16 +169,19 @@ function createSirenRock(): Group {
     color: 0x3f4b4a,
     roughness: 0.98,
     flatShading: true,
+    fog: false,
   });
   const stoneLight = new MeshStandardMaterial({
     color: 0x59625c,
     roughness: 0.96,
     flatShading: true,
+    fog: false,
   });
   const barnacle = new MeshStandardMaterial({
     color: 0xa49b7f,
     roughness: 1,
     flatShading: true,
+    fog: false,
   });
 
   addMesh(
@@ -250,8 +241,6 @@ export class SupernaturalEventAnimator {
     ghostVisibility: 0,
     ghostVisibilities: [0, 0, 0, 0, 0],
     flareFlash: 0,
-    fogCurtain: 0,
-    melodyClarity: 0,
   };
   private readonly itemSample: SupernaturalItemSample = {
     x: 0,
@@ -277,7 +266,6 @@ export class SupernaturalEventAnimator {
     ghostVisibility: 0,
     ghostAdvance: 0,
     flareFlash: 0,
-    fogCurtain: 0,
     sirenLunge: 0,
     sirenStrike: 0,
   };
@@ -317,8 +305,8 @@ export class SupernaturalEventAnimator {
   private readonly sirenRock: Group;
   private readonly sirenTableau = new Group();
   private readonly sirenFacingAnchor = new Group();
-  private readonly sirenKeyLight = new PointLight(0xf2c78f, 4.8, 20, 1.3);
-  private readonly sirenFillLight = new PointLight(0x82b8c4, 3.2, 24, 1.15);
+  private readonly sirenKeyLight = new PointLight(0xe1e9d2, 8, 20, 1.3);
+  private readonly sirenFillLight = new PointLight(0x72bacb, 5.4, 24, 1.15);
   private readonly fogCurtain = new SeaMistCurtain('supernatural-sea-mist');
   private readonly flareFlash: Mesh;
   private readonly sirenBaseRotation: Euler;
@@ -355,7 +343,8 @@ export class SupernaturalEventAnimator {
     }) : [];
     this.siren = includeSiren ? eventModels.create('siren') : new Group();
     this.siren.name = 'event-siren';
-    tuneReadableMaterials(this.siren, 0.2);
+    styleSiren(this.siren);
+    this.siren.scale.multiplyScalar(1.3);
     this.siren.position.set(0, 0, 0);
     this.siren.rotation.set(0, 0, 0);
     this.sirenBasePosition = this.siren.position.clone();
@@ -386,10 +375,10 @@ export class SupernaturalEventAnimator {
     this.sirenFacingAnchor.userData.pose = 'seated';
     this.sirenFacingAnchor.add(this.siren);
     this.sirenKeyLight.name = 'siren-tableau-key-light';
-    this.sirenKeyLight.position.set(2.8, 4.2, 4.6);
+    this.sirenKeyLight.position.set(1.8, 3.4, 3.2);
     this.sirenKeyLight.castShadow = false;
     this.sirenFillLight.name = 'siren-tableau-fill-light';
-    this.sirenFillLight.position.set(-4.4, 2.6, 1.8);
+    this.sirenFillLight.position.set(-2.4, 3.2, -2.2);
     this.sirenFillLight.castShadow = false;
 
     this.sirenTableau.name = 'siren-tableau';
@@ -404,6 +393,7 @@ export class SupernaturalEventAnimator {
     this.sirenTableau.userData.subjectValueSeparation = 2;
     this.sirenTableau.add(
       this.sirenRock,
+      createSirenReef(this.sirenRock, SIREN_WATERLINE_Y - this.sirenTableauBaseY),
       this.sirenFacingAnchor,
       this.sirenKeyLight,
       this.sirenFillLight,
@@ -609,13 +599,6 @@ export class SupernaturalEventAnimator {
       this.ghosts[index]!.visible = false;
     }
     this.sirenTableau.visible = true;
-    this.showSirenFog(Math.max(
-      0.2,
-      Math.min(
-        0.42,
-        sample.fogCurtain * (0.3 + sample.melodyClarity * 0.12),
-      ),
-    ));
   }
 
   private updateItem(
@@ -631,9 +614,6 @@ export class SupernaturalEventAnimator {
     if (active.eventId === 'ghosts') {
       this.hideGhosts();
       return;
-    }
-    if (this.itemSample.effect > 0.015) {
-      this.showSirenFog(0.16 + this.itemSample.effect * 0.1);
     }
   }
 
@@ -689,9 +669,6 @@ export class SupernaturalEventAnimator {
     this.siren.position.z = this.sirenBasePosition.z + sample.sirenLunge * 3.6;
     this.siren.position.y = this.sirenBasePosition.y + sample.sirenStrike * 0.24;
     this.siren.rotation.z = this.sirenBaseRotation.z - sample.sirenStrike * 0.34;
-    if (sample.fogCurtain > 0.015) {
-      this.showSirenFog(sample.fogCurtain * 0.64);
-    }
   }
 
   private poseFloatingGhost(
@@ -737,10 +714,10 @@ export class SupernaturalEventAnimator {
     this.setFogOpacity(GHOST_FOG_OPACITY);
   }
 
-  private showSirenFog(opacity: number): void {
+  private showSirenFog(): void {
     this.setFogSize('eerie-melody');
     this.fogCurtain.root.visible = true;
-    this.setFogOpacity(opacity);
+    this.setFogOpacity(SIREN_FOG_OPACITY);
   }
 
   private setFogSize(eventId: 'ghosts' | 'eerie-melody'): void {
@@ -748,11 +725,11 @@ export class SupernaturalEventAnimator {
     this.fogSizeEventId = eventId;
     if (eventId === 'ghosts') {
       this.fogCurtain.root.scale.set(...GHOST_FOG_SCALE);
-      this.fogCurtain.root.position.x = GHOST_FOG_X;
+      this.fogCurtain.root.position.set(GHOST_FOG_X, 0, 0);
       return;
     }
-    this.fogCurtain.root.scale.set(1, 1, 1);
-    this.fogCurtain.root.position.x = 0;
+    this.fogCurtain.root.scale.set(1.65, 3.2, 1);
+    this.fogCurtain.root.position.set(0, 0, SIREN_SCENE_OFFSET_Z);
   }
 
   private restoreStage(): void {
@@ -770,7 +747,7 @@ export class SupernaturalEventAnimator {
       this.showGhostFog();
     } else if (this.stagedEventId === 'eerie-melody') {
       this.sirenTableau.visible = true;
-      this.showSirenFog(0.2);
+      this.showSirenFog();
     }
   }
 

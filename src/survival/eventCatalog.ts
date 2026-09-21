@@ -417,7 +417,6 @@ const survivalEvents: SurvivalEventDefinition[] = [
   ]),
   event('bad-sleep', 'night', 'eventText040', 'uncertain', 'darkness', 4, 2, 4, [
     choice('bucket', 'eventText065', 'bucket', outcome(1, 'eventText159')),
-    choice('flashlight', 'eventText071', 'flashlight', outcome(1, 'eventText160')),
     choice('swimRing', 'eventText075', 'swimRing', outcome(1, 'eventText161')),
     choice('umbrella', 'eventText072', 'umbrella', outcome(100, 'eventText162'), outcome(5, 'eventText163', effects(undefined, [breakItem('umbrella')]))),
     choice('sleep', 'eventText063', undefined, outcome(1, 'eventText152', atNextDawn(2))),
@@ -736,8 +735,6 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(1, 'underUsFoodResult', effects([subtract('food', 1)]), 'under-us-diverted')),
     choice('baitTin', 'underUsBaitChoice', 'baitTin',
       outcome(1, 'underUsBaitResult', effects([subtract('bait', 1)]), 'under-us-diverted')),
-    choice('flashlight', 'underUsLightChoice', 'flashlight',
-      outcome(1, 'underUsLightResult', effects([subtract('hull', 20)]), 'under-us-impact')),
     contextualChoice('sleep', 'underUsStillChoice',
       outcome(1, 'underUsStillResult', { nextDawnEnergyReduction: 1 }, 'under-us-waited')),
   ], undefined, { minimumPressure: 1, maximumAppearances: 2 }),

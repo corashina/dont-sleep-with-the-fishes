@@ -1,5 +1,4 @@
 import { presentationUiText } from '../i18n/presentationUiMessages';
-import { SceneFade } from '../rendering/SceneFade';
 import {
   AnimationMixer,
   Box3,
@@ -109,9 +108,8 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private readonly shovelGeometries = new Set<BufferGeometry>();
   private readonly shovelMaterials = new Set<Material>();
   private readonly islandBase = new Vector3();
-  private readonly islandFade = new SceneFade();
-  private passVisibility = 1;
-  private passStartVisibility = 1;
+  private readonly islandBehind = new Vector3();
+  private readonly islandStart = new Vector3();
   private readonly chestEnd = new Vector3();
   private readonly monsterPosition = new Vector3();
   private cameraParent: Object3D | null = null;
@@ -129,7 +127,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private monsterIdleClip: AnimationClip | null = null;
   private monsterAttackClip: AnimationClip | null = null;
   private shovelAnimation: MidnightShovelAnimation | null = null;
-  private camp: MidnightCampPresentation | null = null;
+  private readonly camp: MidnightCampPresentation;
   private readonly digOrigin = new Vector3();
   private readonly scanQuaternion = new Quaternion();
   private readonly attackQuaternion = new Quaternion();
@@ -147,6 +145,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private digCueEmitted = false;
   private digContacts = 0;
   private chestBuriedY = 0;
+  private preparedResultId: 'tour-camp' | 'tour-camp-backpack' | 'tour-grave' | null = null;
   private staged = false;
   private disposed = false;
 
@@ -171,6 +170,9 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.island.name = 'midnight-tour-island';
     this.island.userData.motionSource = 'fixed';
     this.buildIsland();
+    this.camp = new MidnightCampPresentation(this.dependencies.propModels);
+    this.camp.root.visible = false;
+    this.root.add(this.camp.root);
     this.setSidePositions();
     this.island.position.copy(this.islandBase);
     this.updateGreenTopClearance();
@@ -183,8 +185,6 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   stage(variantSeed = 0): void {
     if (this.disposed) return;
-    this.islandFade.reset();
-    this.passVisibility = 1;
     this.animation.cancel();
     this.restoreCamera();
     this.clearResultActors();
@@ -219,8 +219,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       case 'sleep': {
         this.animation.settle();
         this.restoreCamera();
-        this.islandFade.begin([this.island]);
-        this.passStartVisibility = this.passVisibility;
+        this.islandStart.copy(this.island.position);
         this.root.userData.state = 'sailing-on';
         const animation = this.animation.start('choice-pass', PASS_DURATION);
         this.applyAnimation('choice-pass', 0);
@@ -238,44 +237,52 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     }
   }
 
+  prepareResult(result: EventResultPresentation, outcome: ActionOutcome): void {
+    if (this.disposed) return;
+    if (result.eventId !== 'midnight-tour') {
+      throw new Error(`Midnight Tour received result for ${result.eventId}.`);
+    }
+    void outcome;
+    if (result.resultId === 'tour-camp' || result.resultId === 'tour-camp-backpack') {
+      if (this.preparedResultId === result.resultId) return;
+      this.clearResultActors();
+      this.resetResultCounters();
+      this.camp.root.visible = true;
+      this.activeActor = this.camp.root;
+      this.preparedResultId = result.resultId;
+      this.root.userData.state = 'camp-prepared';
+      return;
+    }
+    if (result.resultId !== 'tour-grave' || this.preparedResultId === 'tour-grave') return;
+    this.clearResultActors();
+    this.resetResultCounters();
+    this.activeActor = this.createBuriedReward('midnightCoffin');
+    this.createShovel();
+    this.preparedResultId = 'tour-grave';
+    this.root.userData.state = 'grave-prepared';
+  }
+
   react(result: EventResultPresentation, outcome: ActionOutcome): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (result.eventId !== 'midnight-tour') {
       throw new Error(`Midnight Tour received result for ${result.eventId}.`);
     }
     void outcome;
+    const prepared = this.takePreparedResult(result.resultId);
     if (this.activeResultTimeline) this.animation.cancel();
     else this.animation.settle();
-    this.clearResultActors();
     this.activeResultTimeline = false;
     switch (result.resultId) {
       case 'tour-camp-backpack':
       case 'tour-camp': {
-        this.prepareCutsceneCamera();
-        this.resetResultCounters();
-        this.camp = new MidnightCampPresentation(this.dependencies.propModels);
-        this.camp.root.position.set(
-          this.islandBase.x - 0.95,
-          this.islandBase.y + this.greenTopLocalY,
-          this.islandBase.z + 1.8,
-        );
-        this.activeActor = this.camp.root;
-        this.addResultActor(this.camp.root);
-        this.root.userData.state = 'camp-result';
-        this.activeResultTimeline = true;
-        const animation = this.animation.start('result-camp', CAMP_RESULT_DURATION_SECONDS);
-        this.applyAnimation('result-camp', 0);
-        return animation;
+        return this.playCampResult();
       }
       case 'tour-chest':
       case 'tour-grave': {
         this.prepareCutsceneCamera();
         this.resetResultCounters();
-        this.activeActor = this.createBuriedReward(
-          result.resultId === 'tour-grave' ? 'midnightCoffin' : 'chestClosed',
-        );
+        this.ensureBuriedResult(result.resultId, prepared);
         this.prepareChestCamera();
-        this.createShovel();
         this.root.userData.state = result.resultId === 'tour-grave' ? 'grave-result' : 'chest-result';
         this.activeResultTimeline = true;
         const animation = this.animation.start(
@@ -308,7 +315,6 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
-    this.islandFade.reset();
     this.animation.cancel();
     this.activeResultTimeline = false;
     this.clearResultActors();
@@ -323,8 +329,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   private playPassResult(): Promise<void> {
     this.restoreCamera();
-    if (this.passVisibility === 1) this.islandFade.begin([this.island]);
-    this.passStartVisibility = this.passVisibility;
+    this.islandStart.copy(this.island.position);
     this.root.userData.state = 'pass-result';
     this.activeResultTimeline = true;
     const animation = this.animation.start('result-pass', PASS_DURATION * 0.55);
@@ -332,10 +337,22 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     return animation;
   }
 
+  private playCampResult(): Promise<void> {
+    this.prepareCutsceneCamera();
+    this.resetResultCounters();
+    this.camp.root.visible = true;
+    this.activeActor = this.camp.root;
+    this.root.userData.state = 'camp-result';
+    this.activeResultTimeline = true;
+    const animation = this.animation.start('result-camp', CAMP_RESULT_DURATION_SECONDS);
+    this.applyAnimation('result-camp', 0);
+    return animation;
+  }
+
   update(time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
     this.animation.update(time, delta);
-    this.camp?.update(time);
+    this.camp.update(time);
     if (this.heldResultKind !== null) {
       this.applyAnimation(this.heldResultKind, 1);
     } else if (this.cameraCaptured && !this.activeResultTimeline) {
@@ -373,7 +390,6 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   dispose(): void {
     if (this.disposed) return;
-    this.islandFade.reset();
     this.animation.cancel();
     this.activeResultTimeline = false;
     this.restoreCamera();
@@ -444,9 +460,9 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   }
 
   private applyPass(progress: number): void {
-    this.passVisibility = this.passStartVisibility * (1 - smoothstep(progress));
-    this.islandFade.apply(this.passVisibility);
-    this.island.visible = this.passVisibility > 0;
+    const travel = smoothstep(progress);
+    this.island.position.lerpVectors(this.islandStart, this.islandBehind, travel);
+    this.island.rotation.y = 0.08 * this.side - this.side * travel * 0.2;
   }
 
   private applyChestResult(elapsedSeconds: number): void {
@@ -514,17 +530,41 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   }
 
   private applyCampResult(progress: number): void {
-    if (this.camp === null) return;
     this.markResultReveal(this.camp.root);
-    const approach = smoothstep(clamp01(progress / 0.45));
-    this.cutsceneCameraPosition.x = this.islandBase.x - approach * 0.95;
-    this.cutsceneCameraPosition.z = this.islandBase.z + 2.4 + approach * 2;
-    this.applyCameraPose(
-      this.islandBase.x + 0.65 - approach * 1.6,
-      this.camp.root.position.y + 1 - approach * 0.75,
-      this.islandBase.z + 0.15 + approach * 1.65,
-      0,
-    );
+    const walk = smoothstep(clamp01(progress / 0.72));
+    const walkEnvelope = Math.sin(clamp01(progress / 0.72) * Math.PI);
+    // Curve inland from the landing heading, then straighten at the camp entrance.
+    const initialTangentX = 0.65 / 2.25 * 3.2;
+    const bend = walk * walk * (3 - 2 * walk);
+    const tangentX = -0.95 * 6 * walk * (1 - walk)
+      + initialTangentX * (3 * walk * walk - 4 * walk + 1);
+    this.cutsceneCameraPosition.x = this.islandBase.x - 0.95 * bend
+      + initialTangentX * walk * (1 - walk) * (1 - walk);
+    this.cutsceneCameraPosition.y = this.islandBase.y + this.greenTopLocalY
+      + 1.45 + Math.sin(progress * Math.PI * 8) * 0.025 * walkEnvelope;
+    this.cutsceneCameraPosition.z = this.islandBase.z + 2.4 - walk * 3.2;
+
+    const searchY = this.islandBase.y + this.greenTopLocalY + 1;
+    let scan: number;
+    if (progress < 0.25) {
+      scan = -0.55 * smoothstep(progress / 0.25);
+    } else if (progress < 0.5) {
+      this.markSearchLeft();
+      scan = -0.55 + 1.1 * smoothstep((progress - 0.25) / 0.25);
+    } else {
+      this.markSearchLeft();
+      this.markSearchRight();
+      scan = 0.55;
+    }
+    const heading = Math.atan2(tangentX, 3.2) + scan;
+    const lookDistance = Math.hypot(0.65, 2.25);
+    const searchX = this.cutsceneCameraPosition.x + Math.sin(heading) * lookDistance;
+    const searchZ = this.cutsceneCameraPosition.z - Math.cos(heading) * lookDistance;
+    const discovery = smoothstep(clamp01((progress - 0.5) / 0.22));
+    const targetX = searchX + (this.camp.root.position.x - searchX) * discovery;
+    const targetY = searchY + (this.camp.root.position.y + 0.25 - searchY) * discovery;
+    const targetZ = searchZ + (this.camp.root.position.z - searchZ) * discovery;
+    this.applyCameraPose(targetX, targetY, targetZ, 0);
   }
 
   private applyAttackResult(elapsedSeconds: number): void {
@@ -766,7 +806,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private placeBushes(): void {
     const placements = [
       [-2.5, -0.15, 1.05, 0.3], [-1.8, -0.65, 0.75, -0.6],
-      [-0.65, -1.4, 0.9, 1.4], [1.8, 0.6, 0.8, -0.4],
+      [-3.4, 1.3, 0.9, 1.4], [1.8, 0.6, 0.8, -0.4],
       [2.65, -0.3, 1.1, 0.8], [2.25, -1.05, 0.7, 2.1],
     ] as const;
     for (const [index, [x, z, scale, yaw]] of placements.entries()) {
@@ -845,6 +885,12 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     const islandY = MAXIMUM_WAVE_CREST + ISLAND_TOP_WAVE_CLEARANCE
       - this.greenTopLocalY;
     this.islandBase.set(islandX, islandY, ISLAND_Z);
+    this.islandBehind.set(-4.6 * this.side, islandY, 10.5);
+    this.camp.root.position.set(
+      this.islandBase.x - 0.95,
+      this.islandBase.y + this.greenTopLocalY,
+      this.islandBase.z - 2.4,
+    );
     this.chestEnd.set(
       this.islandBase.x + 0.75,
       this.islandBase.y + this.greenTopLocalY + 0.2,
@@ -1020,9 +1066,25 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     collectMeshResources(actor, this.resultGeometries, this.resultMaterials);
   }
 
+  private takePreparedResult(resultId: string): boolean {
+    const prepared = this.preparedResultId === resultId;
+    if (prepared) this.preparedResultId = null;
+    else this.clearResultActors();
+    return prepared;
+  }
+
+  private ensureBuriedResult(resultId: string, prepared: boolean): void {
+    if (prepared) return;
+    this.activeActor = this.createBuriedReward(
+      resultId === 'tour-grave' ? 'midnightCoffin' : 'chestClosed',
+    );
+    this.createShovel();
+  }
+
   private clearResultActors(): void {
+    this.preparedResultId = null;
     this.heldResultKind = null;
-    this.camp = null;
+    this.camp.root.visible = false;
     this.disposeShovel();
     this.disposeMonsterAnimation();
     this.activeActor = null;

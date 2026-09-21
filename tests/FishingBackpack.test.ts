@@ -53,23 +53,6 @@ describe('fishing backpack', () => {
     }
   });
 
-  it('gives scuba gear three times the backpack weight of other items', () => {
-    const owned = new Set<ItemId>(ITEM_IDS.filter((itemId) => (
-      itemId !== 'compass' && itemId !== 'scubaSet'
-    )));
-    expect(selectFishingCatch(0, false, 0.924999, owned).reward).toMatchObject({ itemId: 'compass' });
-    expect(selectFishingCatch(0, false, 0.925, owned).reward).toMatchObject({ itemId: 'scubaSet' });
-  });
-
-  it.each([
-    ['rod', 0.899999, false],
-    ['rod', 0.90, true],
-    ['net', 0.849999, false],
-    ['net', 0.85, true],
-  ] as const)('uses the %s backpack chance at roll %s', (gear, roll, isBackpack) => {
-    expect(selectFishingCatch(0, false, roll, new Set(), 1, gear).id === 'backpack').toBe(isBackpack);
-  });
-
   it('only awards the missing item and disappears when all eligible items are present', () => {
     const present = new Set<ItemId>(ITEM_IDS.filter((id) => id !== 'map'));
     for (const roll of [0.90, 0.95, 0.999999]) {

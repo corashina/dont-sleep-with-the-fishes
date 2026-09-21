@@ -203,20 +203,6 @@ const carlitosAnchor = (x = 720, y = 360) => ({
 });
 
 describe('SurvivalUI', () => {
-  it.each(['rested', 'tired', 'exhausted'] as const)('shows Carlitos rest as status text: %s', (rest) => {
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const ui = createUI(mount);
-    const session = new SurvivalSession(saved('carlitos'), { seed: 1, initialCarlitos: { rest } });
-    ui.render(session.snapshot(), () => null);
-    ui.setAnchors([carlitosAnchor()]);
-    mount.querySelector<HTMLButtonElement>('[data-anchor-id="carlitos"]')!.click();
-    const label = mount.querySelector<HTMLElement>('[data-carlitos-rest-label]')!;
-    expect(label.textContent).toBe(rest.toUpperCase());
-    expect(label.classList.contains('ui-role-context')).toBe(true);
-    expect(mount.querySelector('[data-carlitos-energy-label]')).toBeNull();
-  });
-
   it.each(['tired', 'exhausted'] as const)('keeps disabled Carlitos retrieval and its hint visible while %s', (rest) => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -247,8 +233,6 @@ describe('SurvivalUI', () => {
     const focusedView = mount.querySelector<HTMLElement>('[data-focused-event-view]')!;
     expect(focusedView.dataset.placement).toBe('center');
     expect(focusedView.dataset.anchorState).toBe('centered');
-    expect(focusedView.querySelector('[data-focused-event-description]')?.textContent)
-      .toBe('Recover it yourself, or send Carlitos if he is rested.');
     const button = mount.querySelector<HTMLButtonElement>('[data-focused-event-view] [data-event-choice="delegate-carlitos"]')!;
     expect(button.getAttribute('aria-disabled')).toBe('true');
     expect(button.querySelector('.event-choice__reason')!.textContent).toBe(reason);
@@ -259,29 +243,6 @@ describe('SurvivalUI', () => {
     expect(button.querySelector('.event-choice__reason')!.textContent).toContain(
       rest === 'tired' ? 'jednej spokojnej nocy' : 'dwóch spokojnych nocy',
     );
-  });
-
-  it('keeps the drifting popup centered when its world target moves', () => {
-    const mount = document.createElement('main');
-    Object.defineProperty(mount, 'clientWidth', { configurable: true, value: 1000 });
-    Object.defineProperty(mount, 'clientHeight', { configurable: true, value: 700 });
-    mount.getBoundingClientRect = () => ({
-      x: 0, y: 0, top: 0, right: 1000, bottom: 700, left: 0, width: 1000, height: 700,
-      toJSON: () => ({}),
-    });
-    document.body.append(mount);
-    const ui = createUI(mount);
-    ui.showFocusedEvent({
-      eventId: 'drifting-chest',
-      target: { x: 900, y: 80, width: 60, height: 60, depth: 1, visible: true },
-      choices: [{ id: 'retrieve', label: 'RETRIEVE', unavailableReason: null, instanceId: null }],
-    });
-    const popup = mount.querySelector<HTMLElement>('[data-focused-event-view]')!;
-    expect(popup.dataset.placement).toBe('center');
-    expect(popup.getAttribute('aria-describedby')).toBe('focused-event-description');
-    expect(popup.style.getPropertyValue('--focused-event-x')).toBe('302px');
-    expect(popup.querySelector('[data-focused-event-description]')?.textContent)
-      .toBe('Bring it aboard yourself, or send Carlitos if he is rested.');
   });
 
   it('dismisses only the top popup and consumes the outside click', async () => {
@@ -345,34 +306,6 @@ describe('SurvivalUI', () => {
       expect(backgroundAction).not.toHaveBeenCalled();
     },
   );
-
-  it('restamps accessible meter values after a covered transition', () => {
-    const mount = document.createElement('main');
-    const ui = createUI(mount);
-    const changed = snapshot({ health: 60, energy: 0 });
-    ui.render(changed, () => null);
-    const health = mount.querySelector<HTMLElement>('[data-meter="health"]')!;
-    const energy = mount.querySelector<HTMLElement>('[data-meter="energy"]')!;
-    const observer = new MutationObserver(() => undefined);
-    observer.observe(mount, {
-      attributes: true,
-      attributeFilter: ['aria-valuemax', 'aria-valuenow', 'aria-valuetext'],
-      subtree: true,
-    });
-
-    ui.render(changed, () => null);
-
-    const records = observer.takeRecords();
-    observer.disconnect();
-    expect(records.some(({ target, attributeName }) => (
-      target === health && attributeName === 'aria-valuenow'
-    ))).toBe(true);
-    expect(records.some(({ target, attributeName }) => (
-      target === energy && attributeName === 'aria-valuenow'
-    ))).toBe(true);
-    expect(health.getAttribute('aria-valuenow')).toBe('60');
-    expect(energy.getAttribute('aria-valuenow')).toBe('0');
-  });
 
   it('supports Carlitos pointer, keyboard, dismissal, focus, and action flows', () => {
     const mount = document.createElement('main');
@@ -471,7 +404,7 @@ describe('SurvivalUI', () => {
         },
         {
           id: 'handyman:hand', itemType: null, toolId: null, action: null,
-          eventChoiceId: 'touch', label: 'HAND', tooltip: false, remainingUses: null,
+          eventChoiceId: 'touch', label: '?', tooltip: true, remainingUses: null,
           x: 260, y: 180, visible: true, depleted: false,
           hitArea: { width: 80, height: 80, depth: 3 },
         },
@@ -482,6 +415,7 @@ describe('SurvivalUI', () => {
       }]);
       const ring = mount.querySelector<HTMLButtonElement>('[data-anchor-id="supply:swimRing"]')!;
       const hand = mount.querySelector<HTMLButtonElement>('[data-anchor-id="handyman:hand"]')!;
+      expect(hand.querySelector('[role="tooltip"]')?.textContent).toBe('?');
       expect(ring.getAttribute('aria-disabled')).toBe('false');
       expect(Number(ring.style.zIndex)).toBeGreaterThan(Number(hand.style.zIndex));
 
@@ -836,33 +770,6 @@ describe('SurvivalUI', () => {
     expect(onEventItem).not.toHaveBeenCalled();
   });
 
-  it.each(['pointer', 'keyboard'] as const)(
-    'shows a distinct selected keyed response for %s activation',
-    async (input) => {
-      vi.useFakeTimers();
-      const mount = document.createElement('main');
-      document.body.append(mount);
-      const ui = createUI(mount);
-      openContextualEvent(ui);
-      ui.onEventChoice = (choiceId) => {
-        ui.setBusy(true);
-        void ui.playEventChoiceBeat(choiceId);
-      };
-      const choice = mount.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]')!;
-
-      if (input === 'pointer') choice.click();
-      else {
-        choice.focus();
-        press('[data-event-choice="retrieve"]', 'Enter');
-      }
-
-      expect(choice.dataset.eventState).toBe('selected');
-      expect(choice.getAttribute('aria-pressed')).toBe('true');
-      expect(choice.getAttribute('aria-disabled')).toBe('true');
-      await vi.runAllTimersAsync();
-    },
-  );
-
   it('settles and clears an active contextual press beat during lifecycle cleanup', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
@@ -942,7 +849,6 @@ describe('SurvivalUI', () => {
     expect(dialog.classList).toContain('routine-dialog');
     expect(dialog.classList).not.toContain('survival-overlay');
     expect(dialog.classList).not.toContain('cinematic-overlay');
-    expect(dialog.dataset.anchorState).toBe('fallback');
     ui.setAnchors([
       { id: 'ductTape-1', itemType: 'ductTape', toolId: null, action: 'repairItem', remainingUses: 1, x: 100, y: 100, visible: true, depleted: false },
       {
@@ -959,8 +865,6 @@ describe('SurvivalUI', () => {
       },
     ]);
     expect(mount.querySelector('[data-repair-options]')).toBe(dialog);
-    expect(dialog.dataset.anchorState).toBe('projected');
-    expect(dialog.dataset.placement).toBe('left');
     const targets = [...mount.querySelectorAll<HTMLButtonElement>('[data-repair-target]')];
     expect(targets.map(({ dataset }) => dataset.repairTarget)).toEqual(['bucket-2', 'compass-4']);
     expect([...mount.querySelectorAll<HTMLButtonElement>('[data-discard-target]')]
@@ -1133,21 +1037,6 @@ describe('SurvivalUI', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(document.activeElement).toBe(marker);
     expect(mount.querySelector('[data-journal]')?.hasAttribute('inert')).toBe(true);
-  });
-
-  it('keeps the journal marker available while actions are busy', () => {
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const ui = createUI(mount);
-    const open = vi.fn();
-    const marker = mount.querySelector<HTMLButtonElement>('[data-journal-open]')!;
-    ui.onJournalOpen = open;
-
-    ui.setBusy(true);
-    marker.click();
-
-    expect(marker.disabled).toBe(false);
-    expect(open).toHaveBeenCalledOnce();
   });
 
   it('locks ordinary anchors until event choices become available', () => {

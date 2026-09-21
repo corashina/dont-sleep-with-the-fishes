@@ -87,16 +87,50 @@ function setup(
     borrowEventActor: vi.fn(() => actor),
     stowEventItemUntilDay: vi.fn(),
   } as unknown as BoatSupplyDisplay;
-  const adapter = new EventItemUseAdapter(
-    camera,
-    new EventItemEffects(),
-  );
+  const effects = new EventItemEffects();
+  const adapter = new EventItemUseAdapter(camera, effects);
   const clear = vi.spyOn(adapter, 'clear');
   const controller = new EventItemUseController(supplies, adapter);
-  return { actor, adapter, camera, clear, controller, supplies };
+  return { actor, adapter, camera, clear, controller, effects, supplies };
 }
 
 describe('EventItemUseController', () => {
+
+  // Importance: 95/100. The chain must survive the whole event result, including failure.
+  it.each(['usable', 'broken', 'lost'] as const)(
+    'keeps the %s anchor chain until the event scene clears', async (condition) => {
+      const { actor, adapter, controller, effects } = setup('anchor-1' as ItemInstanceId);
+      try {
+        const use = controller.play({
+          ...request(actor.instanceId),
+          eventId: 'tornado', choiceId: 'anchor', itemId: 'anchor', context: 'anchor-drop',
+        });
+        controller.update(eventItemUseDuration('anchor-drop'));
+        await use;
+        const chain = effects.root.getObjectByName('event-item-chain')!;
+        expect(chain.visible).toBe(true);
+        expect(actor.root.visible).toBe(false);
+        const reaction = controller.react(result(actor.instanceId, {
+          brokenInstanceIds: condition === 'broken' ? [actor.instanceId] : [],
+          lostInstanceIds: condition === 'lost' ? [actor.instanceId] : [],
+        }));
+        for (let frame = 0; frame < 100; frame += 1) {
+          controller.update(0.1);
+          expect(chain.visible).toBe(true);
+          expect(actor.root.visible).toBe(false);
+          expect(actor.release).not.toHaveBeenCalled();
+        }
+        await reaction;
+        controller.clear('night');
+        expect(chain.visible).toBe(false);
+        expect(actor.release).toHaveBeenCalledOnce();
+      } finally {
+        controller.dispose();
+        adapter.dispose();
+        effects.dispose();
+      }
+    },
+  );
 
   it('preserves player camera changes throughout the net attack and cleanup', () => {
     const { actor, adapter, camera, controller } = setup();

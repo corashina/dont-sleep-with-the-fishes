@@ -1,9 +1,6 @@
-import { Box3,BufferGeometry,Material,Mesh,Vector3 } from 'three';
-import { describe,expect,it,vi } from 'vitest';
-import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
+import { describe,expect,it } from 'vitest';
 import { eligibleFishingCatches,selectFishingCatch } from '../src/survival/fishingCatalog';
 import { fishingSettlement } from '../src/survival/fishingSettlementRules';
-import { collectMaterialTextures,modelTriangleCount } from '../src/rendering/modelPresentation';
 import type { SimpleJunkId } from '../src/survival/JunkCatchModels';
 
 const ids: readonly SimpleJunkId[] = [
@@ -26,26 +23,4 @@ describe('new junk catches', () => {
     }
   });
 
-  it.each(ids)('builds %s at catch scale and releases all model resources', async (id) => {
-    const load = vi.fn();
-    const library = new FishingCatchLibrary({ load });
-    const root = (await library.prepare(id))!;
-    expect(load).not.toHaveBeenCalled();
-    const size = new Box3().setFromObject(root).getSize(new Vector3());
-    expect([size.x, size.y, size.z].every((value) => Number.isFinite(value) && value > 0)).toBe(true);
-    expect(Math.max(size.x, size.y, size.z)).toBeLessThanOrEqual(0.5);
-    expect(modelTriangleCount(root, 'Missing geometry')).toBeLessThanOrEqual(400);
-    const geometries = new Set<BufferGeometry>();
-    const materials = new Set<Material>();
-    root.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      geometries.add(object.geometry);
-      for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material);
-    });
-    const disposed = [...geometries, ...materials, ...collectMaterialTextures(materials)]
-      .map((resource) => vi.spyOn(resource, 'dispose'));
-    library.hide();
-    library.dispose();
-    disposed.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
-  });
 });

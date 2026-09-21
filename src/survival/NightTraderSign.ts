@@ -4,29 +4,37 @@ import {
 } from 'three';
 import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { itemArtwork } from '../ui/uiArtwork';
+import { nightTraderArtwork } from './nightTraderArtwork';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import type { ItemId } from '../game/ItemState';
 import type { NightTraderTrade } from './nightTraderTrades';
 
-const ROW_HEIGHT = 0.43;
-const ICON_SCALE = 0.0064;
-const PAINT = {
-  primary: '#d7c49b', secondary: '#a59876', light: '#ead9b2',
-  ink: '#392c20', cutout: '#614630',
-} as const;
+const ROW_HEIGHT = 0.51;
+const ICON_SCALE = 0.0072;
+const PAINT_COLOR = '#f0dfb7';
 
-function paintedArtwork(id: ItemId): string {
-  return itemArtwork(id).replace(/class="([^"]*)"/g, (_match, classNames: string) => {
-    const names = classNames.split(' ');
-    const color = Object.entries(PAINT).find(([name]) => names.includes(`item-artwork__${name}`))?.[1] ?? PAINT.primary;
-    const stroke = names.some((name) => name.startsWith('item-artwork__stroke'));
-    return stroke ? `fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"`
-      : `fill="${color}"`;
-  });
+function facePaintForward(geometry: BufferGeometry): void {
+  const positions = geometry.getAttribute('position');
+  const uv = geometry.getAttribute('uv');
+  for (let i = 0; i < positions.count; i += 3) {
+    const ax = positions.getX(i + 1) - positions.getX(i);
+    const ay = positions.getY(i + 1) - positions.getY(i);
+    const bx = positions.getX(i + 2) - positions.getX(i);
+    const by = positions.getY(i + 2) - positions.getY(i);
+    if (ax * by - ay * bx <= 0) continue;
+    const x = positions.getX(i + 1);
+    const y = positions.getY(i + 1);
+    positions.setXYZ(i + 1, positions.getX(i + 2), positions.getY(i + 2), 0);
+    positions.setXYZ(i + 2, x, y, 0);
+    const u = uv.getX(i + 1);
+    const v = uv.getY(i + 1);
+    uv.setXY(i + 1, uv.getX(i + 2), uv.getY(i + 2));
+    uv.setXY(i + 2, u, v);
+  }
+  geometry.computeVertexNormals();
 }
 
-/** A boat-mounted sign. Drawings reuse the game's illustrated item silhouettes. */
+/** A boat-mounted sign with painted illustrations readable at trade distance. */
 export class NightTraderSign {
   readonly root = new Group();
   private readonly drawings = new Group();
@@ -44,11 +52,6 @@ export class NightTraderSign {
       post.position.set(x, -0.85, -0.09);
       this.root.add(post);
     }
-    const lanternArm = new Mesh(new BoxGeometry(0.66, 0.055, 0.07), endGrain);
-    lanternArm.position.set(0.31, 1.08, -0.03);
-    const lanternHook = new Mesh(new BoxGeometry(0.05, 0.055, 0.45), nail);
-    lanternHook.position.set(0, 1.08, 0.16);
-    this.root.add(lanternArm, lanternHook);
     for (let row = 0; row < 5; row++) {
       const y = (2 - row) * ROW_HEIGHT;
       const edge = row % 2 === 0 ? 0.025 : -0.015;
@@ -64,6 +67,7 @@ export class NightTraderSign {
         depth: 0.075, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.01, bevelSegments: 1, steps: 1,
       }), wood);
       plank.name = `night-trader-sign-plank-${row + 1}`;
+      plank.scale.y = 1.18;
       plank.position.set(0, y, -0.075);
       this.root.add(plank);
       for (const x of [-0.78, 0.78]) {
@@ -85,7 +89,7 @@ export class NightTraderSign {
       arrow.lineTo(0.05, 0.028);
       arrow.lineTo(-0.15, 0.022);
       arrow.closePath();
-      const paint = new MeshStandardMaterial({ color: PAINT.light, roughness: 1, side: DoubleSide });
+      const paint = new MeshStandardMaterial({ color: PAINT_COLOR, roughness: 1, side: DoubleSide });
       const arrowMesh = new Mesh(new ShapeGeometry(arrow), paint);
       arrowMesh.position.set(0, y, 0.019);
       this.root.add(arrowMesh);
@@ -116,19 +120,19 @@ export class NightTraderSign {
   }
 
   private addIcon(loader: SVGLoader, batches: Map<string, BufferGeometry[]>, id: ItemId, x: number, y: number): void {
-    const { paths } = loader.parse(paintedArtwork(id));
+    const { paths } = loader.parse(nightTraderArtwork(id));
     paths.forEach((path, index) => {
       const style = path.userData!.style;
       if (style.fill !== undefined && style.fill !== 'none') {
         const shape = new ShapeGeometry(SVGLoader.createShapes(path), 10);
         const geometry = shape.toNonIndexed();
         shape.dispose();
-        this.addPaint(batches, geometry, style.fill, x, y, index);
+        this.addPaint(batches, geometry, style.fill, x, y, index * 2);
       }
       if (style.stroke !== undefined && style.stroke !== 'none') {
         for (const subPath of path.subPaths) {
           const geometry = SVGLoader.pointsToStroke(subPath.getPoints(12), style, 6);
-          this.addPaint(batches, geometry, style.stroke, x, y, index);
+          this.addPaint(batches, geometry, style.stroke, x, y, index * 2 + 1);
         }
       }
     });
@@ -137,8 +141,8 @@ export class NightTraderSign {
   private addPaint(batches: Map<string, BufferGeometry[]>, geometry: BufferGeometry, color: string, x: number, y: number, layer: number): void {
     geometry.translate(-40, -36, 0);
     geometry.scale(ICON_SCALE, -ICON_SCALE, 1);
-    // SVG Y points down. Recompute normals after reflection so the paint receives front lighting.
-    geometry.computeVertexNormals();
+    // SVG Y points down; round stroke joins can also contain reversed triangles.
+    facePaintForward(geometry);
     geometry.translate(x, y, 0.018 + layer * 0.001);
     const batch = batches.get(color) ?? [];
     batch.push(geometry);

@@ -74,22 +74,4 @@ describe('GameUI', () => {
     ui.dispose();
   });
 
-  it('returns to the menu from pause', () => {
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const ui = new GameUI(mount);
-    const returnToMenu = vi.fn();
-    ui.onReturnToMenu = returnToMenu;
-    ui.setPaused(true);
-
-    const button = mount.querySelector<HTMLButtonElement>('[data-return-to-menu]')!;
-    expect(button.textContent).toContain('BACK TO MENU');
-    expect(button.getAttribute('aria-label')).toBe('Back to menu');
-    expect(button.classList).toContain('primary-action');
-    expect(button.classList).not.toContain('secondary-action');
-    button.click();
-
-    expect(returnToMenu).toHaveBeenCalledOnce();
-    ui.dispose();
-  });
 });

@@ -58,8 +58,10 @@ export class SurvivalModalViews {
     for (const item of this.currentRepairItems) {
       const repair = this.repairTargets.querySelector<HTMLButtonElement>(`[data-repair-target="${item.instanceId}"]`);
       const discard = this.repairTargets.querySelector<HTMLButtonElement>(`[data-discard-target="${item.instanceId}"]`);
+      const name = this.repairTargets.querySelector<HTMLElement>(`[data-repair-item-name="${item.instanceId}"]`);
       if (repair) this.labelRepairTarget(repair, item);
       if (discard) this.labelDiscardTarget(discard, item);
+      if (name) name.textContent = ITEM_LABELS[item.type];
     }
     this.labelRepairAvailability();
     if (this.currentEnding !== null) {
@@ -77,12 +79,10 @@ export class SurvivalModalViews {
     template.innerHTML = `
       <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="repairTarget" aria-label="${uiText('repairTarget')}" inert>
         <div class="routine-dialog__card scuba-popup-paper">
-          <h2 class="scuba-popup-title ui-role-display" data-repair-options-title tabindex="-1" data-ui-text="chooseRepair">${uiText('chooseRepair')}</h2>
+          <button type="button" class="dive-result__close ui-role-context" data-repair-cancel data-ui-aria="cancelRepair" aria-label="${uiText('cancelRepair')}">&times;</button>
+          <h2 class="scuba-popup-title ui-role-display" data-repair-options-title tabindex="-1" data-ui-text="repairItem">${uiText('repairItem')}</h2>
           <p class="repair-unavailable ui-role-context" data-repair-unavailable hidden></p>
           <div class="repair-targets" data-repair-targets></div>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-repair-cancel data-ui-aria="cancelRepair" aria-label="${uiText('cancelRepair')}" data-ui-text="cancel">
-            ${uiText('cancel')}
-          </button>
         </div>
       </section>
       <section class="survival-overlay pause-overlay cinematic-overlay scuba-popup-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="paused" aria-label="${uiText('paused')}" inert>
@@ -163,13 +163,11 @@ export class SurvivalModalViews {
       thumbnail.draggable = false;
       button.append(thumbnail);
       button.disabled = this.repairBusy;
-      const repairLabel = document.createElement('span');
-      repairLabel.className = 'repair-target__label ui-role-context';
-      repairLabel.textContent = uiText('repair');
-      repairLabel.dataset.uiText = 'repair';
-      repairLabel.setAttribute('aria-hidden', 'true');
-      button.append(repairLabel);
-      row.append(button);
+      const name = document.createElement('span');
+      name.className = 'repair-target__name ui-role-context';
+      name.dataset.repairItemName = item.instanceId;
+      name.textContent = ITEM_LABELS[item.type];
+      row.append(button, name);
       if (showDiscard) {
         const discard = document.createElement('button');
         discard.type = 'button';
@@ -180,8 +178,6 @@ export class SurvivalModalViews {
         this.labelDiscardTarget(discard, item);
         discard.disabled = this.repairBusy;
         row.append(discard);
-      } else {
-        row.classList.add('repair-target-row--repair-only');
       }
       return row;
     });

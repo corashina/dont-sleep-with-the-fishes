@@ -1,17 +1,17 @@
 import {
-  BoxGeometry,
   BufferGeometry,
+  DirectionalLight,
   DoubleSide,
   Group,
   Material,
   Mesh,
-  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   Shape,
   ShapeGeometry,
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
+import { LightningBolt } from '../world/LightningBolt';
 import { FogMonster } from './FogMonster';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import { clamp01, pulse, smoothstep } from './animationMath';
@@ -19,7 +19,6 @@ import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import type { EventModelLibrary } from './EventModelLibrary';
 import type { WorldWaveSampler } from './eventPresentationTypes';
-import { SeaMistCurtain } from './SeaMistCurtain';
 import type { ActionOutcome, ItemCondition } from './survivalTypes';
 import { StationaryEventCamera } from './StationaryEventCamera';
 import {
@@ -94,7 +93,6 @@ function reactionCondition(
   return null;
 }
 
-const FOG_MONSTER_MIST_OPACITY = 0.56;
 
 interface WeatherWaveEnvironment {
   readonly sampleWorldWaveInto: WorldWaveSampler;
@@ -116,31 +114,6 @@ function resetItemSample(sample: WeatherItemSample): void {
   sample.cameraPush = 0;
   sample.supplyRoll = 0;
   sample.effectKind = 'none';
-}
-
-function createLightningFlash(material: Material): Group {
-  const root = new Group();
-  root.name = 'weather-lightning-flash';
-  const segments = [
-    [-0.26, 1.18, -0.06, -0.25],
-    [0.02, 0.48, 0.03, 0.34],
-    [-0.18, -0.22, -0.02, -0.3],
-    [0.06, -0.86, 0.02, 0.22],
-  ] as const;
-  for (let index = 0; index < segments.length; index += 1) {
-    const [x, y, z, roll] = segments[index]!;
-    const segment = new Mesh(
-      new BoxGeometry(0.085 - index * 0.012, 0.88 - index * 0.08, 0.045),
-      material,
-    );
-    segment.name = `weather-lightning-segment-${index + 1}`;
-    segment.position.set(x, y, z);
-    segment.rotation.z = roll;
-    root.add(segment);
-  }
-  root.position.set(-3.8, 4.1, -12.5);
-  root.visible = false;
-  return root;
 }
 
 export class WeatherEventAnimator {
@@ -199,10 +172,9 @@ export class WeatherEventAnimator {
     effectKind: 'none',
   };
   private readonly monster: FogMonster | null;
-  private readonly lightningMaterial: MeshBasicMaterial;
-  private readonly lightningFlash: Group;
+  private readonly lightningFlash: LightningBolt;
+  private readonly lightningLight = new DirectionalLight(0xe3eaff, 0);
   private readonly windPaper: Mesh;
-  private readonly fog: SeaMistCurtain | null;
   private active: ActiveWeatherAnimation | null = null;
   private selectedActorId: ItemInstanceId | null = null;
   private stagedEventId: string | null = null;
@@ -221,21 +193,14 @@ export class WeatherEventAnimator {
       : new StationaryEventCamera(viewCamera);
     this.worldRoot.name = 'weather-event-world';
     this.boatRoot.name = 'weather-event-boat';
-    this.lightningMaterial = new MeshBasicMaterial({
-      color: 0xdce8e6,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      side: DoubleSide,
-    });
     this.monster = eventModels !== undefined && (
       onlyEventId === undefined || onlyEventId === 'monster-in-the-fog'
     ) ? new FogMonster(eventModels.create('fogMonster'), viewCamera, waveEnvironment) : null;
-    const usesFogMonster = onlyEventId === undefined || onlyEventId === 'monster-in-the-fog';
-    this.fog = usesFogMonster
-      ? new SeaMistCurtain('weather-fog-monster-mist', 'surrounding')
-      : null;
-    this.lightningFlash = createLightningFlash(this.lightningMaterial);
+    this.lightningFlash = new LightningBolt(14, 0x57024);
+    this.lightningFlash.name = 'weather-lightning-flash';
+    this.lightningFlash.position.set(-3.8, -0.3, -18);
+    this.lightningLight.name = 'weather-event-lightning-light';
+    this.lightningLight.position.set(-3.8, 13.7, -18);
     const paperShape = new Shape();
     paperShape.moveTo(-0.34, -0.22);
     paperShape.lineTo(0.31, -0.2);
@@ -256,8 +221,7 @@ export class WeatherEventAnimator {
     this.windPaper.name = 'weather-windy-paper';
     this.windPaper.visible = false;
     this.windPaper.renderOrder = 3;
-    if (this.fog !== null) this.worldRoot.add(this.fog.root);
-    this.worldRoot.add(this.lightningFlash, this.windPaper);
+    this.worldRoot.add(this.lightningFlash, this.lightningLight, this.lightningLight.target, this.windPaper);
     collectMeshResources(this.worldRoot, this.ownedGeometries, this.ownedMaterials);
     collectMeshResources(this.boatRoot, this.ownedGeometries, this.ownedMaterials);
     if (this.monster !== null) this.worldRoot.add(this.monster.root);
@@ -271,7 +235,6 @@ export class WeatherEventAnimator {
     if (eventId === 'monster-in-the-fog') this.monster?.stage(variantSeed);
     this.rememberCameraBase();
     this.hideTransientEffects();
-    this.showStagedFog();
     this.selectedActorId = null;
   }
 
@@ -290,7 +253,6 @@ export class WeatherEventAnimator {
         return this.windPaper;
       case 'shower-night':
       case 'restless-waves':
-      case 'bad-sleep':
         return this.worldRoot;
       default:
         return null;
@@ -305,7 +267,6 @@ export class WeatherEventAnimator {
     this.stagedEventId = eventId;
     this.rememberCameraBase();
     this.hideTransientEffects();
-    this.showStagedFog();
     return new Promise((resolve) => {
       this.active = {
         kind: 'reveal',
@@ -330,7 +291,6 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
     this.hideTransientEffects();
     this.showStagedFogMonster();
-    this.showStagedFog();
     resetItemSample(this.itemSample);
     this.selectedActorId = null;
     return new Promise((resolve) => {
@@ -363,7 +323,6 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
     this.hideTransientEffects();
     this.showStagedFogMonster();
-    this.showStagedFog();
     this.pinReactionActors(eventId, actors);
     return new Promise((resolve) => {
       this.active = {
@@ -388,7 +347,6 @@ export class WeatherEventAnimator {
     this.restoreCamera();
     this.supplyDisplay.resetEventPoseForFrame();
     this.hideTransientEffects();
-    this.showStagedFog();
     if (active.kind !== 'reveal') this.showStagedFogMonster();
     active.elapsed = Math.min(
       active.duration,
@@ -452,9 +410,7 @@ export class WeatherEventAnimator {
     }
     if (eventId === 'windy-night') this.applyWindPaper(progress);
     if (eventId === 'thunderstorm' && sample.lightningEmphasis > 0.015) {
-      this.lightningFlash.visible = true;
-      this.lightningFlash.scale.setScalar(0.9 + sample.lightningEmphasis * 0.22);
-      this.lightningMaterial.opacity = 0.24 + sample.lightningEmphasis * 0.72;
+      this.setLightningIntensity(sample.lightningEmphasis);
     }
   }
 
@@ -595,9 +551,7 @@ export class WeatherEventAnimator {
     if (effect <= 0.01) return;
     switch (sample.effectKind) {
       case 'storm-loss-lightning':
-        this.lightningFlash.visible = true;
-        this.lightningFlash.scale.setScalar(0.92 + effect * 0.18);
-        this.lightningMaterial.opacity = 0.28 + effect * 0.68;
+        this.setLightningIntensity(effect);
         break;
       default:
         break;
@@ -631,12 +585,6 @@ export class WeatherEventAnimator {
     if (this.stagedEventId === 'monster-in-the-fog') this.showSilhouette(1);
   }
 
-  private showStagedFog(): void {
-    if (this.stagedEventId !== 'monster-in-the-fog' || this.fog === null) return;
-    this.fog.root.visible = true;
-    this.fog.setOpacity(FOG_MONSTER_MIST_OPACITY);
-  }
-
   private applyWindPaper(progress: number): void {
     const value = clamp01(progress);
     this.windPaper.visible = value > 0.03 && value < 0.94;
@@ -662,16 +610,15 @@ export class WeatherEventAnimator {
 
   private hideTransientEffects(): void {
     this.monster?.setVisibility(0);
-    if (this.fog !== null) {
-      this.fog.root.visible = false;
-      this.fog.setOpacity(0);
-    }
-    this.lightningFlash.visible = false;
-    this.lightningFlash.scale.set(1, 1, 1);
-    this.lightningMaterial.opacity = 0;
+    this.setLightningIntensity(0);
     this.windPaper.visible = false;
     this.windPaper.position.set(-3.4, 1.35, -3.2);
     this.windPaper.rotation.set(0, 0, -0.24);
+  }
+
+  private setLightningIntensity(intensity: number): void {
+    this.lightningFlash.setIntensity(intensity);
+    this.lightningLight.intensity = intensity * 3.2;
   }
 
   private finishActive(): void {
@@ -683,7 +630,6 @@ export class WeatherEventAnimator {
         this.restoreCamera();
         this.hideTransientEffects();
         this.showStagedFogMonster();
-        this.showStagedFog();
         active.resolve(true);
         break;
       case 'react':
@@ -705,7 +651,6 @@ export class WeatherEventAnimator {
         this.restoreCamera();
         this.hideTransientEffects();
         this.showStagedFogMonster();
-        this.showStagedFog();
         active.resolve();
         break;
     }
@@ -717,7 +662,6 @@ export class WeatherEventAnimator {
     if (active !== null) this.restoreCamera();
     this.hideTransientEffects();
     this.showStagedFogMonster();
-    this.showStagedFog();
     this.selectedActorId = null;
     if (active?.kind === 'item') {
       active.resolve(false);

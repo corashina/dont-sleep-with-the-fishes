@@ -196,11 +196,6 @@ export const uiCatalog = {
     "pl": "Działania dla uszkodzonych przedmiotów",
     "es-AR": "Acciones para objetos rotos"
   },
-  "chooseRepair": {
-    "en": "Choose what to do with a broken item",
-    "pl": "Wybierz działanie dla uszkodzonego przedmiotu",
-    "es-AR": "Elegí qué hacer con un objeto roto"
-  },
   "cancelRepair": {
     "en": "Cancel broken item actions",
     "pl": "Anuluj działania dla uszkodzonego przedmiotu",
@@ -261,20 +256,10 @@ export const uiCatalog = {
     "pl": "Dryfujące zapasy",
     "es-AR": "Suministros a la deriva"
   },
-  "suppliesDescription": {
-    "en": "Recover it yourself, or send Carlitos if he is rested.",
-    "pl": "Zdobądź je sam albo wyślij Carlitosa, jeśli jest wypoczęty.",
-    "es-AR": "Recuperalos vos, o mandá a Carlitos si está descansado."
-  },
   "chestTitle": {
     "en": "Drifting Chest",
     "pl": "Dryfująca skrzynia",
     "es-AR": "Cofre a la deriva"
-  },
-  "chestDescription": {
-    "en": "Bring it aboard yourself, or send Carlitos if he is rested.",
-    "pl": "Wciągnij ją sam albo wyślij Carlitosa, jeśli jest wypoczęty.",
-    "es-AR": "Subilo al bote vos, o mandá a Carlitos si está descansado."
   },
   "fishingResult": { en: 'Fishing Result', pl: 'Wynik połowu', 'es-AR': 'Resultado de pesca' },
   "closeFishing": { en: 'Close fishing result', pl: 'Zamknij wynik połowu', 'es-AR': 'Cerrar resultado de pesca' },

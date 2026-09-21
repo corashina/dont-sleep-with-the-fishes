@@ -55,7 +55,7 @@ const REVEAL_DURATION = 3.4;
 const FLASHLIGHT_DURATION = 1.8;
 const PASS_CHOICE_DURATION = 0.32;
 const RESCUE_DURATION = 3.2;
-const FADE_DURATION = 4.2;
+const EXIT_DURATION = 4.2;
 const SHIP_YAW = -0.08;
 const RESCUE_YAW = SHIP_YAW + 0.58;
 const SHIP_DISTANCE_SCALE = 3;
@@ -68,6 +68,11 @@ const SHIP_APPROACH = new Vector3(
   -3.8 * SHIP_DISTANCE_SCALE,
   0.8,
   -21 * SHIP_DISTANCE_SCALE,
+);
+const SHIP_EXIT = new Vector3(
+  11 * SHIP_DISTANCE_SCALE,
+  0.68,
+  -45.4 * SHIP_DISTANCE_SCALE,
 );
 const HORIZON_LIGHT_INTENSITY = 0.82;
 const CRUISE_SPEED = 0.7;
@@ -175,15 +180,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   });
   private readonly staticGeometries = new Set<BufferGeometry>();
   private readonly staticMaterials = new Set<Material>();
-  private readonly shipMaterialStates: {
-    material: Material;
-    opacity: number;
-    transparent: boolean;
-    depthWrite: boolean;
-  }[] = [];
   private readonly shipStartPosition = new Vector3();
   private readonly shipBase = SHIP_BASE.clone();
   private readonly shipApproach = SHIP_APPROACH.clone();
+  private readonly shipExit = SHIP_EXIT.clone();
   private readonly cameraLook: StationaryEventCamera;
   private readonly supplyPose: MutableSupplyPose = {
     x: 0,
@@ -248,15 +248,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       this.staticGeometries,
       this.staticMaterials,
     );
-    for (const material of this.staticMaterials) {
-      if (material === this.portBeaconMaterial || material === this.starboardBeaconMaterial) continue;
-      this.shipMaterialStates.push({
-        material,
-        opacity: material.opacity,
-        transparent: material.transparent,
-        depthWrite: material.depthWrite,
-      });
-    }
     this.resetActors();
   }
 
@@ -365,7 +356,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
         this.setPlayerSignalsDark();
         this.root.userData.signalPulses = 0;
         this.root.userData.state = 'passing';
-        return this.startAnimation('result-pass', FADE_DURATION);
+        return this.startAnimation('result-pass', EXIT_DURATION);
       default:
         throw new Error(
           `Unsupported Other People result: ${result.resultId}`,
@@ -491,9 +482,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
         this.root.userData.state = 'held-rescue';
         break;
       case 'result-pass':
-        this.ship.visible = false;
-        this.portBeacon.visible = false;
-        this.starboardBeacon.visible = false;
         this.root.userData.state = 'held-pass';
         break;
     }
@@ -576,26 +564,21 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   }
 
   private applyPassResult(progress: number): void {
-    const visibility = 1 - smoothstep(progress);
-    this.setShipVisibility(visibility);
+    const travel = clamp01(progress);
+    this.ship.position.lerpVectors(
+      this.shipStartPosition,
+      this.shipExit,
+      travel,
+    );
+    this.ship.rotation.y = this.shipStartYaw;
     this.root.userData.courseTurns = 0;
-    this.setBeaconIntensity(HORIZON_LIGHT_INTENSITY * visibility);
+    const light = HORIZON_LIGHT_INTENSITY
+      * (1 - smoothstep((progress - 0.38) / 0.62));
+    this.setBeaconIntensity(light);
     this.setPlayerSignalsDark();
     this.updateBeaconPose();
+    this.applyCameraPose(0.17 - 0.41 * travel, -0.012 * (1 - travel));
     this.updateOpenWaterDistance();
-  }
-
-  private setShipVisibility(visibility: number): void {
-    for (const original of this.shipMaterialStates) {
-      const material = original.material;
-      const transparent = visibility < 1 || original.transparent;
-      if (material.transparent !== transparent) {
-        material.transparent = transparent;
-        material.needsUpdate = true;
-      }
-      material.opacity = original.opacity * visibility;
-      material.depthWrite = visibility < 1 ? false : original.depthWrite;
-    }
   }
 
   private advanceCruise(delta: number): void {
@@ -715,7 +698,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   }
 
   private resetActors(): void {
-    this.setShipVisibility(1);
     this.ship.visible = false;
     this.ship.position.copy(this.shipBase);
     this.ship.rotation.set(0, this.shipYaw, 0);
@@ -737,6 +719,8 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.shipBase.x *= mirror;
     this.shipApproach.copy(SHIP_APPROACH);
     this.shipApproach.x *= mirror;
+    this.shipExit.copy(SHIP_EXIT);
+    this.shipExit.x *= mirror;
     this.shipYaw = this.side === -1 ? SHIP_YAW : Math.PI - SHIP_YAW;
     this.rescueYaw = this.side === -1 ? RESCUE_YAW : Math.PI - RESCUE_YAW;
     this.root.userData.eventSide = this.side === -1 ? 'left' : 'right';

@@ -466,6 +466,18 @@ export class EventPresentationLayer {
     return this.activeFocused?.playChoice(choice) ?? Promise.resolve();
   }
 
+  prepareResult(eventId: string, outcome: ActionOutcome): void {
+    if (this.disposed) return;
+    const focused = this.focused.get(eventId) ?? null;
+    this.ensureEventStaged(eventId, focused);
+    if (this.activeFocused === null) return;
+    const result = outcome.eventResult;
+    if (result === undefined || result.eventId !== eventId) {
+      throw new Error(`Focused event ${eventId} requires a matching event result.`);
+    }
+    this.activeFocused.prepareResult?.(result, outcome);
+  }
+
   playDangerousWatersItemUse(
     choiceId: string,
     instanceId: ItemInstanceId,

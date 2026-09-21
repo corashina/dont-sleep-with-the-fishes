@@ -45,6 +45,12 @@ const HUNGER_FILL_BOUNDARIES = [
   [90, 28.1],
   [100, 11],
 ] as const;
+const ENERGY_FILL_BOUNDARIES = [
+  [0, CONDITION_ARTWORK_HEIGHT],
+  [100 / 3, 36.7],
+  [200 / 3, 30.17],
+  [100, 0],
+] as const;
 
 function hungerFillBoundary(percentage: number): number {
   for (let index = 1; index < HUNGER_FILL_BOUNDARIES.length; index += 1) {
@@ -57,6 +63,17 @@ function hungerFillBoundary(percentage: number): number {
   return HUNGER_FILL_BOUNDARIES.at(-1)![1];
 }
 
+function energyFillBoundary(percentage: number): number {
+  for (let index = 1; index < ENERGY_FILL_BOUNDARIES.length; index += 1) {
+    const [upperPercentage, upperBoundary] = ENERGY_FILL_BOUNDARIES[index]!;
+    if (percentage > upperPercentage) continue;
+    const [lowerPercentage, lowerBoundary] = ENERGY_FILL_BOUNDARIES[index - 1]!;
+    const progress = (percentage - lowerPercentage) / (upperPercentage - lowerPercentage);
+    return lowerBoundary + (upperBoundary - lowerBoundary) * progress;
+  }
+  return ENERGY_FILL_BOUNDARIES.at(-1)![1];
+}
+
 function hullFillBoundary(percentage: number): number {
   const progress = (percentage / 100) ** 1.4;
   return 61 - (61 - 29) * progress;
@@ -65,7 +82,7 @@ function hullFillBoundary(percentage: number): number {
 const METERS: readonly MeterDefinition[] = [
   { id: 'health', get label() { return uiText('health'); }, min: 0, max: 100, get dangerLabel() { return uiText('low'); }, displayValue: identity, isDanger: (value) => value <= 20 },
   { id: 'hunger', get label() { return uiText('food'); }, min: 0, max: 100, fillBoundary: hungerFillBoundary, get dangerLabel() { return uiText('low'); }, displayValue: (value) => 100 - value, isDanger: (value) => value <= 30 },
-  { id: 'energy', get label() { return uiText('energy'); }, min: 0, max: SURVIVAL_BALANCE.actions.maximumEnergy, get dangerLabel() { return uiText('low'); }, displayValue: identity, isDanger: (value) => value <= 1 },
+  { id: 'energy', get label() { return uiText('energy'); }, min: 0, max: SURVIVAL_BALANCE.actions.maximumEnergy, fillBoundary: energyFillBoundary, get dangerLabel() { return uiText('low'); }, displayValue: identity, isDanger: (value) => value <= 1 },
   { id: 'hull', get label() { return uiText('hull'); }, min: 0, max: 100, fillBoundary: hullFillBoundary, get dangerLabel() { return uiText('low'); }, displayValue: identity, isDanger: (value) => value <= 20 },
 ];
 

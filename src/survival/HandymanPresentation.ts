@@ -5,6 +5,7 @@ import {
   CylinderGeometry,
   Group,
   Material,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   Object3D,
@@ -13,6 +14,7 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three';
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { ItemId, ItemInstanceId } from '../game/ItemState';
 import {
   sampleWaveFieldInto,
@@ -32,7 +34,8 @@ import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
-import type { MutableSupplyPose } from './BoatSupplyDisplay';
+import type { BorrowedSupplyActor, MutableSupplyPose } from './BoatSupplyDisplay';
+import { eventItemMotionProfile } from './eventItemMotionProfile';
 import {
   clamp01Unchecked as clamp01,
   smoothstepUnchecked as smoothstep,
@@ -61,7 +64,12 @@ type HandymanAnimationKind =
 const REVEAL_DURATION = 1.45;
 const PAYMENT_DURATION = 1.08;
 const SLEEP_CHOICE_DURATION = 0.38;
-const RESULT_DURATION = 1.12;
+const RESULT_DURATION = 4.2;
+const PAYMENT_CONTACT = 0.58;
+const REWARD_REVEAL = 0.2;
+const REWARD_RECEIVE = 0.55;
+const REWARD_STOW = 0.67;
+const REWARD_PLACED = 0.95;
 const TOUCH_RESULT_DURATION = 1.05;
 const SLEEP_RESULT_DURATION = 1.22;
 const WRIST_BASE = new Vector3(-2.35, 0.45, -2.15);
@@ -69,7 +77,6 @@ const WRIST_HIDDEN = new Vector3(-2.35, -2.05, -2.15);
 const WRIST_SUNK = new Vector3(-2.55, -2.4, -2.55);
 const PALM_TARGET = new Vector3(0.05, 0.32, 0.05);
 const PAYMENT_START = new Vector3(3.05, 0.38, 3.9);
-const REWARD_END = new Vector3(2.85, 0.55, 3.6);
 const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
@@ -114,6 +121,15 @@ export class HandymanPresentation implements FocusedEventPresentation {
   private readonly handVisual = new Group();
   private readonly paymentActors = new Group();
   private readonly rewardActors = new Group();
+  private readonly transferPosition = new Vector3();
+  private readonly storedPaymentPosition = new Vector3();
+  private readonly transferMatrix = new Matrix4();
+  private readonly rewardStoragePosition = new Vector3();
+  private readonly rewardStorageQuaternion = new Quaternion();
+  private readonly rewardStorageScale = new Vector3();
+  private readonly rewardHeldPosition = new Vector3();
+  private readonly rewardHeldQuaternion = new Quaternion();
+  private readonly rewardViewPosition = new Vector3();
   private readonly staticGeometries = new Set<BufferGeometry>();
   private readonly staticMaterials = new Set<Material>();
   private readonly staticSkeletons = new Set<Skeleton>();
@@ -146,8 +162,8 @@ export class HandymanPresentation implements FocusedEventPresentation {
   );
   private paymentActor: Group | null = null;
   private rewardActor: Group | null = null;
-  private paymentInstanceId: ItemInstanceId | null = null;
-  private usingSupplyPayment = false;
+  private borrowedPayment: BorrowedSupplyActor | null = null;
+  private rewardSlot: Object3D | null = null;
   private paymentVisible = false;
   private rewardVisible = false;
   private fingerBend = 0;
@@ -278,8 +294,8 @@ export class HandymanPresentation implements FocusedEventPresentation {
 
   update(time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
-    this.animation.update(time, delta);
     this.applySharedWave(time);
+    this.animation.update(time, delta);
     this.applyRestrainedIdle(time);
   }
 
@@ -292,11 +308,12 @@ export class HandymanPresentation implements FocusedEventPresentation {
     return [
       {
         id: 'handyman:hand',
-        get label() { return presentationUiText('hand'); },
+        label: '?',
         get description() { return presentationUiText('handDescription'); },
         choiceId: 'touch',
         root: this.handVisual,
-        tooltip: false,
+        tooltip: true,
+        preciseHitTest: true,
         minimumHitWidth: 82,
         minimumHitHeight: 82,
       },
@@ -367,6 +384,9 @@ export class HandymanPresentation implements FocusedEventPresentation {
         this.root.userData.state = 'choice-sleep';
         break;
       case 'result-reward':
+        if (this.rewardActor !== null) this.rewardActor.visible = false;
+        this.rewardVisible = false;
+        this.updateExchangeState();
         this.root.userData.state = 'held-reward';
         break;
       case 'result-touch':
@@ -394,28 +414,9 @@ export class HandymanPresentation implements FocusedEventPresentation {
   }
 
   private applyPaymentChoice(progress: number): void {
-    const travel = smoothstep(progress / 0.58);
-    if (
-      this.usingSupplyPayment
-      && this.paymentInstanceId !== null
-    ) {
-      this.supplyPose.x = -2.95 * travel;
-      this.supplyPose.y = 0.48 * travel;
-      this.supplyPose.z = -2.2 * travel;
-      this.supplyPose.yaw = 0.28 * travel;
-      this.supplyPose.pitch = -0.18 * travel;
-      this.supplyPose.roll = 0.14 * travel;
-      const scale = Math.max(
-        0.001,
-        1 - smoothstep((progress - 0.78) / 0.12),
-      );
-      this.supplyPose.scaleX = scale;
-      this.supplyPose.scaleY = scale;
-      this.supplyPose.scaleZ = scale;
-      this.dependencies.supplyDisplay.applyEventItemPose(
-        this.paymentInstanceId,
-        this.supplyPose,
-      );
+    const travel = smoothstep(progress / PAYMENT_CONTACT);
+    if (this.borrowedPayment !== null) {
+      this.moveBorrowedPayment(travel);
     } else if (this.paymentActor !== null) {
       this.paymentActor.position.lerpVectors(
         PAYMENT_START,
@@ -424,19 +425,31 @@ export class HandymanPresentation implements FocusedEventPresentation {
       );
       this.paymentActor.position.y += Math.sin(travel * Math.PI) * 0.32;
       this.paymentActor.rotation.y = travel * 0.62;
-      const scale = Math.max(
-        0.001,
-        1 - smoothstep((progress - 0.78) / 0.12),
-      );
-      this.paymentActor.scale.setScalar(scale);
     }
     const close = smoothstep((progress - 0.42) / 0.34);
     this.setFingerBend(close);
-    if (progress >= 0.9) {
+    if (progress >= PAYMENT_CONTACT) {
       this.hidePayment();
       this.root.userData.paymentEnteredPalm = true;
       this.root.userData.paymentInPalm = true;
     }
+  }
+
+  private moveBorrowedPayment(travel: number): void {
+    const actor = this.borrowedPayment!;
+    this.supplyPose.x = 0;
+    this.supplyPose.y = 0;
+    this.supplyPose.z = 0;
+    actor.applyPose(this.supplyPose);
+    this.storedPaymentPosition.copy(actor.root.position);
+    this.transferPosition.copy(PALM_TARGET);
+    this.paymentActors.localToWorld(this.transferPosition);
+    actor.root.parent!.worldToLocal(this.transferPosition);
+    this.transferPosition.sub(this.storedPaymentPosition).multiplyScalar(travel);
+    this.supplyPose.x = this.transferPosition.x;
+    this.supplyPose.y = this.transferPosition.y + Math.sin(travel * Math.PI) * 0.32;
+    this.supplyPose.z = this.transferPosition.z;
+    actor.applyPose(this.supplyPose);
   }
 
   private applySleepChoice(progress: number): void {
@@ -448,10 +461,10 @@ export class HandymanPresentation implements FocusedEventPresentation {
   private applyRewardResult(progress: number): void {
     this.hidePayment();
     const actor = this.rewardActor;
-    if (actor === null) return;
-    const reopen = smoothstep((progress - 0.32) / 0.38);
+    if (actor === null || this.rewardSlot === null) return;
+    const reopen = smoothstep(progress / REWARD_REVEAL);
     this.setFingerBend(1 - reopen);
-    if (progress < 0.7) {
+    if (progress < REWARD_REVEAL) {
       actor.visible = false;
       this.rewardVisible = false;
       this.updateExchangeState();
@@ -459,12 +472,37 @@ export class HandymanPresentation implements FocusedEventPresentation {
     }
     actor.visible = true;
     this.rewardVisible = true;
-    const travel = keyedTravel((progress - 0.7) / 0.3);
-    actor.position.lerpVectors(PALM_TARGET, REWARD_END, travel);
-    actor.position.y += Math.sin(clamp01(travel) * Math.PI) * 0.28;
-    actor.rotation.y = -travel * 0.68;
-    actor.rotation.z = Math.sin(progress * Math.PI) * 0.08;
+    this.updateRewardTargets();
+    const arrival = smoothstep((progress - REWARD_REVEAL) / (REWARD_RECEIVE - REWARD_REVEAL));
+    const stow = smoothstep((progress - REWARD_STOW) / (REWARD_PLACED - REWARD_STOW));
+    if (progress < REWARD_STOW) {
+      actor.position.lerpVectors(PALM_TARGET, this.rewardHeldPosition, arrival);
+      actor.position.y += Math.sin(arrival * Math.PI) * 0.18;
+    } else {
+      actor.position.lerpVectors(this.rewardHeldPosition, this.rewardStoragePosition, stow);
+      actor.position.y += Math.sin(stow * Math.PI) * 0.12;
+    }
+    actor.quaternion.copy(this.rewardHeldQuaternion).slerp(this.rewardStorageQuaternion, stow);
+    actor.scale.copy(this.rewardStorageScale);
     this.updateExchangeState();
+  }
+
+  private updateRewardTargets(): void {
+    const slot = this.rewardSlot!;
+    slot.updateWorldMatrix(true, false);
+    this.rewardActors.updateWorldMatrix(true, false);
+    this.transferMatrix.copy(this.rewardActors.matrixWorld).invert().multiply(slot.matrixWorld);
+    this.transferMatrix.decompose(
+      this.rewardStoragePosition, this.rewardStorageQuaternion, this.rewardStorageScale,
+    );
+    const camera = this.dependencies.camera;
+    camera.updateWorldMatrix(true, false);
+    this.rewardHeldPosition.copy(this.rewardViewPosition);
+    camera.localToWorld(this.rewardHeldPosition);
+    this.rewardActors.worldToLocal(this.rewardHeldPosition);
+    this.rewardActors.getWorldQuaternion(this.rewardHeldQuaternion).invert();
+    camera.getWorldQuaternion(this.boatQuaternion);
+    this.rewardHeldQuaternion.multiply(this.boatQuaternion);
   }
 
   private applyTouchResult(progress: number): void {
@@ -550,14 +588,14 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
     this.clearExchangeActors();
-    this.paymentInstanceId = choice.instanceId;
-    this.usingSupplyPayment = choice.instanceId !== null
-      && this.dependencies.supplyDisplay.pinEventActor(choice.instanceId);
-    if (!this.usingSupplyPayment) {
-      this.paymentActor = this.createItemActor(
-        choice.choiceId as ItemId,
-        'payment',
-      );
+    this.borrowedPayment = choice.instanceId === null
+      ? null
+      : this.dependencies.supplyDisplay.borrowEventActor(choice.instanceId);
+    this.supplyPose.scaleX = 1;
+    this.supplyPose.scaleY = 1;
+    this.supplyPose.scaleZ = 1;
+    if (this.borrowedPayment === null) {
+      this.paymentActor = this.createPaymentActor(choice.choiceId as ItemId);
       this.paymentActor.position.copy(PAYMENT_START);
     }
     this.paymentVisible = true;
@@ -569,31 +607,36 @@ export class HandymanPresentation implements FocusedEventPresentation {
   }
 
   private prepareReward(reward: ItemId): void {
-    this.rewardActors.clear();
-    this.rewardActor = this.createItemActor(reward, 'reward');
+    const record = this.dependencies.supplyDisplay.recordFor(reward)!;
+    const index = reward === 'cannedFood' || reward === 'baitTin'
+      ? Math.min(record.visibleCopies, record.root.children.length - 1)
+      : 0;
+    this.rewardSlot = record.root.children[index]!;
+    this.rewardActor = cloneSkeleton(this.rewardSlot) as Group;
+    this.rewardActor.name = `handyman-reward-${reward}`;
+    this.rewardActor.userData.itemType = reward;
+    this.rewardActors.add(this.rewardActor);
+    this.rewardViewPosition.fromArray(eventItemMotionProfile(reward).view);
     this.rewardActor.position.copy(PALM_TARGET);
     this.rewardActor.visible = false;
     this.rewardVisible = false;
     this.updateExchangeState();
   }
 
-  private createItemActor(
-    itemId: ItemId,
-    role: 'payment' | 'reward',
-  ): Group {
+  private createPaymentActor(itemId: ItemId): Group {
     const actor = new Group();
-    actor.name = `handyman-${role}-${itemId}`;
+    actor.name = `handyman-payment-${itemId}`;
     let selected: Group | null = null;
     try {
       selected = this.dependencies.propModels.create({
-        instanceId: `handyman-${role}-${itemId}` as ItemInstanceId,
+        instanceId: `handyman-payment-${itemId}` as ItemInstanceId,
         type: itemId,
       });
     } catch {
       selected = null;
     }
     if (selected !== null && hasRenderableBounds(selected)) {
-      selected.name = `handyman-${role}-${itemId}-model`;
+      selected.name = `handyman-payment-${itemId}-model`;
       actor.add(selected);
       actor.userData.model = 'supply-clone';
     } else {
@@ -602,17 +645,14 @@ export class HandymanPresentation implements FocusedEventPresentation {
         new BoxGeometry(0.32, 0.17, 0.23),
         createMaterial(0x66513e, 0.95),
       );
-      fallback.name = `handyman-${role}-${itemId}-fallback`;
+      fallback.name = `handyman-payment-${itemId}-fallback`;
       fallback.rotation.set(0.1, -0.18, 0.05);
       actor.add(fallback);
       actor.userData.model = 'procedural';
     }
     actor.userData.itemType = itemId;
     actor.scale.setScalar(0.82);
-    const parent = role === 'payment'
-      ? this.paymentActors
-      : this.rewardActors;
-    parent.add(actor);
+    this.paymentActors.add(actor);
     collectMeshResources(
       actor,
       this.exchangeGeometries,
@@ -623,18 +663,12 @@ export class HandymanPresentation implements FocusedEventPresentation {
 
   private hidePayment(): void {
     this.paymentVisible = false;
-    if (
-      this.usingSupplyPayment
-      && this.paymentInstanceId !== null
-    ) {
-      this.supplyPose.scaleX = 0.001;
-      this.supplyPose.scaleY = 0.001;
-      this.supplyPose.scaleZ = 0.001;
-      this.dependencies.supplyDisplay.applyEventItemPose(
-        this.paymentInstanceId,
-        this.supplyPose,
-      );
-      this.dependencies.supplyDisplay.releaseEventActorOnNextSync();
+    if (this.borrowedPayment !== null) {
+      this.supplyPose.scaleX = 0;
+      this.supplyPose.scaleY = 0;
+      this.supplyPose.scaleZ = 0;
+      this.borrowedPayment.applyPose(this.supplyPose);
+      this.borrowedPayment.releaseOnNextSync();
     } else if (this.paymentActor !== null) {
       this.paymentActor.visible = false;
       this.paymentActor.scale.setScalar(0.001);
@@ -650,6 +684,9 @@ export class HandymanPresentation implements FocusedEventPresentation {
   }
 
   private clearExchangeActors(): void {
+    this.borrowedPayment?.release();
+    this.borrowedPayment = null;
+    this.rewardSlot = null;
     this.paymentActors.clear();
     this.rewardActors.clear();
     disposeResourceSets(
@@ -658,8 +695,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     );
     this.paymentActor = null;
     this.rewardActor = null;
-    this.paymentInstanceId = null;
-    this.usingSupplyPayment = false;
     this.paymentVisible = false;
     this.rewardVisible = false;
     this.updateExchangeState();

@@ -1,5 +1,6 @@
 import {
   BufferGeometry,
+  DoubleSide,
   Group,
   Material,
   Mesh,
@@ -176,6 +177,7 @@ type BorrowedCopyTransform = Pick<
 
 export const GENERIC_EVENT_ITEM_USE_DURATION = scaleEventItemDuration(0.65);
 const AGGREGATE_ITEM_IDS = new Set<ItemId>(['cannedFood', 'baitTin']);
+const NO_EVENT_ITEM_TYPES: ReadonlySet<ItemId> = new Set();
 
 function createIdentitySupplyPose(): MutableSupplyPose {
   return {
@@ -196,6 +198,18 @@ function enableBoatSupplyShadows(root: Object3D): void {
     if (!(object instanceof Mesh)) return;
     object.castShadow = true;
     object.receiveShadow = true;
+  });
+}
+
+function prepareBoatSupplyMaterials(root: Object3D, groupId: BoatSupplyGroupId): void {
+  if (groupId !== 'umbrella') return;
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      material.side = DoubleSide;
+      material.needsUpdate = true;
+    }
   });
 }
 
@@ -226,6 +240,7 @@ export class BoatSupplyDisplay {
   private readonly eventStowedUntilDay = new Set<ItemInstanceId>();
   private currentSnapshot: SurvivalSnapshot | null = null;
   private eventEligibleItemIds: ReadonlySet<ItemInstanceId> | null = null;
+  private eventEligibleItemTypes: ReadonlySet<ItemId> = new Set();
   private eventSelectedItemId: ItemInstanceId | null = null;
   private readonly availableDayActions = new Set<DayActionId>();
   private readonly eligibleOutlines = new Map<BoatSupplyGroupId, HoverOutline>();
@@ -327,6 +342,7 @@ export class BoatSupplyDisplay {
     const presentation = propModels.createPresentation(instance);
     const copy = presentation.root;
     enableBoatSupplyShadows(copy);
+    prepareBoatSupplyMaterials(copy, groupId);
     const transform = boatSupplyTransform(groupId, index);
     copy.name = `boat-supply:${groupId}:copy-${index + 1}`;
     copy.position.copy(transform.position);
@@ -403,9 +419,13 @@ export class BoatSupplyDisplay {
     this.syncEligibleOutlines();
   }
 
-  setEventEligibleItems(instanceIds: ReadonlySet<ItemInstanceId> | null): void {
+  setEventEligibleItems(
+    instanceIds: ReadonlySet<ItemInstanceId> | null,
+    itemTypes: ReadonlySet<ItemId> = NO_EVENT_ITEM_TYPES,
+  ): void {
     if (this.disposed) return;
     this.eventEligibleItemIds = instanceIds === null ? null : new Set(instanceIds);
+    this.eventEligibleItemTypes = instanceIds === null ? new Set() : new Set(itemTypes);
     if (
       this.eventSelectedItemId !== null
       && this.eventEligibleItemIds?.has(this.eventSelectedItemId) !== true
@@ -444,6 +464,7 @@ export class BoatSupplyDisplay {
       const groupId = this.groupByInstanceId.get(instanceId);
       if (groupId !== undefined) eligibleGroups.add(groupId);
     }
+    for (const itemType of this.eventEligibleItemTypes) eligibleGroups.add(itemType);
     return eligibleGroups;
   }
 

@@ -106,7 +106,8 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
 
   private readonly modelInstance;
   private readonly angler = new Group();
-  readonly itemAimTarget = new ItemAimTarget(this.angler);
+  private readonly visuals = new Group();
+  readonly itemAimTarget = new ItemAimTarget(this.visuals);
   private readonly dominantEyeMaterial = new MeshStandardMaterial({
     color: 0xd8e5c8,
     emissive: 0xb4dfbf,
@@ -211,6 +212,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.worldRoot.name = 'death-stare-world';
     this.boatRoot.name = 'death-stare-boat';
     this.angler.name = 'death-stare-angler';
+    this.visuals.name = 'death-stare-visuals';
     this.angler.userData.faceLongestDimension = FACE_LONGEST_DIMENSION;
     this.angler.userData.presentationScale = FACE_PRESENTATION_SCALE;
     this.angler.userData.fixedPlayerFacingPose = true;
@@ -220,7 +222,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.modelInstance.root.name = 'death-stare-blob-model';
     this.modelInstance.root.scale.setScalar(FACE_LONGEST_DIMENSION);
     setFlatShading(this.modelInstance.root);
-    this.angler.add(this.modelInstance.root);
+    this.visuals.add(this.modelInstance.root);
     this.itemAimTarget.name = 'death-stare-item-aim-target';
     this.itemAimTarget.position.set(0, 0.2, 0.72);
     this.angler.add(this.itemAimTarget);
@@ -256,7 +258,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.dominantEye.scale.set(1.08, 1.22, 0.66);
     this.dominantEye.rotation.z = -0.1;
     this.dominantEye.castShadow = true;
-    this.angler.add(this.dominantEye);
+    this.visuals.add(this.dominantEye);
 
     this.dominantEyeLight.name = 'death-stare-dominant-eye-light';
     this.dominantEyeLight.position.set(-0.46, 0.56, 1.02);
@@ -271,13 +273,13 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.recessedEye.scale.set(0.82, 1, 0.56);
     this.recessedEye.rotation.z = 0.18;
     this.recessedEye.castShadow = true;
-    this.angler.add(this.recessedEye);
+    this.visuals.add(this.recessedEye);
 
     this.jawInterior = new Mesh(jawGeometry, this.jawMaterial);
     this.jawInterior.name = 'death-stare-jaw-interior';
     this.jawInterior.position.set(0.02, -0.52, 0.5);
     this.jawInterior.scale.set(1.06, 0.44, 0.18);
-    this.angler.add(this.jawInterior);
+    this.visuals.add(this.jawInterior);
 
     this.mouthTarget.name = 'death-stare-mouth-target';
     this.mouthTarget.position.set(0.02, -0.52, 0.8);
@@ -309,7 +311,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
         0.82,
       );
       tooth.castShadow = true;
-      this.angler.add(tooth);
+      this.visuals.add(tooth);
     }
 
     this.lureStalk = new Mesh(lureStalkGeometry, this.wetLureMaterial);
@@ -317,14 +319,14 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.lureStalk.position.set(-0.04, 1.13, 0.14);
     this.lureStalk.rotation.set(0.14, 0, -0.28);
     this.lureStalk.castShadow = true;
-    this.angler.add(this.lureStalk);
+    this.visuals.add(this.lureStalk);
 
     this.lure = new Mesh(lureGeometry, this.wetLureMaterial);
     this.lure.name = 'death-stare-lure';
     this.lure.position.set(-0.22, 1.73, 0.29);
     this.lure.scale.set(0.92, 1.18, 0.86);
     this.lure.castShadow = true;
-    this.angler.add(this.lure);
+    this.visuals.add(this.lure);
 
     const waterStrands: WaterStrand[] = [];
     for (let index = 0; index < WATER_STRAND_COUNT; index += 1) {
@@ -347,6 +349,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     }
     this.waterStrands = waterStrands;
 
+    this.angler.add(this.visuals);
     this.worldRoot.add(this.angler);
     this.hideScene();
   }
@@ -534,7 +537,8 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   }
 
   private applySample(time: number): void {
-    this.angler.visible = this.sample.fishVisibility > 0.008;
+    this.angler.visible = true;
+    this.visuals.visible = this.sample.fishVisibility > 0.008;
     this.angler.position.set(
       FACE_X + this.sample.fishX,
       FACE_Y + this.sample.fishY,
@@ -553,9 +557,9 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.recessedEye.position.x = 0.58 - (1 - this.sample.eyeTarget) * 0.035;
     this.dominantEyeMaterial.emissiveIntensity = 0.9
       + this.sample.eyeTarget * 0.9;
-    this.dominantEyeLight.intensity = this.sample.eyeTarget
-      * dominantBlinkScale
-      * 2.4;
+    this.dominantEyeLight.intensity = this.visuals.visible
+      ? this.sample.eyeTarget * dominantBlinkScale * 2.4
+      : 0;
     this.recessedEyeMaterial.emissiveIntensity = 0.16
       + this.sample.eyeTarget * 0.16;
     this.jawInterior.scale.set(
@@ -591,7 +595,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
       );
       const stagger = (index % 4) * 0.035;
       strand.mesh.visible = strength > 0.025 + stagger
-        && this.angler.visible;
+        && this.visuals.visible;
       const surfaceY = WATERLINE + strand.wave.height;
       const sourceY = FACE_Y + this.sample.fishY + strand.sourceOffset;
       const height = Math.max(0.08, sourceY - surfaceY);
@@ -670,6 +674,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.worldRoot.visible = false;
     this.boatRoot.visible = false;
     this.angler.visible = false;
+    this.visuals.visible = false;
     this.angler.position.set(FACE_X, FACE_Y, FACE_Z);
     this.angler.rotation.set(FACE_PLAYER_PITCH, FACE_PLAYER_YAW, 0);
     this.dominantEyeLight.intensity = 0;

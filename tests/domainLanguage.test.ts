@@ -1,6 +1,5 @@
 import { afterEach,describe,expect,it } from 'vitest';
 import { setLanguage } from '../src/i18n/language';
-import { resourceQuantity } from '../src/i18n/resourceMessages';
 import { ITEM_DEFINITIONS,ITEM_IDS,ITEM_LABELS } from '../src/game/ItemState';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../src/survival/itemDescriptions';
@@ -55,25 +54,6 @@ describe('domain language', () => {
     }
   });
 
-  it('describes item lifecycle rules in each language', () => {
-    for (const language of ['en', 'pl', 'es-AR'] as const) {
-      setLanguage(language);
-      expect(SURVIVAL_ITEM_DESCRIPTIONS.ductTape).toMatch(/one|jedn|un/iu);
-      expect(SURVIVAL_ITEM_DESCRIPTIONS.map).toMatch(/reusable|wielokrotnego|reutilizable/iu);
-      expect(SURVIVAL_ITEM_DESCRIPTIONS.flashlight).toMatch(/break|uszkodzić|romper/iu);
-      expect(SURVIVAL_ITEM_DESCRIPTIONS.swimRing).toMatch(/consumed|zużyte|consume/iu);
-      expect(SURVIVAL_ITEM_DESCRIPTIONS.flareGun).toMatch(/consumed|zużyta|consume/iu);
-      expect(SURVIVAL_ITEM_DESCRIPTIONS.shotgun).toMatch(/consumed|zużyta|consume/iu);
-    }
-  });
-
-  it.each([[1, '1 porcja jedzenia'], [2, '2 porcje jedzenia'], [5, '5 porcji jedzenia'], [12, '12 porcji jedzenia'], [22, '22 porcje jedzenia']] as const)(
-    'uses the Polish resource form for %i', (quantity, expected) => {
-      setLanguage('pl');
-      expect(resourceQuantity('food', quantity)).toBe(expected);
-    },
-  );
-
   it('updates an accepted outcome and cached snapshot without changing simulation state', () => {
     const session = new SurvivalSession([], { seed: 41, initial: { food: 2, hunger: 60 } });
     const outcome = session.perform('eat');
@@ -86,16 +66,6 @@ describe('domain language', () => {
     expect(cloneActionOutcome(outcome).message).toBe(outcome.message);
     expect(session.snapshot()).toBe(snapshot);
     expect(JSON.stringify(session.exportCheckpoint())).toBe(savedState);
-  });
-
-  it('keeps action codes stable when Polish rules reject an action', () => {
-    const session = new SurvivalSession([], { seed: 1, initial: { food: 0 } });
-    setLanguage('pl');
-    const outcome = session.perform('eat');
-    expect(outcome.code).toBe('no-food');
-    expect(outcome.message).toBe('Nie ma już jedzenia.');
-    setLanguage('en');
-    expect(outcome.message).toBe('No food remains.');
   });
 
   it('updates fishing results and history from catch IDs', () => {

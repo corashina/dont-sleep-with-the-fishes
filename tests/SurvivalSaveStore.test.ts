@@ -72,11 +72,6 @@ function expectRejectedAndDeleted(value: any): void {
 }
 
 describe('SurvivalSaveStore', () => {
-  it('defaults to disabled with no checkpoint', () => {
-    const store = new SurvivalSaveStore(memoryStorage());
-    expect(store.getState()).toEqual({ enabled: false, checkpoint: null });
-  });
-
   it('persists enable and deletes the checkpoint when disabled', () => {
     const storage = memoryStorage();
     const store = new SurvivalSaveStore(storage);

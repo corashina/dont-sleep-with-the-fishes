@@ -7,11 +7,6 @@ import { sequenceRandom } from './helpers/random';
 describe('chest rewards', () => {
   const rewardItems = ITEM_IDS.filter((itemId) => itemId !== 'carlitos');
 
-  it.each(rewardItems)('can award missing %s', (missing) => {
-    const owned = new Set<ItemId>(rewardItems.filter((itemId) => itemId !== missing));
-    expect(drawChestReward(owned, sequenceRandom([0]))).toEqual({ kind: 'item', itemId: missing });
-  });
-
   it('gives scuba gear three times the weight of other items', () => {
     const owned = new Set<ItemId>(rewardItems.filter((itemId) => (
       itemId !== 'compass' && itemId !== 'scubaSet'

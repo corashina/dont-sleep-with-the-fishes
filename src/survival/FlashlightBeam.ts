@@ -115,11 +115,16 @@ export class FlashlightBeam extends Group {
     this.light.angle = Math.atan2(radius, length);
     this.light.intensity = primary * (1.1 + primary * 3.2 + secondary * 2.5);
     this.material.opacity = primary * 0.16;
+    this.beam.visible = true;
     this.visible = true;
   }
 
   hide(): void {
-    this.visible = false;
+    // Keep the zero-strength light in the visible scene graph. Scene preparation
+    // then compiles the stable light count before the first item use.
+    this.visible = true;
+    this.beam.visible = false;
+    this.light.visible = true;
     this.light.intensity = 0;
     this.material.opacity = 0;
   }

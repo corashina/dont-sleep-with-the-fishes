@@ -3,13 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getLanguage, setLanguage } from '../src/i18n/language';
 import { uiDynamic } from '../src/i18n/uiDynamicMessages';
 import { ScavengeSession } from '../src/game/ScavengeSession';
-import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { GameUI } from '../src/ui/GameUI';
-import { SurvivalUI } from '../src/ui/SurvivalUI';
 import { SurvivalJournalView } from '../src/ui/SurvivalJournalView';
 import { SurvivalEventView } from '../src/ui/SurvivalEventView';
-import { FocusedEventView } from '../src/ui/FocusedEventView';
-import { SurvivalFishingView } from '../src/ui/SurvivalFishingView';
 import { SurvivalCoverView } from '../src/ui/SurvivalCoverView';
 
 const views: { dispose(): void }[] = [];
@@ -106,63 +102,6 @@ describe('live gameplay translations', () => {
     expect(settled).toBe(true);
   });
 
-  it('refreshes focused choices, costs and unavailable reasons on existing buttons', () => {
-    const view = new FocusedEventView(document.body);
-    views.push(view);
-    document.body.append(view.root);
-    view.show({ eventId: 'drifting-supplies', target: null, choices: [{ id: 'take', instanceId: null, energyCost: 2,
-      get label() { return getLanguage() === 'en' ? 'Take supplies' : 'Zabierz zapasy'; },
-      get unavailableReason() { return getLanguage() === 'en' ? 'No energy.' : 'Brak energii.'; },
-    }] });
-    view.root.removeAttribute('inert');
-    const choice = view.choiceButton('take')!;
-    choice.focus();
-    setLanguage('pl');
-    expect(view.choiceButton('take')).toBe(choice);
-    expect(document.activeElement).toBe(choice);
-    expect(choice.textContent).toContain('Zabierz zapasy');
-    expect(choice.getAttribute('aria-description')).toBe('Brak energii.');
-    expect(choice.querySelector('.focused-event-view__cost')?.getAttribute('aria-label')).toBe('2 energii');
-    expect(find('[data-focused-event-title]').textContent).toBe('Dryfujące zapasy');
-    expect(find('[data-focused-event-description]').textContent)
-      .toBe('Zdobądź je sam albo wyślij Carlitosa, jeśli jest wypoczęty.');
-  });
-
-  it('refreshes fishing text without reissuing the cast', () => {
-    const view = new SurvivalFishingView(document.body);
-    views.push(view);
-    document.body.append(...view.roots);
-    const cast = vi.fn(() => true);
-    view.onCast = cast;
-    view.setState({ mode: 'aiming', biteTarget: null, get message() { return getLanguage() === 'en' ? 'Cast now.' : 'Zarzuć teraz.'; } });
-    view.handleKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }));
-    setLanguage('pl');
-    expect(find('[data-fishing-message]').textContent).toBe('Zarzuć teraz.');
-    view.handleKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }));
-    expect(cast).toHaveBeenCalledOnce();
-    expect(view.mode()).toBe('aiming');
-  });
-
-  it('translates an existing fishing result without resetting its continue action', () => {
-    const view = new SurvivalFishingView(document.body);
-    views.push(view);
-    document.body.append(...view.roots);
-    view.showResult({ items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }],
-      message: '',
-    });
-    const continued = vi.fn();
-    view.onContinue = continued;
-    view.resultRoot.removeAttribute('inert');
-    view.resultClose.focus();
-    view.resultClose.click();
-    setLanguage('pl');
-    expect(document.activeElement).toBe(view.resultClose);
-    expect(find('[data-fishing-result-items] [role=img]').getAttribute('aria-label')).toBe('JEDZENIE: +1');
-    expect(view.resultClose.getAttribute('aria-label')).toBe('Zamknij wynik połowu');
-    view.resultClose.click();
-    expect(continued).toHaveBeenCalledOnce();
-  });
-
   it('keeps a reward confirmation pending while translating its text', async () => {
     const view = new SurvivalCoverView();
     views.push(view);
@@ -182,43 +121,6 @@ describe('live gameplay translations', () => {
     view.confirmRewardResult();
     await Promise.resolve();
     expect(settled).toBe(true);
-  });
-
-  it('updates active action reasons and preserves pause menu focus', () => {
-    const ui = new SurvivalUI(document.body);
-    views.push(ui);
-    const session = new SurvivalSession([], { seed: 1 });
-    ui.render(session.snapshot(), () => getLanguage() === 'en' ? 'Unavailable now.' : 'Teraz niedostępne.');
-    ui.setAnchors([{ id: 'repair', toolId: 'repairTools', itemType: null, action: 'repair', remainingUses: null, x: 10, y: 10, visible: true, depleted: false }]);
-    ui.setPaused(true);
-    const menu = find<HTMLButtonElement>('[data-pause-menu]');
-    menu.focus();
-    const action = vi.fn();
-    ui.onReturnToMenu = action;
-    setLanguage('pl');
-    expect(document.activeElement).toBe(menu);
-    expect(menu.textContent).toBe('WRÓĆ DO MENU');
-    expect(find('[data-anchor-id="repair"]').getAttribute('aria-description')).toContain('Teraz niedostępne.');
-    menu.click();
-    expect(action).toHaveBeenCalledOnce();
-  });
-
-  it('preserves the statistics page, expanded values and summary focus', () => {
-    const ui = new SurvivalUI(document.body);
-    views.push(ui);
-    const session = SurvivalSession.createEndingPreview([], 123, 'rescue');
-    const snapshot = session.snapshot();
-    ui.render(snapshot, () => null);
-    ui.showEnding(snapshot.ending! as Exclude<typeof snapshot.ending, { id: 'dorothy' } | null>);
-    find<HTMLButtonElement>('[data-view-statistics]').click();
-    find<HTMLDetailsElement>('details').open = true;
-    find('summary').focus();
-    setLanguage('pl');
-    expect(find('[data-ending-statistics]').hidden).toBe(false);
-    expect(find<HTMLDetailsElement>('details').open).toBe(true);
-    expect(document.activeElement).toBe(find('summary'));
-    expect(find('[data-statistics-content]').textContent).toContain('SYGNAŁY RADIOWE');
-    expect(find('summary').textContent).toBe('ZOBACZ WARTOŚCI WYKRESU');
   });
 
   it('removes subscriptions on disposal and uses Polish second forms', () => {

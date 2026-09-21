@@ -45,7 +45,7 @@ function projectedBounds(bounds: Readonly<Box3>, camera: PerspectiveCamera): Box
 }
 
 describe('boat storage', () => {
-  it('keeps the anchor visible beside the sleep pillow', () => {
+  it('keeps the anchor clear of the sleep pillow on screen', () => {
     const camera = new PerspectiveCamera(80, 16 / 9, 0.08, 220);
     camera.position.set(0, 0.88, 0.96);
     camera.lookAt(0, 0.88, -1.55);
@@ -87,11 +87,6 @@ describe('boat storage', () => {
     expect(tape.max.x).toBeLessThan(map.min.x);
     expect(bar.min.x).toBeGreaterThan(map.max.x);
     for (const bound of bounds) expect(bound.min.y).toBeCloseTo(LIFEBOAT_DISPLAY_SHELF_SURFACE_Y);
-  });
-
-  it('uses the former energy bar position for the binoculars', () => {
-    const binoculars = boatSupplyTransform('spyglass', 0).position;
-    expect([binoculars.x, binoculars.z]).toEqual([0.502, -1.64]);
   });
 
   it.each(['cannedFood', 'baitTin'] as const)('fits eight %s models without intersections', (groupId) => {

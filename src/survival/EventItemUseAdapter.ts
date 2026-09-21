@@ -20,7 +20,7 @@ import type {
 import { EventItemEffects } from './EventItemEffects';
 import { StationaryEventCamera } from './StationaryEventCamera';
 import { NetAttackPose } from './NetAttackPose';
-import type { EventItemUseSample } from './eventItemUseChoreography';
+import type { EventItemFlightTarget, EventItemUseSample } from './eventItemUseChoreography';
 import {
   eventItemMotionProfile,
   type EventItemMotionProfile,
@@ -39,9 +39,16 @@ const IDENTITY_POSE: MutableSupplyPose = {
 };
 const THROW_WATER_CONTACT_Y = 0.04;
 const THROW_FALLBACK_DISTANCE = 6;
-const ANCHOR_WATER_Z = 0.55;
+const ANCHOR_WATER_Z = -0.85;
 const ANCHOR_WATER_X = (lifeboatHullHalfWidthAt(ANCHOR_WATER_Z) ?? 1.63) + 0.48;
-const BUCKET_WATER_X = (lifeboatHullHalfWidthAt(ANCHOR_WATER_Z) ?? 1.63) + 0.82;
+const BUCKET_WATER_Z = 0.55;
+const BUCKET_WATER_X = (lifeboatHullHalfWidthAt(BUCKET_WATER_Z) ?? 1.63) + 0.82;
+const RING_WATER_Z = -2.4;
+const WATER_TARGETS = {
+  'starboard-water': [ANCHOR_WATER_X, ANCHOR_WATER_Z],
+  'bucket-water': [BUCKET_WATER_X, BUCKET_WATER_Z],
+  'ring-water': [(lifeboatHullHalfWidthAt(RING_WATER_Z) ?? 1.63) + 0.6, RING_WATER_Z],
+} as const;
 const BUCKET_HELMET_COVERAGE_RADIUS = 0.48;
 const BUCKET_HELMET_COVERAGE_START = 0.9;
 export const BUCKET_HELMET_COVERAGE_NAME = 'bucket-helmet-interior-coverage';
@@ -173,12 +180,7 @@ export class EventItemUseAdapter {
     if (this.disposed || !this.active || actor === null || profile === null) return;
     this.effects.flashlight.updateTarget();
 
-    this.controlsCamera = !sample.netSwing;
-    if (this.controlsCamera) {
-      this.cameraLook.apply(sample.cameraYaw, sample.cameraPitch);
-      this.applyCameraTarget(sample, actor);
-      this.applyFieldOfView(sample.fovScale);
-    }
+    this.applyCamera(sample, actor);
     this.camera.updateWorldMatrix(true, false);
     this.cameraWorldMatrix.copy(this.camera.matrixWorld);
     if (this.lockItemToHeldCamera) this.updateHeldCameraWorldTransform();
@@ -226,6 +228,7 @@ export class EventItemUseAdapter {
       this.applyTargetTravel(sample, actor, profile);
     }
     this.applyKnifeGripAfterTravel(sample, actor);
+    this.applyFloatingRingRotation(sample, actor);
     this.applyCameraFacing(sample, actor);
     this.applyAim(sample, actor, profile);
     this.applyRecoil(sample, actor);
@@ -261,6 +264,14 @@ export class EventItemUseAdapter {
     this.clear();
     this.disposed = true;
     this.effects.dispose();
+  }
+
+  private applyCamera(sample: Readonly<EventItemUseSample>, actor: BorrowedSupplyActor): void {
+    this.controlsCamera = !sample.netSwing && sample.flightTarget !== 'ring-water';
+    if (!this.controlsCamera) return;
+    this.cameraLook.apply(sample.cameraYaw, sample.cameraPitch);
+    this.applyCameraTarget(sample, actor);
+    this.applyFieldOfView(sample.fovScale);
   }
 
   private applyFieldOfView(fovScale: number): void {
@@ -372,8 +383,8 @@ export class EventItemUseAdapter {
   ): void {
     const blend = sample.cameraTargetBlend;
     if (blend <= 0) return;
-    if (sample.flightTarget === 'starboard-water' || sample.flightTarget === 'bucket-water') {
-      this.setStarboardWaterTarget(actor, sample.flightTarget);
+    if (sample.flightTarget !== 'event') {
+      this.setWaterTarget(actor, sample.flightTarget);
     } else {
       const aimTarget = this.aimTarget;
       if (aimTarget === null) return;
@@ -404,8 +415,8 @@ export class EventItemUseAdapter {
     const aimTarget = this.aimTarget;
     if (sample.targetBlend <= 0) return;
 
-    if (sample.flightTarget === 'starboard-water' || sample.flightTarget === 'bucket-water') {
-      this.setStarboardWaterTarget(actor, sample.flightTarget);
+    if (sample.flightTarget !== 'event') {
+      this.setWaterTarget(actor, sample.flightTarget);
     } else if (aimTarget === null) {
       if (!sample.ballisticFlight) return;
       this.camera.getWorldPosition(this.targetWorldPosition);
@@ -470,14 +481,15 @@ export class EventItemUseAdapter {
     actor.applyPose(this.pose);
   }
 
-  private setStarboardWaterTarget(
+  private setWaterTarget(
     actor: BorrowedSupplyActor,
-    target: 'starboard-water' | 'bucket-water',
+    target: Exclude<EventItemFlightTarget, 'event'>,
   ): void {
+    const [x, z] = WATER_TARGETS[target];
     this.targetWorldPosition.set(
-      target === 'bucket-water' ? BUCKET_WATER_X : ANCHOR_WATER_X,
+      x,
       0,
-      ANCHOR_WATER_Z,
+      z,
     );
     const actorParent = actor.root.parent;
     if (actorParent !== null) {
@@ -485,6 +497,18 @@ export class EventItemUseAdapter {
       this.targetWorldPosition.applyMatrix4(actorParent.matrixWorld);
     }
     this.targetWorldPosition.y = THROW_WATER_CONTACT_Y;
+  }
+
+  private applyFloatingRingRotation(
+    sample: Readonly<EventItemUseSample>,
+    actor: BorrowedSupplyActor,
+  ): void {
+    if (sample.flightTarget !== 'ring-water') return;
+    this.aimEuler.set(sample.pitch, sample.yaw, sample.roll, 'YXZ');
+    this.solvedWorldQuaternion.setFromEuler(this.aimEuler);
+    this.facingWorldQuaternion.copy(this.storedActorWorldQuaternion)
+      .slerp(this.solvedWorldQuaternion, sample.cameraSpaceBlend);
+    this.writeActorFacing(actor);
   }
 
   private applyAim(

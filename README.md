@@ -44,9 +44,9 @@ All night events use the bright, glowy star field when weather and haze allow it
 An old chest can become a mimic and attack automatically. A usable Knife reduces the damage from 25 to 10 Health.
 
 **Something Under Us** can appear at night from day eight, with pressure one or higher.
-A vast sea shadow approaches, reacts to the lantern, and lifts the boat.
+A vast sea shadow circles outside the hull, with faint eyes and teeth beneath the water.
+Low underwater groans accompany its approach and fade as it leaves. Its wake lifts the boat.
 Stay still to lose one Energy from the normal dawn amount. Throw one Bait to preserve sleep.
-Using the Flashlight reveals pale ridges and causes 20 Hull damage. The Flashlight stays usable.
 Throwing one Food also diverts the shadow and preserves sleep.
 The event has a seven-day cooldown and can appear twice per run.
 Use System Tuning → Event Test → Something Under Us to inspect it.

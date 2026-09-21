@@ -27,11 +27,11 @@ describe('survival ending animation', () => {
   it('clears the sleep cover and keeps the finish screen closed during rescue', () => {
     const view = setup();
     void view.ui.setSleepCovered(true);
-    view.ui.beginRescueEnding();
+    view.ui.beginEndingSequence();
     const cover = document.querySelector<HTMLElement>('[data-sleep-cover]')!;
     expect(cover.classList.contains('is-covered')).toBe(false);
     expect(cover.style.opacity).toBe('0');
-    expect(document.querySelector('.survival-ui')?.classList.contains('is-rescuing')).toBe(true);
+    expect(document.querySelector('.survival-ui')?.classList.contains('is-ending-sequence')).toBe(true);
     expect(view.root.getAttribute('aria-hidden')).toBe('true');
     expect(document.querySelector<HTMLElement>('[data-boat-anchors]')?.inert).toBe(true);
     view.ui.setRescueFade(0.5);

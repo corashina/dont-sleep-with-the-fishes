@@ -1181,6 +1181,10 @@ describe('SurvivalPhase orchestration', () => {
           });
           return choice.promise;
         }),
+        prepareEventOutcome: vi.fn((_eventId, received) => {
+          calls.push('prepare:tour-chest');
+          expect(received).toBe(outcome);
+        }),
         reactToEventOutcome: vi.fn((_eventId, received, receivedChoice) => {
           calls.push('react:tour-chest');
           expect(received).toBe(outcome);
@@ -1230,7 +1234,7 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     expect(calls).toEqual([
       'profile:midnight-tour', 'fade:true', 'choice:visit',
-      'resolve:visit', 'fade:false',
+      'resolve:visit', 'prepare:tour-chest', 'fade:false',
     ]);
     expect(reaction.isSettled()).toBe(false);
     expect(setBusy).not.toHaveBeenCalledWith(false);
@@ -1239,7 +1243,7 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     expect(calls).toEqual([
       'profile:midnight-tour', 'fade:true', 'choice:visit',
-      'resolve:visit', 'fade:false', 'cue:none', 'react:tour-chest',
+      'resolve:visit', 'prepare:tour-chest', 'fade:false', 'cue:none', 'react:tour-chest',
     ]);
 
     reaction.resolve();
@@ -1266,6 +1270,7 @@ describe('SurvivalPhase orchestration', () => {
       'fade:true',
       'choice:visit',
       'resolve:visit',
+      'prepare:tour-chest',
       'fade:false',
       'cue:none',
       'react:tour-chest',
@@ -1279,7 +1284,7 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it('selects a Night Trader offer directly and orders its focused result', async () => {
+  it('selects a Night Trader payment item and plays only one payment flight', async () => {
     const map = {
       instanceId: 'map-1' as const,
       type: 'map' as const,
@@ -1365,7 +1370,10 @@ describe('SurvivalPhase orchestration', () => {
           calls.push('reveal');
           return Promise.resolve();
         }),
-        playEventItemUse: vi.fn(() => Promise.resolve()),
+        playEventItemUse: vi.fn(() => {
+          calls.push('item-use');
+          return Promise.resolve();
+        }),
         setEventEligibleItems,
         playEventChoice: vi.fn((_eventId, choice) => {
           calls.push('choice');
@@ -1398,18 +1406,17 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
-    expect([...ui.setEventSelection.mock.calls[0]![0]]).toEqual([]);
+    expect([...ui.setEventSelection.mock.calls[0]![0]]).toEqual([['map-1', 'map']]);
     const choices = ui.setEventSelection.mock.calls[0]![1];
-    expect(choices.map(({ id }: { id: string }) => id)).toEqual([
-      ...nightTraderOffers(deriveEventVariantSeed(traderMapSeed, 1, 'night-trader')).map(({ id }) => id),
-      'sleep',
-    ]);
-    expect(choices.find(({ id }: { id: string }) => id === 'map')).toMatchObject({
-      id: 'map', label: 'Exchange: MAP → COMPASS', unavailableReason: null,
-    });
-    (ui as Partial<SurvivalUI>).onEventChoice?.('map');
+    expect(choices.map(({ id }: { id: string }) => id)).toEqual(['sleep']);
+    expect(setEventEligibleItems).toHaveBeenLastCalledWith(
+      new Set(['map-1']),
+    );
+    (ui as Partial<SurvivalUI>).onEventItem?.('map', 'map-1');
     await flushPromises();
-    expect(setEventEligibleItems).toHaveBeenLastCalledWith(new Set());
+    expect(setEventEligibleItems).toHaveBeenLastCalledWith(
+      new Set(),
+    );
     expect(calls).toEqual(['stage', 'reveal', 'unlock', 'choice']);
 
     choiceMotion.resolve();
@@ -1689,6 +1696,7 @@ describe('SurvivalPhase orchestration', () => {
           stageEvent: vi.fn(),
           revealEvent: vi.fn(() => Promise.resolve()),
           playEventChoice: vi.fn(() => Promise.resolve()),
+          prepareEventOutcome: vi.fn(),
           reactToEventOutcome: vi.fn(() => reaction.promise),
           syncInventory,
           play: vi.fn(() => Promise.resolve()),
@@ -1869,7 +1877,7 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
 
     expect(calls).toEqual([
-      'choice-ui', 'choice-world', 'resolve', 'impact', 'hold-result',
+      'cover', 'choice-ui', 'choice-world', 'resolve', 'impact', 'hold-result',
       'cover', 'clear-event', 'dawn', 'scene-render', 'uncover',
     ]);
     expect(setBusy).toHaveBeenLastCalledWith(true);
@@ -2416,6 +2424,7 @@ describe('SurvivalPhase orchestration', () => {
         revealEvent: vi.fn(() => Promise.resolve()),
         setEventEligibleItems: vi.fn(),
         playEventChoice: vi.fn(() => Promise.resolve()),
+        prepareEventOutcome: vi.fn(),
         reactToEventOutcome: vi.fn(() => reaction.promise),
         syncInventory,
         setDocumentHidden,

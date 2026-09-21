@@ -1,5 +1,5 @@
 import { settingsText } from '../i18n/settingsMessages';
-import type { WeatherId } from '../survival/survivalTypes';
+import type { SkyWeather } from '../world/skyPalette';
 
 export const PRESENTATION_WEATHER_IDS = Object.freeze([
   'calm', 'overcast', 'squall', 'rain',
@@ -12,7 +12,7 @@ export type WeatherControlSource = 'normal' | 'event' | 'forced';
 export interface PresentationWeatherProfile {
   readonly id: PresentationWeatherId;
   readonly label: string;
-  readonly skyWeather: WeatherId;
+  readonly skyWeather: SkyWeather;
   readonly fogDensityScale: number;
   readonly lightIntensityScale: number;
   readonly waveScale: number;
@@ -48,7 +48,7 @@ const PROFILES: Readonly<Record<PresentationWeatherId, Readonly<PresentationWeat
   rain: profile({
     id: 'rain', get label() { return settingsText('rain'); }, skyWeather: 'overcast',
     fogDensityScale: 1.55, lightIntensityScale: 0.58, waveScale: 1.15,
-    rainIntensity: 1, mistIntensity: 0.55, sprayIntensity: 0.42, lightning: false,
+    rainIntensity: 1, mistIntensity: 0, sprayIntensity: 0, lightning: false,
   }),
   wind: profile({
     id: 'wind', get label() { return settingsText('wind'); }, skyWeather: 'overcast',
@@ -58,7 +58,7 @@ const PROFILES: Readonly<Record<PresentationWeatherId, Readonly<PresentationWeat
   thunderstorm: profile({
     id: 'thunderstorm', get label() { return settingsText('storm'); }, skyWeather: 'squall',
     fogDensityScale: 1.65, lightIntensityScale: 0.48, waveScale: 1.55,
-    rainIntensity: 1, mistIntensity: 0.55, sprayIntensity: 0.9, lightning: true,
+    rainIntensity: 1, mistIntensity: 0.85, sprayIntensity: 0.9, lightning: true,
   }),
   waves: profile({
     id: 'waves', get label() { return settingsText('waves'); }, skyWeather: 'squall',
@@ -66,9 +66,9 @@ const PROFILES: Readonly<Record<PresentationWeatherId, Readonly<PresentationWeat
     rainIntensity: 0, mistIntensity: 0.15, sprayIntensity: 1, lightning: false,
   }),
   fog: profile({
-    id: 'fog', get label() { return settingsText('fog'); }, skyWeather: 'overcast',
-    fogDensityScale: 4.4, lightIntensityScale: 0.38, waveScale: 0.65,
-    rainIntensity: 0, mistIntensity: 1, sprayIntensity: 0, lightning: false,
+    id: 'fog', get label() { return settingsText('fog'); }, skyWeather: 'fog',
+    fogDensityScale: 1, lightIntensityScale: 0.8, waveScale: 0.65,
+    rainIntensity: 0, mistIntensity: 0, sprayIntensity: 0, lightning: false,
   }),
 });
 

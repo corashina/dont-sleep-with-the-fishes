@@ -13,6 +13,7 @@ import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 const SPEED = 2.4;
 const DISTANCE = 120;
 const START_X = 56;
+const WATERLINE_Y = -0.5;
 const clamp = (value: number): number => Math.max(0, Math.min(1, value));
 
 export class GhostShipPresentation implements FocusedEventPresentation {
@@ -29,7 +30,6 @@ export class GhostShipPresentation implements FocusedEventPresentation {
   );
   private readonly radius: number;
   private readonly viewSlope: number;
-  private passResolve: (() => void) | null = null;
   private elapsed = 0;
   private cruising = false;
   private staged = false;
@@ -68,7 +68,7 @@ export class GhostShipPresentation implements FocusedEventPresentation {
     if (this.disposed) return;
     this.clear();
     const side = eventSideFromSeed(variantSeed);
-    this.ship.position.set(side * START_X, 0, -DISTANCE);
+    this.ship.position.set(side * START_X, WATERLINE_Y, -DISTANCE);
     this.ship.rotation.set(0, -side * Math.PI / 2, 0);
     this.direction.set(-side, 0, 0);
     this.appearance.setStrength(1);
@@ -103,28 +103,28 @@ export class GhostShipPresentation implements FocusedEventPresentation {
       throw new Error(`Unsupported Ghost Ship result: ${result.resultId}`);
     }
     this.animation.settle();
-    this.resolvePass();
     const signaled = result.resultId === 'ghost-ship-signaled';
     this.root.userData.state = signaled ? 'signaled' : 'pass';
     if (signaled) {
-      void this.animation.start('signaled', 6);
+      const reaction = this.animation.start('signaled', 6);
       this.sampleSignal(0);
+      return reaction.then(() => {
+        if (!this.disposed && this.staged && this.root.userData.state === 'signaled') {
+          this.finish();
+        }
+      });
     }
-    if (this.hasPassed() && !this.animation.active) {
-      this.finish();
-      return Promise.resolve();
-    }
-    return new Promise((resolve) => { this.passResolve = resolve; });
+    this.finish();
+    return Promise.resolve();
   }
 
   update(_time: number, delta: number): void {
     if (this.disposed || !this.staged || !Number.isFinite(delta) || delta < 0) return;
     this.elapsed += delta;
     if (this.cruising) this.ship.position.addScaledVector(this.direction, SPEED * delta);
-    this.ship.position.y = Math.sin(this.elapsed * 0.45) * 0.12;
+    this.ship.position.y = WATERLINE_Y + Math.sin(this.elapsed * 0.45) * 0.12;
     this.ship.rotation.z = Math.sin(this.elapsed * 0.3) * 0.008;
     this.animation.update(this.elapsed, delta);
-    if (this.passResolve !== null && this.hasPassed() && !this.animation.active) this.finish();
   }
 
   settleForVisibilityChange(): void {
@@ -133,7 +133,6 @@ export class GhostShipPresentation implements FocusedEventPresentation {
 
   clear(): void {
     this.animation.cancel();
-    this.resolvePass();
     this.cruising = false;
     this.staged = false;
     this.root.visible = false;
@@ -159,17 +158,8 @@ export class GhostShipPresentation implements FocusedEventPresentation {
   }
 
   private finish(): void {
-    this.root.userData.state = 'departed';
-    this.cruising = false;
-    this.staged = false;
-    this.root.visible = false;
+    // Keep crossing until the event flow clears the covered scene.
+    this.root.userData.state = 'held-result';
     this.wash.intensity = 0;
-    this.resolvePass();
-  }
-
-  private resolvePass(): void {
-    const resolve = this.passResolve;
-    this.passResolve = null;
-    resolve?.();
   }
 }

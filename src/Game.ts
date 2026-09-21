@@ -831,8 +831,10 @@ export class Game {
     if (option === undefined) throw new Error(`Unknown event test scene: ${id}`);
     this.exitPointerLock();
     this.elapsed = 0;
-    this.seed = this.createSeed();
-    const result = createEventTestResult();
+    this.seed = option.phase !== 'ending' && option.seed !== undefined
+      ? option.seed
+      : this.createSeed();
+    const result = createEventTestResult(option, this.seed);
     if (option.phase === 'ending') {
       if (option.endingId === 'dorothy') {
         this.activateScavenge('ending-preview');

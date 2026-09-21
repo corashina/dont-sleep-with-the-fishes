@@ -12,7 +12,7 @@ import {
 export type EventItemUseContext =
   | 'base' | 'throw-target' | 'tape-stretch' | 'compass-search' | 'map-read'
   | 'binocular-look' | 'net-scoop' | 'net-slap' | 'bucket-scoop' | 'bucket-helmet'
-  | 'trade-handover' | 'map-leak-patch' | 'swim-ring-wear'
+  | 'trade-handover' | 'map-leak-patch' | 'swim-ring-wear' | 'swim-ring-deploy'
   | 'radio-signal-receive' | 'radio-call' | 'tape-secure'
   | 'flare-target' | 'flare-sky' | 'anchor-drop'
   | 'umbrella-overhead' | 'umbrella-shield'
@@ -26,7 +26,7 @@ export type EventItemEffectKind =
 export type EventItemSurfaceFacing =
   | 'default' | 'none' | 'target' | 'target-plane' | 'target-plane-opposite';
 
-export type EventItemFlightTarget = 'event' | 'starboard-water' | 'bucket-water';
+export type EventItemFlightTarget = 'event' | 'starboard-water' | 'bucket-water' | 'ring-water';
 
 export type EventItemDisposition = 'recover' | 'broken' | 'depart';
 
@@ -149,7 +149,7 @@ const BUCKET_HELMET_EVENTS: ReadonlySet<string> = new Set([
   'shower-night', 'bad-sleep', 'thunderstorm', 'eerie-melody',
 ]);
 const UMBRELLA_OVERHEAD_EVENTS: ReadonlySet<string> = new Set([
-  'shower-night', 'thunderstorm',
+  'shower-night', 'windy-night', 'thunderstorm',
 ]);
 const UMBRELLA_SHIELD_EVENTS: ReadonlySet<string> = new Set([
   'bad-sleep', 'death-stare', 'eerie-melody', 'face-on-the-moon',
@@ -169,6 +169,7 @@ const ANCHOR_DROP_EVENTS: ReadonlySet<string> = new Set([
 const SETTLE_ROLL_EXCLUDED_CONTEXTS: ReadonlySet<EventItemUseContext> = new Set([
   'shotgun-fire',
   'swim-ring-wear',
+  'swim-ring-deploy',
   'map-read', 'compass-search', 'net-scoop', 'net-slap', 'map-leak-patch', 'knife-stab',
 ]);
 const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number>> = {
@@ -183,6 +184,7 @@ const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number
   'bucket-scoop': SCOOP_DURATION,
   'bucket-helmet': 1.45,
   'swim-ring-wear': 1.25,
+  'swim-ring-deploy': 1.8,
   'trade-handover': 1.35,
   'radio-signal-receive': 1.65,
   'radio-call': 2.1,
@@ -221,7 +223,8 @@ const EVENT_ITEM_CONTEXT_RESOLVERS: Partial<Record<ItemId, EventItemContextResol
   medicalKit: (_eventId, choiceId) => exactChoiceContext(choiceId, 'medicalKit', 'throw-target'),
   energyBar: (_eventId, choiceId) => exactChoiceContext(choiceId, 'energyBar', 'throw-target'),
   swimRing: (eventId, choiceId) => exactChoiceContext(
-    choiceId, 'swimRing', eventId === 'bad-sleep' ? 'swim-ring-wear' : 'throw-target',
+    choiceId, 'swimRing', eventId === 'bad-sleep' ? 'swim-ring-wear'
+      : eventId === 'restless-waves' ? 'swim-ring-deploy' : 'throw-target',
   ),
   ductTape: (eventId, choiceId) => exactChoiceContext(
     choiceId, 'ductTape', eventId === 'windy-night' ? 'tape-secure' : 'tape-stretch',
@@ -433,6 +436,28 @@ function sampleThrowTarget(
   output.itemVisible = flight < 1;
 }
 
+function sampleSwimRingDeploy(
+  output: EventItemUseSample,
+  pickup: number,
+  hold: number,
+  progress: number,
+): void {
+  samplePickupAndHold(output, pickup, hold);
+  const windUp = smoothstep((progress - 0.38) / 0.14);
+  const flight = clamp01((progress - 0.54) / 0.34);
+  const settle = smoothstep((progress - 0.88) / 0.12);
+  output.viewX += 0.18 * windUp;
+  output.viewY += 0.24 * windUp;
+  output.viewZ += 0.12 * windUp;
+  output.pitch = 0.35 * pickup * (1 - flight);
+  output.roll = -0.24 * windUp * (1 - flight);
+  output.targetBlend = flight;
+  output.flightTarget = 'ring-water';
+  output.ballisticFlight = flight > 0;
+  output.flightArc = 4 * flight * (1 - flight) + 0.025 * Math.sin(settle * Math.PI);
+  output.flightArcHeight = 1.4;
+}
+
 function sampleTapeStretch(
   output: EventItemUseSample, pickup: number, hold: number, action: number,
 ): void {
@@ -469,7 +494,6 @@ function sampleTapeSecure(
   output.targetBlend = press;
   output.cameraTargetBlend = 0.65 * smoothstep((progress - 0.5) / 0.22);
   output.pitch = -0.28 * press;
-  output.itemVisible = progress < 1;
 }
 
 function sampleRadioCall(
@@ -525,22 +549,17 @@ function sampleBinocularLook(
   progress: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  const approach = smoothstep((progress - 0.34) / 0.18);
-  const passCamera = smoothstep((progress - 0.52) / 0.16);
+  const approach = smoothstep((progress - 0.34) / 0.16);
   const mask = smoothstep((progress - 0.5) / 0.14);
-  const targetLook = smoothstep((progress - 0.6) / 0.24);
   output.viewY += 0.2 * hold;
-  output.viewZ += 0.62 * approach + 0.5 * passCamera;
+  // Stop the model before the near plane; the mask takes over when zoom starts.
+  output.viewZ += 0.2 * approach;
   output.pitch = 0;
-  output.scaleX = 1 + 0.35 * approach;
-  output.scaleY = 1 + 0.35 * approach;
-  output.scaleZ = 1 + 0.35 * approach;
   output.effectKind = mask > 0 ? 'binocular-mask' : 'none';
   output.fovScale = 1 - 0.62 * mask;
   output.primaryEffect = mask;
-  output.secondaryEffect = passCamera;
-  output.cameraTargetBlend = targetLook;
-  output.itemVisible = progress < 0.68;
+  output.cameraTargetBlend = mask;
+  output.itemVisible = mask === 0;
 }
 
 function sampleNetScoop(
@@ -805,7 +824,7 @@ function sampleAnchorDrop(
   output.targetBlend = flight;
   output.ballisticFlight = flight > 0;
   output.flightArc = flightArc;
-  output.flightArcHeight = 0.65;
+  output.flightArcHeight = 1.2;
   output.flightTarget = 'starboard-water';
   output.effectKind = released > 0 ? 'chain' : 'none';
   output.primaryEffect = released;
@@ -975,6 +994,8 @@ export function sampleEventItemUse(
     sampleTapeSecure(output, pickup, hold, t);
   } else if (context === 'radio-call') {
     sampleRadioCall(output, pickup, hold, t);
+  } else if (context === 'swim-ring-deploy') {
+    sampleSwimRingDeploy(output, pickup, hold, t);
   } else if (!sampleHeldEventItemUse(context, output, pickup, hold, action, t)) {
     sampleTargetedEventItemUse(context, output, itemId, pickup, hold, t);
   }
@@ -1066,6 +1087,11 @@ export function eventItemActionCueProgresses(context: EventItemUseContext): read
   return ACTION_CUES[context] ?? NO_ACTION_CUE_PROGRESSES;
 }
 
+export function isReturningSingleUseContext(context: EventItemUseContext): boolean {
+  return context === 'shotgun-fire' || context === 'flare-target'
+    || context === 'flare-sky' || context === 'tape-stretch' || context === 'tape-secure';
+}
+
 export function sampleEventItemOutcome(
   context: EventItemUseContext,
   itemId: ItemId,
@@ -1074,7 +1100,9 @@ export function sampleEventItemOutcome(
   output: EventItemUseSample,
 ): void {
   sampleEventItemUse(context, itemId, 1, output);
-  if (context === 'swim-ring-wear') return;
+  // Keep worn and deployed items in place throughout the result.
+  if (context === 'swim-ring-wear' || context === 'anchor-drop'
+    || context === 'swim-ring-deploy' || context === 'map-leak-patch') return;
   const t = clamp01(progress);
   const profile = eventItemMotionProfile(itemId);
 
@@ -1102,10 +1130,7 @@ function sampleImmediateEventItemOutcome(
   output: EventItemUseSample,
 ): boolean {
   switch (context) {
-    case 'tape-secure':
-      output.itemVisible = false;
-      output.cameraTargetBlend *= 1 - smoothstep(progress);
-      return true;
+    case 'tape-secure': sampleTapeSecureOutcome(progress, profile, output); return true;
     case 'throw-target': output.itemVisible = false; return true;
     case 'bucket-helmet': return true;
     case 'umbrella-shield': return true;
@@ -1139,7 +1164,6 @@ function sampleShotgunOutcome(progress: number, output: EventItemUseSample): voi
   resetSample(output);
   const pickup = 1 - smoothstep(progress);
   samplePickupAndHold(output, pickup, pickup);
-  output.itemVisible = progress < 1;
 }
 
 function sampleBinocularOutcome(progress: number, output: EventItemUseSample): void {
@@ -1156,7 +1180,6 @@ function sampleFlareOutcome(progress: number, output: EventItemUseSample): void 
   resetSample(output);
   const pickup = 1 - smoothstep(progress);
   sampleFlare(output, pickup, pickup, 1);
-  output.itemVisible = progress < 1;
 }
 
 function sampleUmbrellaOutcome(progress: number, output: EventItemUseSample): void {
@@ -1164,6 +1187,22 @@ function sampleUmbrellaOutcome(progress: number, output: EventItemUseSample): vo
   const pickup = 1 - smoothstep(progress);
   sampleUmbrella(output, pickup, pickup, false, 1);
   output.itemVisible = progress < 1;
+}
+
+function sampleTapeSecureOutcome(
+  progress: number,
+  profile: ReturnType<typeof eventItemMotionProfile>,
+  output: EventItemUseSample,
+): void {
+  // Pull away from the supplies before lowering the roll to its pickup pose.
+  if (progress < 0.5) {
+    const remaining = 1 - smoothstep(progress * 2);
+    output.targetBlend *= remaining;
+    output.pitch *= remaining;
+  } else {
+    sampleTapeOutcome((progress - 0.5) * 2, profile, output);
+  }
+  output.cameraTargetBlend = 0.65 * (1 - smoothstep(progress));
 }
 
 function sampleTapeOutcome(
@@ -1177,7 +1216,6 @@ function sampleTapeOutcome(
   staged[MOTION_PROFILE] = profile;
   staged[ANTICIPATE] = 0;
   sampleTapeStretch(output, pickup, pickup, 0);
-  output.itemVisible = progress < 1;
 }
 
 function sampleRecoveringEventItemOutcome(
@@ -1333,19 +1371,13 @@ function sampleDefaultEventItemOutcome(
   profile: ReturnType<typeof eventItemMotionProfile>,
   output: EventItemUseSample,
 ): void {
-  const returnToGrip = smoothstep(progress / 0.5);
-  if (progress <= 0.5) {
-    output.viewX += (profile.grip[0] - output.viewX) * returnToGrip;
-    output.viewY += (profile.grip[1] - output.viewY) * returnToGrip;
-    output.viewZ += (profile.grip[2] - output.viewZ) * returnToGrip;
-  } else {
-    const stow = smoothstep((progress - 0.5) / 0.5);
-    output.viewX = profile.grip[0];
-    output.viewY = profile.grip[1] + (-1.35 - profile.grip[1]) * stow;
-    output.viewZ = profile.grip[2];
-  }
+  resetSample(output);
+  const staged = output as StagedEventItemUseSample;
+  staged[MOTION_PROFILE] = profile;
+  staged[ANTICIPATE] = 0;
+  const pickup = 1 - smoothstep(progress);
+  samplePickupAndHold(output, pickup, pickup);
   output.aimBlend = 0;
-  output.itemVisible = progress < 1;
 }
 
 export function eventItemOutcomeDuration(

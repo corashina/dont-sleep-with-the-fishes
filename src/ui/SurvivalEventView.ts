@@ -387,13 +387,16 @@ export class SurvivalEventView {
       this.disposed
       || !this.active
       || this.modalOpen
+      || this.caption.getAttribute('aria-hidden') === 'true'
       || !this.choices.contains(button)
       || this.busy
       || this.selectedChoiceId !== null
       || button.getAttribute('aria-disabled') === 'true'
     ) return;
     const choiceId = button.dataset.eventChoice as EventResponseId | undefined;
-    if (choiceId !== undefined) this.onChoice(choiceId);
+    if (choiceId === undefined) return;
+    this.hideReveal();
+    this.onChoice(choiceId);
   }
 
   dispose(): void {

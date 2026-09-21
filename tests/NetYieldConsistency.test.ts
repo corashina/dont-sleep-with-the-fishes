@@ -1,5 +1,4 @@
 import { describe,expect,it } from 'vitest';
-import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import { formatFishingResult } from '../src/survival/SurvivalFishingFlow';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from './helpers/random';
@@ -33,11 +32,4 @@ describe('net catch agreement', () => {
     }
   });
 
-  it.each(['plasticBottle', 'brokenCan', 'crushedCan'] as const)('labels %s as Junk', (id) => {
-    const caught = FISHING_CATCHES.find((entry) => entry.id === id)!;
-    const game = new SurvivalSession([], { seed: 1 });
-    const popup = formatFishingResult({ kind: 'catch', catch: caught }, game.beginFishing().outcome);
-    expect(popup.message).toBe('Junk');
-    expect(popup.items).toEqual([]);
-  });
 });

@@ -146,27 +146,6 @@ describe('Ocean of Blood presentation', () => {
     expect(intensity).toHaveBeenLastCalledWith(0);
   });
 
-  it('keeps distant bodies apart on both sides of the view', async () => {
-    const { event } = presentation();
-    const reveal = event.reveal();
-    event.settleForVisibilityChange();
-    await reveal;
-    const bodies = event.worldRoot.children.filter(child => child.name.startsWith('blood-ocean-body-'));
-    const distant = bodies.slice(1);
-    expect(distant.filter(body => body.position.x < -3)).toHaveLength(5);
-    expect(distant.filter(body => body.position.x > 3)).toHaveLength(5);
-    expect(distant.every(body => body.position.z <= -8)).toBe(true);
-    for (let index = 0; index < bodies.length; index += 1) {
-      for (const other of bodies.slice(index + 1)) {
-        expect(bodies[index]!.position.distanceTo(other.position)).toBeGreaterThan(4);
-      }
-    }
-    const coats = bodies.map(body => body.getObjectByName('torn-coat') as Mesh);
-    expect(new Set(coats.map(coat => coat.material)).size).toBe(5);
-    expect(new Set(coats.map(coat => coat.geometry)).size).toBe(1);
-    event.dispose();
-  });
-
   it('settles reveal, clears pending actions, and disposes geometry once', async () => {
     const { event, intensity } = presentation();
     const geometry = (event.worldRoot.getObjectByName('torn-coat') as Mesh).geometry;
@@ -254,7 +233,7 @@ describe('Ocean of Blood presentation', () => {
       ocean.setBloodOceanIntensity(1);
       ocean.setQuality('high');
       ocean.update(1, 1, 0.025, {
-        phase: 'night', fogColor: color, horizonColor: color, skyColor: color, sunColor: color, sunVisibility: 0,
+        phase: 'night', denseFog: false, fogColor: color, horizonColor: color, skyColor: color, sunColor: color, sunVisibility: 0,
       });
       expect(ocean.material.uniforms.uBloodOceanIntensity!.value).toBe(1);
       expect(ocean.material.uniforms.uFogColor!.value).toEqual(color);

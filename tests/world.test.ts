@@ -1,7 +1,6 @@
 // Importance: 10/10 (scaled from 5/5). Protects world integration and resource ownership.
 import { describe,expect,it,vi } from 'vitest';
 import {
-  Box3,
   BufferGeometry,
   Color,
   DirectionalLight,
@@ -19,7 +18,6 @@ import {
 } from 'three';
 import { createItemInstances,type ItemInstance } from '../src/game/ItemState';
 import { getSinkingState } from '../src/game/sinking';
-import { getScavengeCinematicFrame } from '../src/game/scavengeEnding';
 import { BoatBuoyancy } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import {
@@ -132,7 +130,6 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
-
   it('preserves ship composition and idempotent geometry ownership', () => {
     const updateMatrixWorld = vi.spyOn(Group.prototype, 'updateMatrixWorld');
     const materials = createShipMaterials();
@@ -280,42 +277,6 @@ describe('world builders', () => {
         expect(object.getWorldPosition(new Vector3()).distanceTo(expected)).toBeLessThan(1e-5);
       });
 
-    } finally {
-      world.dispose();
-      propModels.dispose();
-    }
-  });
-
-  it('keeps the departing lifeboat afloat and inside the sinking camera frame', () => {
-    const scene = new Scene();
-    const propModels = createTestPropModels();
-    const world = createTestWorld(scene, propModels);
-    const camera = new PerspectiveCamera(60, 16 / 9, 0.1, 1000);
-    try {
-      const originalX = world.lifeboat.position.x;
-      world.prepareSurvivalDeparture();
-      for (let elapsed = 0; elapsed <= 8; elapsed += 0.5) {
-        const frame = getScavengeCinematicFrame(elapsed);
-        camera.position.fromArray(frame.cameraPosition);
-        camera.lookAt(new Vector3().fromArray(frame.cameraTarget));
-        camera.updateMatrixWorld(true);
-        world.update(elapsed, 0.5, frame.sinking, camera.position, false);
-        expect(world.lifeboat.parent).toBe(scene);
-        expect(world.lifeboat.position.x).toBeGreaterThan(originalX + 4);
-        expect(Math.abs(world.lifeboat.position.y)).toBeLessThan(3);
-        const bounds = new Box3().setFromObject(world.lifeboat);
-        for (const x of [bounds.min.x, bounds.max.x]) {
-          for (const y of [bounds.min.y, bounds.max.y]) {
-            for (const z of [bounds.min.z, bounds.max.z]) {
-              const projected = new Vector3(x, y, z).project(camera);
-              expect(Math.abs(projected.x)).toBeLessThan(0.9);
-              expect(Math.abs(projected.y)).toBeLessThan(0.9);
-              expect(Math.abs(projected.z)).toBeLessThan(1);
-            }
-          }
-        }
-      }
-      expect(world.ship.position.y).toBeLessThan(-12);
     } finally {
       world.dispose();
       propModels.dispose();

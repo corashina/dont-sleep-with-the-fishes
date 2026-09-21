@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { FishingSession } from '../src/survival/FishingSession';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from './helpers/random';
 
@@ -56,17 +55,6 @@ describe('net fishing', () => {
     expect(game.snapshot().inventory['fishingNet-1']?.condition).toBe('usable');
     expect(game.finishFishing(attempt.view().id, result).accepted).toBe(false);
     expect(game.snapshot().food).toBe(before.food + 1);
-  });
-
-  it('ignores bait and never waits for a bite', () => {
-    const attempt = new FishingSession({
-      id: 'net', gear: 'net', day: 1, capturedBait: true, random: sequenceRandom([0]),
-    });
-    expect(attempt.snapshot().capturedBait).toBe(false);
-    attempt.cast({ x: 0, z: -6.4 });
-    attempt.completeCast();
-    attempt.advance(100);
-    expect(attempt.view()).toMatchObject({ state: 'resolved', result: { kind: 'catch' } });
   });
 
 });

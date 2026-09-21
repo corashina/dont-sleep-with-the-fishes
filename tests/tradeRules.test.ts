@@ -10,16 +10,24 @@ function ownedExcept(...missing: ItemId[]): ReadonlySet<ItemId> {
 }
 
 describe('Handyman trade rules', () => {
-  it('keeps only missing rewards with the payment catalog weight', () => {
-    const owned = new Set<ItemId>(['compass', 'map', 'radio', 'shotgun', 'scubaSet']);
+  it('keeps only missing rewards at or below the payment weight', () => {
+    const owned = new Set<ItemId>(['bucket', 'cannedFood', 'scubaSet']);
 
-    expect(eligibleHandymanRewards(owned, 'spyglass')).toEqual([
-      'cannedFood',
+    expect(eligibleHandymanRewards(owned, 'bucket')).toEqual([
       'baitTin',
       'ductTape',
+      'compass',
+      'map',
+      'medicalKit',
+      'spyglass',
+      'fishingNet',
       'knife',
       'flareGun',
+      'radio',
+      'umbrella',
+      'swimRing',
       'flashlight',
+      'shotgun',
       'energyBar',
     ]);
   });

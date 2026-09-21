@@ -1,4 +1,5 @@
 import { presentationUiText } from '../i18n/presentationUiMessages';
+import { BoatInteractionRaycast } from './BoatInteractionRaycast';
 import type {
   Object3D,
   PerspectiveCamera,
@@ -42,6 +43,7 @@ export interface EventInteractionProjectionHost {
 }
 
 export interface BoatInteractionProjectorRoots {
+  readonly boatRoot: Object3D;
   readonly supplyRecords: readonly BoatSupplyPresentationRecord[];
   readonly carlitosRoot: Object3D;
   readonly carlitosInteractionRoot: Object3D;
@@ -130,6 +132,9 @@ function updateHitArea(
 }
 
 export class BoatInteractionProjector {
+  private readonly pointerRaycast: BoatInteractionRaycast;
+  private viewportWidth = 0;
+  private viewportHeight = 0;
   private readonly supplyEntries: readonly SupplyProjectionEntry[];
   private readonly fishingCache: BoatObjectBoundsCache | null;
   private readonly repairCache: BoatObjectBoundsCache | null;
@@ -160,6 +165,7 @@ export class BoatInteractionProjector {
     private readonly roots: BoatInteractionProjectorRoots,
     private readonly eventHost: EventInteractionProjectionHost,
   ) {
+    this.pointerRaycast = new BoatInteractionRaycast(camera, roots.boatRoot);
     this.supplyEntries = roots.supplyRecords.map((record) => {
       const itemType = record.groupId;
       return {
@@ -315,6 +321,11 @@ export class BoatInteractionProjector {
       projection: projectionOutput(),
       anchor: {
         id: target.id,
+        ...(target.preciseHitTest ? {
+          hitTest: (x: number, y: number) => !this.disposed && this.pointerRaycast.hits(
+            target.root, x, y, this.viewportWidth, this.viewportHeight,
+          ),
+        } : {}),
         get label() { return target.label; },
         get description() { return target.description; },
         tooltip: target.tooltip,
@@ -350,6 +361,8 @@ export class BoatInteractionProjector {
 
   projectAnchors(width: number, height: number): readonly BoatInteractionAnchor[] {
     if (this.disposed || width <= 0 || height <= 0) return this.emptyAnchors;
+    this.viewportWidth = width;
+    this.viewportHeight = height;
     this.nextAnchors.length = 0;
     this.projectSupplyAnchors(width, height);
     this.projectCarlitosAnchor(width, height);

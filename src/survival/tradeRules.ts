@@ -29,6 +29,6 @@ function handymanRewardPool(payment: ItemId): readonly ItemId[] {
   const paymentWeight = ITEM_DEFINITIONS[payment].weight;
   return HANDYMAN_ITEM_IDS.filter((candidate) => (
     candidate !== payment
-    && ITEM_DEFINITIONS[candidate].weight === paymentWeight
+    && ITEM_DEFINITIONS[candidate].weight <= paymentWeight
   ));
 }

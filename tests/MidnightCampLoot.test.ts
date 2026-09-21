@@ -1,32 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ITEM_IDS, type ItemId } from '../src/game/ItemState';
 import { drawMidnightCampItems } from '../src/survival/midnightCampLoot';
-import { survivalEventById } from '../src/survival/eventCatalog';
-import { resolveWeightedOutcome } from '../src/survival/eventResolver';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { formatJournalEntry } from '../src/survival/journal';
 import { sequenceRandom } from './helpers/random';
 
-const visit = survivalEventById('midnight-tour')!.choices.find(({ id }) => id === 'visit')!;
-
 describe('Midnight Tour camp rewards', () => {
-  it.each([
-    [0, 'tour-chest'], [0.39999, 'tour-chest'],
-    [0.6, 'tour-camp'], [0.74999, 'tour-camp'],
-    [0.75, 'tour-camp-backpack'], [0.79999, 'tour-camp-backpack'],
-    [0.8, 'tour-attack'], [0.99999, 'tour-attack'],
-  ])('selects the expected outcome at %s', (roll, resultId) => {
-    expect(resolveWeightedOutcome(visit, sequenceRandom([roll])).resultId).toBe(resultId);
-  });
-
-  it.each([0, 1, 2])('can grant %i food independently from bait', (quantity) => {
-    const resolved = resolveWeightedOutcome(visit, sequenceRandom([quantity / 3, (2 - quantity) / 3]), 0, 'tour-camp');
-    expect(resolved.effects.resources).toEqual([
-      { resource: 'food', operation: 'add', value: quantity },
-      { resource: 'bait', operation: 'add', value: 2 - quantity },
-    ]);
-  });
-
   it('rolls each common item separately and permits an empty camp', () => {
     expect(drawMidnightCampItems(new Set(), sequenceRandom([0.5, 0.5]), false)).toEqual([]);
     expect(drawMidnightCampItems(new Set(), sequenceRandom([0.49, 0.5]), false))

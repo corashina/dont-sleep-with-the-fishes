@@ -82,23 +82,23 @@ describe('item circulation', () => {
     expect(game.snapshot().inventory['swimRing-1']?.condition).toBe('consumed');
   });
 
-  it('Handyman exchanges equal weights, hides the reward, and excludes owned equipment', () => {
+  it('Handyman returns a missing item of equal or lower weight', () => {
     const game = new SurvivalSession(saved('anchor'), { seed: 3, initialEventId: 'handyman' });
     const prepared = prepareTradeEvent(survivalEventById('handyman')!, game.snapshot());
     const choice = prepared.choices.find((entry) => entry.id === 'anchor')!;
     expect(choice.label.toLowerCase()).not.toMatch(/scuba|nurkowania|buceo/);
     expect(choice.outcomes[0].effects.items).toBeUndefined();
     const outcome = game.resolveEvent({ kind: 'item', choiceId: 'anchor', instanceId: 'anchor-1' });
-    expect(outcome.rewardSummary).toEqual({ kind: 'item', id: 'scubaSet', quantity: 1 });
-    expect(ITEM_DEFINITIONS.anchor.weight).toBe(ITEM_DEFINITIONS.scubaSet.weight);
+    expect(outcome.rewardSummary).toEqual({ kind: 'item', id: 'cannedFood', quantity: 1 });
+    expect(ITEM_DEFINITIONS.cannedFood.weight).toBeLessThanOrEqual(ITEM_DEFINITIONS.anchor.weight);
     expect(game.snapshot().inventory['anchor-1']?.condition).toBe('lost');
-    expect(game.snapshot().inventory['scubaSet-1']?.condition).toBe('usable');
+    expect(game.snapshot().inventory['cannedFood-1']?.condition).toBe('usable');
     expect(game.beginDawn().accepted).toBe(true);
-    expect(formatJournalEntry(game.snapshot().journalEntries[0]!).nighttime).toMatch(/scuba|nurkowania|buceo/);
+    expect(formatJournalEntry(game.snapshot().journalEntries[0]!).nighttime).toMatch(/food|jedzenie|comida/i);
   });
 
   it('Handyman refuses a full weight pool without taking payment', () => {
-    const game = new SurvivalSession(saved('anchor', 'scubaSet'), {
+    const game = new SurvivalSession(saved(...ITEM_IDS.filter((id) => id !== 'carlitos')), {
       seed: 3, initialEventId: 'handyman', initialConditions: { 'scubaSet-1': 'broken' },
     });
     const before = game.snapshot();

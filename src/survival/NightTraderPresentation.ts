@@ -5,14 +5,17 @@ import {
   CylinderGeometry,
   Group,
   Material,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
+  Object3D,
   PointLight,
   Quaternion,
   SphereGeometry,
   TorusGeometry,
   Vector3,
 } from 'three';
+import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import type { ItemId, ItemInstanceId } from '../game/ItemState';
 import {
   sampleWaveFieldInto,
@@ -26,7 +29,7 @@ import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
-import type { MutableSupplyPose } from './BoatSupplyDisplay';
+import type { BorrowedSupplyActor, MutableSupplyPose } from './BoatSupplyDisplay';
 import {
   clamp01Unchecked as clamp01,
   smoothstepUnchecked as smoothstep,
@@ -43,7 +46,6 @@ import type {
 import { eventSideFromSeed, type EventSide } from './eventVariant';
 import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 import { NightTraderSign } from './NightTraderSign';
-import { SceneFade } from '../rendering/SceneFade';
 import { nightTraderOffers, nightTraderTrade } from './nightTraderTrades';
 
 type NightTraderAnimationKind =
@@ -56,24 +58,20 @@ type NightTraderAnimationKind =
 const REVEAL_DURATION = 1.6;
 const PAYMENT_DURATION = 1.05;
 const REFUSE_CHOICE_DURATION = 0.46;
-const RESULT_DURATION = 1.05;
+const RESULT_DURATION = 1.75;
 const DEPARTURE_DURATION = 1.3;
 const BOAT_BASE = new Vector3(4.9, 0.08, -7.1);
+const BOAT_AWAY = new Vector3(10.8, -0.2, -17.2);
 const ROWBOAT_FLOOR_Y = -0.24;
+const LANTERN_INTENSITY = 15;
+// Center of the raised bow tip after the rowboat's authored rotation.
+const LANTERN_POSITION = new Vector3(2.04, 0.47, -0.13);
 const TRADER_POSITION = new Vector3(0.35, ROWBOAT_FLOOR_Y, -0.1);
 const CASE_TARGET = new Vector3(4.37, 1.02, -6.38);
 const PAYMENT_START = new Vector3(-0.35, 0.72, -1.05);
 const REWARD_END = new Vector3(-0.35, 0.72, -1.05);
 const X_AXIS = new Vector3(1, 0, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
-
-function keyedTravel(progress: number): number {
-  if (progress < 0.15) return -0.04 * smoothstep(progress / 0.15);
-  if (progress < 0.82) {
-    return -0.04 + 1.09 * smoothstep((progress - 0.15) / 0.67);
-  }
-  return 1.05 + (1 - 1.05) * smoothstep((progress - 0.82) / 0.18);
-}
 
 function createMaterial(
   color: number,
@@ -114,10 +112,16 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   private readonly exchangeGeometries = new Set<BufferGeometry>();
   private readonly exchangeMaterials = new Set<Material>();
   private readonly boatBase = BOAT_BASE.clone();
-  private readonly departureFade = new SceneFade();
+  private readonly boatAway = BOAT_AWAY.clone();
   private readonly caseTarget = CASE_TARGET.clone();
   private readonly paymentStart = PAYMENT_START.clone();
   private readonly rewardEnd = REWARD_END.clone();
+  private readonly transferPosition = new Vector3();
+  private readonly storedPaymentPosition = new Vector3();
+  private readonly rewardStoragePosition = new Vector3();
+  private readonly rewardStorageQuaternion = new Quaternion();
+  private readonly rewardStorageScale = new Vector3();
+  private readonly transferMatrix = new Matrix4();
   private readonly boatMotionBase = BOAT_BASE.clone();
   private readonly waveQuaternion = new Quaternion();
   private readonly waveSample: WaveSample = {
@@ -146,8 +150,8 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   );
   private paymentActor: Group | null = null;
   private rewardActor: Group | null = null;
-  private paymentInstanceId: ItemInstanceId | null = null;
-  private usingSupplyPayment = false;
+  private borrowedPayment: BorrowedSupplyActor | null = null;
+  private rewardSlot: Object3D | null = null;
   private paymentVisible = false;
   private rewardVisible = false;
   private staged = false;
@@ -180,8 +184,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
     this.lantern.name = 'night-trader-lantern';
     this.lanternLight = this.buildLantern();
-    this.lantern.position.set(0, 0.6, 0.35);
-    this.sign.root.add(this.lantern);
+    this.vesselContent.add(this.lantern);
     this.lanternReflection.name = 'night-trader-lantern-reflection';
     this.reflectionMaterial = createMaterial(0xd48746, 0.64, {
       emissive: 0x6b381a,
@@ -194,7 +197,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     );
     reflection.name = 'night-trader-lantern-reflection-glow';
     reflection.scale.set(2.6, 0.035, 0.48);
-    this.lanternReflection.position.set(-1.3, -0.43, 0.5);
+    this.lanternReflection.position.set(LANTERN_POSITION.x, -0.43, LANTERN_POSITION.z);
     this.lanternReflection.add(reflection);
     this.vesselContent.add(this.lanternReflection);
 
@@ -225,7 +228,6 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
   stage(variantSeed = 0): void {
     if (this.disposed) return;
-    this.departureFade.reset();
     this.side = eventSideFromSeed(variantSeed);
     this.sign.setOffers(nightTraderOffers(variantSeed));
     this.applySideLayout();
@@ -241,8 +243,8 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.trader.visible = true;
     this.lantern.visible = true;
     this.lanternReflection.visible = true;
-    this.lanternLight.intensity = 5.2;
-    this.reflectionMaterial.opacity = 0.34;
+    this.lanternLight.intensity = LANTERN_INTENSITY;
+    this.reflectionMaterial.opacity = 0.5;
     this.boatMotionBase.copy(this.boatBase);
     this.vessel.position.copy(this.boatBase);
     this.root.userData.state = 'staged';
@@ -288,13 +290,12 @@ export class NightTraderPresentation implements FocusedEventPresentation {
       case 'trader-reward': {
         const itemId = nightTraderTrade(result.choiceId).reward;
         this.hidePayment();
-        this.prepareReward(itemId, itemId === 'cannedFood');
+        this.prepareReward(itemId);
         this.root.userData.state = 'returning-reward';
         return this.startAnimation('result-reward', RESULT_DURATION);
       }
       case 'trader-refuse':
         this.hidePayment();
-        this.departureFade.begin([this.vessel]);
         this.root.userData.state = 'departing';
         return this.startAnimation('result-refuse', DEPARTURE_DURATION);
       default:
@@ -327,7 +328,6 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
   dispose(): void {
     if (this.disposed) return;
-    this.departureFade.reset();
     this.animation.cancel();
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
@@ -388,6 +388,9 @@ export class NightTraderPresentation implements FocusedEventPresentation {
         this.root.userData.state = 'refused';
         break;
       case 'result-reward':
+        if (this.rewardActor !== null) this.rewardActor.visible = false;
+        this.rewardVisible = false;
+        this.updateExchangeState();
         this.root.userData.state = this.rewardActor?.userData.itemType === 'cannedFood'
           ? 'held-food'
           : 'held-reward';
@@ -404,45 +407,40 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
   private applyPaymentChoice(progress: number): void {
     const travel = smoothstep(progress / 0.72);
-    if (
-      this.usingSupplyPayment
-      && this.paymentInstanceId !== null
-    ) {
-      this.supplyPose.x = 3.35 * this.side * travel;
-      this.supplyPose.y = 0.52 * travel;
-      this.supplyPose.z = -5.2 * travel;
-      this.supplyPose.yaw = -0.36 * travel;
-      this.supplyPose.pitch = 0.18 * travel;
-      this.supplyPose.roll = -0.12 * travel;
-      const scale = progress >= 0.72
-        ? Math.max(0.001, 1 - smoothstep((progress - 0.72) / 0.12))
-        : 1;
-      this.supplyPose.scaleX = scale;
-      this.supplyPose.scaleY = scale;
-      this.supplyPose.scaleZ = scale;
-      this.dependencies.supplyDisplay.applyEventItemPose(
-        this.paymentInstanceId,
-        this.supplyPose,
-      );
+    const lower = smoothstep((progress - 0.72) / 0.28);
+    if (this.borrowedPayment !== null) {
+      const actor = this.borrowedPayment;
+      this.supplyPose.x = 0;
+      this.supplyPose.y = 0;
+      this.supplyPose.z = 0;
+      this.supplyPose.scaleX = 1;
+      this.supplyPose.scaleY = 1;
+      this.supplyPose.scaleZ = 1;
+      actor.applyPose(this.supplyPose);
+      this.storedPaymentPosition.copy(actor.root.position);
+      this.transferPosition.copy(this.caseTarget);
+      this.transferPosition.y -= lower * 1.6;
+      this.root.localToWorld(this.transferPosition);
+      actor.root.parent!.worldToLocal(this.transferPosition);
+      this.transferPosition.sub(this.storedPaymentPosition).multiplyScalar(travel);
+      this.supplyPose.x = this.transferPosition.x;
+      this.supplyPose.y = this.transferPosition.y + Math.sin(travel * Math.PI) * 0.35;
+      this.supplyPose.z = this.transferPosition.z;
+      actor.applyPose(this.supplyPose);
     } else if (this.paymentActor !== null) {
       this.paymentActor.position.lerpVectors(
         this.paymentStart,
         this.caseTarget,
         travel,
       );
-      this.paymentActor.position.y += Math.sin(travel * Math.PI) * 0.35;
+      this.paymentActor.position.y += Math.sin(travel * Math.PI) * 0.35 - lower * 1.6;
       this.paymentActor.rotation.y = travel * 0.72 * this.side;
-      if (progress >= 0.72) {
-        const vanish = smoothstep((progress - 0.72) / 0.12);
-        this.paymentActor.scale.setScalar(Math.max(0.001, 1 - vanish));
-      }
     }
     if (progress >= 0.72) {
-      this.paymentVisible = false;
-      if (this.paymentActor !== null) this.paymentActor.visible = false;
       this.root.userData.paymentReachedCase = true;
       this.root.userData.paymentAtCase = true;
     }
+    if (progress === 1) this.hidePayment();
     this.updateExchangeState();
   }
 
@@ -452,30 +450,40 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
   private applyRewardResult(progress: number): void {
     const actor = this.rewardActor;
-    if (actor === null) return;
-    this.hidePayment();
+    const slot = this.rewardSlot;
+    if (actor === null || slot === null) return;
     actor.visible = true;
     this.rewardVisible = true;
-    const travel = keyedTravel(progress);
-    actor.position.lerpVectors(this.caseTarget, this.rewardEnd, travel);
-    actor.position.y += Math.sin(clamp01(travel) * Math.PI) * 0.42;
-    actor.rotation.y = -travel * 0.85 * this.side;
-    actor.rotation.z = Math.sin(progress * Math.PI) * 0.12 * this.side;
+    slot.updateWorldMatrix(true, false);
+    this.rewardActors.updateWorldMatrix(true, false);
+    this.transferMatrix.copy(this.rewardActors.matrixWorld).invert().multiply(slot.matrixWorld);
+    this.transferMatrix.decompose(
+      this.rewardStoragePosition, this.rewardStorageQuaternion, this.rewardStorageScale,
+    );
+    const arrival = smoothstep(progress / 0.6);
+    const stow = smoothstep((progress - 0.6) / 0.4);
+    if (progress <= 0.6) {
+      actor.position.lerpVectors(this.caseTarget, this.rewardEnd, arrival);
+      actor.position.y += Math.sin(arrival * Math.PI) * 0.42;
+    } else {
+      actor.position.lerpVectors(this.rewardEnd, this.rewardStoragePosition, stow);
+      actor.position.y += Math.sin(stow * Math.PI) * 0.18;
+    }
+    actor.quaternion.identity().slerp(this.rewardStorageQuaternion, stow);
+    actor.scale.copy(this.rewardStorageScale);
     this.updateExchangeState();
   }
 
   private applyRefuseResult(progress: number): void {
-    this.departureFade.apply(1 - smoothstep(progress));
+    const travel = smoothstep(progress);
+    this.boatMotionBase.lerpVectors(this.boatBase, this.boatAway, travel);
     this.mist.visible = progress > 0.32;
     this.mistMaterial.opacity = Math.sin(
       smoothstep((progress - 0.32) / 0.68) * Math.PI,
     ) * 0.34;
-    if (progress >= 1) {
-      this.vessel.visible = false;
-      this.lantern.visible = false;
-      this.lanternReflection.visible = false;
-      this.mist.visible = false;
-    }
+    this.lanternLight.intensity = LANTERN_INTENSITY * (1 - smoothstep(
+      (progress - 0.52) / 0.48,
+    ));
   }
 
   private applySharedWave(time: number): void {
@@ -509,19 +517,16 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
     this.clearExchangeActors();
-    this.paymentInstanceId = choice.instanceId;
-    this.usingSupplyPayment = choice.instanceId !== null
-      && this.dependencies.supplyDisplay.pinEventActor(choice.instanceId);
-    if (!this.usingSupplyPayment) {
+    this.borrowedPayment = choice.instanceId === null
+      ? null
+      : this.dependencies.supplyDisplay.borrowEventActor(choice.instanceId);
+    if (this.borrowedPayment === null) {
       const payment = nightTraderTrade(choice.choiceId).payment;
       this.paymentActor = payment === 'cannedFood'
-        ? this.createTradeToken('food', 'payment')
+        ? this.createTradeToken('food')
         : payment === 'baitTin'
-          ? this.createTradeToken('bait', 'payment')
-          : this.createItemActor(
-            payment,
-            'payment',
-          );
+          ? this.createTradeToken('bait')
+          : this.createPaymentActor(payment);
       this.paymentActor.position.copy(this.paymentStart);
     }
     this.paymentVisible = true;
@@ -531,34 +536,37 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.updateExchangeState();
   }
 
-  private prepareReward(itemId: ItemId, authoredFood: boolean): void {
+  private prepareReward(itemId: ItemId): void {
     this.rewardActors.clear();
-    if (authoredFood) {
-      this.rewardActor = this.createTradeToken('food', 'reward');
-      this.rewardActor.userData.itemType = 'cannedFood';
-    } else {
-      this.rewardActor = this.createItemActor(itemId, 'reward');
-    }
+    const record = this.dependencies.supplyDisplay.recordFor(itemId)!;
+    const index = itemId === 'cannedFood' || itemId === 'baitTin'
+      ? Math.min(record.visibleCopies, record.root.children.length - 1)
+      : 0;
+    this.rewardSlot = record.root.children[index]!;
+    this.rewardActor = cloneSkeleton(this.rewardSlot) as Group;
+    this.rewardActor.name = `night-trader-reward-${itemId}`;
+    this.rewardActor.userData.itemType = itemId;
+    this.rewardActors.add(this.rewardActor);
     this.rewardActor.position.copy(this.caseTarget);
     this.rewardActor.visible = false;
     this.rewardVisible = false;
     this.updateExchangeState();
   }
 
-  private createItemActor(itemId: ItemId, role: 'payment' | 'reward'): Group {
+  private createPaymentActor(itemId: ItemId): Group {
     const actor = new Group();
-    actor.name = `night-trader-${role}-${itemId}`;
+    actor.name = `night-trader-payment-${itemId}`;
     let selected: Group | null = null;
     try {
       selected = this.dependencies.propModels.create({
-        instanceId: `night-trader-${role}-${itemId}` as ItemInstanceId,
+        instanceId: `night-trader-payment-${itemId}` as ItemInstanceId,
         type: itemId,
       });
     } catch {
       selected = null;
     }
     if (selected !== null && hasRenderableBounds(selected)) {
-      selected.name = `night-trader-${role}-${itemId}-model`;
+      selected.name = `night-trader-payment-${itemId}-model`;
       actor.add(selected);
       actor.userData.model = 'supply-clone';
     } else {
@@ -567,17 +575,14 @@ export class NightTraderPresentation implements FocusedEventPresentation {
         new BoxGeometry(0.34, 0.16, 0.22),
         createMaterial(0x6f5942, 0.94),
       );
-      fallback.name = `night-trader-${role}-${itemId}-fallback`;
+      fallback.name = `night-trader-payment-${itemId}-fallback`;
       fallback.rotation.set(0.08, -0.16, -0.04);
       actor.add(fallback);
       actor.userData.model = 'procedural';
     }
     actor.userData.itemType = itemId;
     actor.scale.setScalar(0.85);
-    const parent = role === 'payment'
-      ? this.paymentActors
-      : this.rewardActors;
-    parent.add(actor);
+    this.paymentActors.add(actor);
     collectMeshResources(
       actor,
       this.exchangeGeometries,
@@ -588,10 +593,9 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
   private createTradeToken(
     kind: 'food' | 'bait',
-    role: 'payment' | 'reward',
   ): Group {
     const actor = new Group();
-    actor.name = `night-trader-${role}-${kind}-token`;
+    actor.name = `night-trader-payment-${kind}-token`;
     actor.userData.tokenKind = kind;
     actor.userData.itemType = kind === 'food' ? 'cannedFood' : 'baitTin';
     const rim = createMaterial(0x596361, 0.7, { metalness: 0.24 });
@@ -631,10 +635,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
       worm.rotation.z = 0.38;
       actor.add(worm);
     }
-    const parent = role === 'payment'
-      ? this.paymentActors
-      : this.rewardActors;
-    parent.add(actor);
+    this.paymentActors.add(actor);
     collectMeshResources(
       actor,
       this.exchangeGeometries,
@@ -649,15 +650,12 @@ export class NightTraderPresentation implements FocusedEventPresentation {
       this.paymentActor.visible = false;
       this.paymentActor.scale.setScalar(0.001);
     }
-    if (this.usingSupplyPayment && this.paymentInstanceId !== null) {
+    if (this.borrowedPayment !== null) {
       this.supplyPose.scaleX = 0.001;
       this.supplyPose.scaleY = 0.001;
       this.supplyPose.scaleZ = 0.001;
-      this.dependencies.supplyDisplay.applyEventItemPose(
-        this.paymentInstanceId,
-        this.supplyPose,
-      );
-      this.dependencies.supplyDisplay.releaseEventActorOnNextSync();
+      this.borrowedPayment.applyPose(this.supplyPose);
+      this.borrowedPayment.releaseOnNextSync();
     }
     this.updateExchangeState();
   }
@@ -670,6 +668,9 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   }
 
   private clearExchangeActors(): void {
+    this.borrowedPayment?.release();
+    this.borrowedPayment = null;
+    this.rewardSlot = null;
     this.paymentActors.clear();
     this.rewardActors.clear();
     disposeResourceSets(
@@ -678,15 +679,12 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     );
     this.paymentActor = null;
     this.rewardActor = null;
-    this.paymentInstanceId = null;
-    this.usingSupplyPayment = false;
     this.paymentVisible = false;
     this.rewardVisible = false;
     this.updateExchangeState();
   }
 
   private resetStaticActors(): void {
-    this.departureFade.reset();
     this.vessel.visible = true;
     this.rowboat.visible = false;
     this.vessel.position.copy(this.boatBase);
@@ -705,6 +703,8 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   private applySideLayout(): void {
     this.boatBase.copy(BOAT_BASE);
     this.boatBase.x *= this.side;
+    this.boatAway.copy(BOAT_AWAY);
+    this.boatAway.x *= this.side;
     this.caseTarget.copy(CASE_TARGET);
     this.caseTarget.x *= this.side;
     this.handoverTarget.position.copy(this.caseTarget);
@@ -802,32 +802,45 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     if (selected !== null && hasRenderableBounds(selected)) {
       selected.name = 'night-trader-lantern-model';
       selected.scale.setScalar(0.72);
+      selected.traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        object.castShadow = false;
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) {
+          if (!(material instanceof MeshStandardMaterial)) continue;
+          material.emissive.setHex(0xffc56a);
+          material.emissiveIntensity = 1.8;
+          material.emissiveMap = material.map;
+        }
+      });
       this.lantern.add(selected);
       this.lantern.userData.modelKind = 'imported';
     } else {
       if (selected !== null) disposeRejectedModel(selected);
       const metal = createMaterial(0x4f5755, 0.72, { metalness: 0.32 });
       const glow = createMaterial(0xd08b49, 0.56, {
-        emissive: 0x8d5424,
+        emissive: 0xffc56a,
       });
+      glow.emissiveIntensity = 1.8;
       const body = new Mesh(
         new CylinderGeometry(0.16, 0.2, 0.42, 7),
         glow,
       );
       body.name = 'night-trader-lantern-fallback-glass';
+      body.position.y = 0.21;
       const cap = new Mesh(
         new CylinderGeometry(0.12, 0.16, 0.12, 7),
         metal,
       );
       cap.name = 'night-trader-lantern-fallback-cap';
-      cap.position.y = 0.27;
+      cap.position.y = 0.48;
       this.lantern.add(body, cap);
       this.lantern.userData.modelKind = 'procedural';
     }
-    this.lantern.position.set(-1.3, ROWBOAT_FLOOR_Y, 0.5);
+    this.lantern.position.copy(LANTERN_POSITION);
     const light = new PointLight(0xffae58, 0, 14, 1.6);
     light.name = 'night-trader-lantern-light';
-    light.position.y = 0.08;
+    light.position.y = 0.18;
     light.castShadow = true;
     light.shadow.mapSize.set(256, 256);
     light.shadow.camera.near = 0.08;

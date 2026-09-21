@@ -1,19 +1,20 @@
 import {
-  AdditiveBlending,
   AmbientLight,
   BufferAttribute,
   BufferGeometry,
   Color,
-  Float32BufferAttribute,
+  DirectionalLight,
   Group,
-  LineBasicMaterial,
-  LineSegments,
   Points,
+  type PerspectiveCamera,
   Scene,
   ShaderMaterial,
   Vector2,
   Vector3,
 } from 'three';
+import { LightningBolt } from './LightningBolt';
+import { RainField } from './RainField';
+import { LIGHTNING_FLASH_DURATION, lightningFlashIntensity } from './lightningFlash';
 import {
   presentationWeatherProfile,
   type PresentationWeatherId,
@@ -36,29 +37,23 @@ interface ParticlePool {
   readonly capacity: number;
 }
 
-interface LightningBolt {
-  readonly line: LineSegments<BufferGeometry, LineBasicMaterial>;
-}
-
-const RAIN_COUNT = 320;
-const FAR_RAIN_COUNT = 900;
 const MIST_COUNT = 120;
-const IMPACT_COUNT = 128;
+const IMPACT_COUNT = 192;
 const SPRAY_COUNT = 160;
 const LIGHTNING_BOLT_COUNT = 8;
 const LIGHTNING_PAIR_CHANCE = 0.16;
-const LIGHTNING_INTERVALS = Object.freeze([1.35, 4.8, 2.9, 6.2, 3.6]);
-const LIGHTNING_FLASH_DURATION = 0.42;
-const LIGHTNING_STROKE_OFFSETS = Object.freeze([-0.28, -0.14, 0, 0.14, 0.28]);
 const PARTICLE_VERTEX_SHADER = `
   attribute float opacity;
   varying float vParticleOpacity;
   uniform float pointSize;
+  uniform vec2 pointSizeLimits;
+  uniform float ripple;
 
   void main() {
     vParticleOpacity = opacity;
     vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = pointSize * (300.0 / max(1.0, -viewPosition.z));
+    float growth = mix(1.0, 0.25 + (1.0 - opacity) * 0.75, ripple);
+    gl_PointSize = clamp(pointSize * growth * (300.0 / max(1.0, -viewPosition.z)), pointSizeLimits.x, pointSizeLimits.y);
     gl_Position = projectionMatrix * viewPosition;
   }
 `;
@@ -67,13 +62,17 @@ const PARTICLE_FRAGMENT_SHADER = `
   uniform float materialOpacity;
   uniform vec2 particleShape;
   uniform float edgeStart;
+  uniform float lightningGlow;
   varying float vParticleOpacity;
+  uniform float ripple;
 
   void main() {
-    vec2 shapedOffset = (gl_PointCoord - vec2(0.5)) * particleShape;
+    vec2 offset = gl_PointCoord - vec2(0.5);
+    vec2 shapedOffset = offset * particleShape;
     float radius = length(shapedOffset);
     float edgeAlpha = 1.0 - smoothstep(edgeStart, 0.5, radius);
-    vec4 diffuseColor = vec4(particleColor, materialOpacity * edgeAlpha);
+    edgeAlpha *= mix(1.0, smoothstep(0.23, 0.34, radius), ripple);
+    vec4 diffuseColor = vec4(particleColor + vec3(0.52, 0.6, 0.7) * lightningGlow, materialOpacity * edgeAlpha);
     diffuseColor.a *= vParticleOpacity;
     if (diffuseColor.a <= 0.001) discard;
     gl_FragColor = diffuseColor;
@@ -133,7 +132,10 @@ function createPool(
       particleColor: { value: new Color(color) },
       particleShape: { value: new Vector2(shape[0], shape[1]) },
       pointSize: { value: size },
+      pointSizeLimits: { value: new Vector2(0, 1024) },
+      ripple: { value: 0 },
       edgeStart: { value: edgeStart },
+      lightningGlow: { value: 0 },
     },
     vertexShader: PARTICLE_VERTEX_SHADER,
   });
@@ -155,77 +157,6 @@ function createPool(
   };
 }
 
-function createLightningBolt(
-  index: number,
-  random: () => number,
-): LightningBolt {
-  const vertices: number[] = [];
-  const appendSegment = (
-    startX: number,
-    startY: number,
-    startZ: number,
-    endX: number,
-    endY: number,
-    endZ: number,
-    widthScale: number,
-  ): void => {
-    for (const offset of LIGHTNING_STROKE_OFFSETS) {
-      const strokeOffset = offset * widthScale;
-      vertices.push(
-        startX + strokeOffset, startY, startZ,
-        endX + strokeOffset, endY, endZ,
-      );
-    }
-  };
-  let x = 0;
-  let y = 22 + random() * 4;
-  let z = 0;
-  let lateralDirection = random() < 0.5 ? -1 : 1;
-
-  for (let segment = 0; segment < 11; segment += 1) {
-    const nextX = x + lateralDirection * (1.3 + random() * 2.2);
-    const nextY = y - (1.2 + random() * 0.82);
-    const nextZ = z + (random() - 0.5) * 1.5;
-    appendSegment(x, y, z, nextX, nextY, nextZ, 1);
-
-    if (segment === 2 || segment === 5 || segment === 8) {
-      const direction = random() < 0.5 ? -1 : 1;
-      const branchX = nextX + direction * (1.8 + random() * 2.6);
-      const branchY = nextY - (1.4 + random() * 2.4);
-      const branchZ = nextZ + (random() - 0.5) * 1.8;
-      appendSegment(nextX, nextY, nextZ, branchX, branchY, branchZ, 0.62);
-    }
-
-    x = nextX;
-    y = nextY;
-    z = nextZ;
-    lateralDirection *= -1;
-  }
-
-  const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
-  const material = new LineBasicMaterial({
-    blending: AdditiveBlending,
-    color: 0xe5f5ff,
-    depthTest: false,
-    depthWrite: false,
-    fog: false,
-    opacity: 0,
-    toneMapped: false,
-    transparent: false,
-  });
-  const line = new LineSegments(geometry, material);
-  const angle = (index / LIGHTNING_BOLT_COUNT) * Math.PI * 2;
-  const radius = 26 + (index % 2) * 5;
-  line.name = `weather-lightning-bolt-${index + 1}`;
-  line.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
-  line.rotation.y = angle + Math.PI / 2;
-  line.frustumCulled = false;
-  line.renderOrder = -500;
-  line.visible = false;
-  return { line };
-}
-
 function activeCount(pool: ParticlePool, intensity: number): number {
   if (intensity <= 0) return 0;
   return Math.max(1, Math.floor(pool.capacity * intensity));
@@ -237,22 +168,29 @@ function cycle(value: number): number {
 
 export class WeatherEffects {
   private readonly root = new Group();
-  private readonly rain: ParticlePool;
-  private readonly farRain: ParticlePool;
+  private readonly rain: RainField;
+  private readonly farRain: RainField;
   private readonly mist: ParticlePool;
   private readonly impacts: ParticlePool;
   private readonly spray: ParticlePool;
   private readonly lightningLayer = new Group();
-  private readonly lightningLight = new AmbientLight(0xd9edff, 0);
+  private readonly lightningLight = new DirectionalLight(0xe3eaff, 0);
+  private readonly lightningFill = new AmbientLight(0xb8c9e8, 0);
   private readonly lightningBolts: readonly LightningBolt[];
   private readonly activeLightningBoltIndices = new Int8Array(2);
+  private readonly lightningViewDirection = new Vector3(0, 0, -1);
+  private lightningViewHeading = Math.PI;
+  private lightningViewSpread = Math.PI / 12;
   private profile = presentationWeatherProfile('calm');
   private stateValue: Readonly<WeatherEffectsState>;
   private lightningClock = 0;
-  private lightningIntervalIndex = 0;
-  private lightningFlashRemaining = 0;
+  private lightningInterval = 0.65;
+  private lightningFlashAge = LIGHTNING_FLASH_DURATION;
+  private lightningRepeatDelay = 0.14;
+  private lightningStrength = 1;
+  private thunderRemaining = 0;
   private activeLightningBoltCount = 0;
-  private lightningStrikeListener: () => void = () => undefined;
+  private thunderListener: () => void = () => undefined;
   private disposed = false;
 
   constructor(
@@ -260,41 +198,40 @@ export class WeatherEffects {
     private readonly lightningRandom: () => number = createSeededRandom(0x1eaf_71a9),
   ) {
     const random = createSeededRandom(0x57ea_7e12);
-    this.rain = createPool('weather-rain', RAIN_COUNT, 0xb8d5dc, 0.28, [5.2, 1], 0.22, random);
-    this.farRain = createPool(
-      'weather-rain-far',
-      FAR_RAIN_COUNT,
-      0x8facb3,
-      0.15,
-      [7.4, 1],
-      0.18,
-      random,
-      [92, 24, 82],
-    );
+    this.rain = new RainField('weather-rain', 2200, new Vector3(18, 14, 18), random);
+    this.farRain = new RainField('weather-rain-far', 1800, new Vector3(70, 24, 70), random);
     this.mist = createPool('weather-mist', MIST_COUNT, 0xa8bec0, 0.62, [0.85, 1.2], 0.28, random);
-    this.impacts = createPool('weather-impacts', IMPACT_COUNT, 0xc6e0e3, 0.22, [1, 1], 0.26, random);
+    this.impacts = createPool('weather-impacts', IMPACT_COUNT, 0xc6e0e3, 0.24, [1, 2.4], 0.38, random,
+      [32, 15, 30]);
+    this.impacts.points.material.uniforms.ripple!.value = 1;
+    (this.impacts.points.material.uniforms.pointSizeLimits!.value as Vector2).set(0, 12);
     this.spray = createPool('weather-spray', SPRAY_COUNT, 0xd0e5e3, 0.24, [1, 1], 0.24, random);
     this.lightningBolts = Object.freeze(
       Array.from({ length: LIGHTNING_BOLT_COUNT }, (_, index) => (
-        createLightningBolt(index, random)
+        new LightningBolt(24, 0x71a9 + index * 7919)
       )),
     );
 
     this.root.name = 'weather-effects-root';
     this.root.add(
-      this.farRain.points,
-      this.rain.points,
+      this.farRain,
+      this.rain,
       this.mist.points,
       this.impacts.points,
       this.spray.points,
       this.lightningLayer,
     );
+    this.lightningBolts.forEach((bolt, index) => {
+      bolt.name = `weather-lightning-bolt-${index + 1}`;
+    });
     this.lightningLayer.name = 'weather-lightning';
     this.lightningLight.name = 'weather-lightning-light';
-    this.lightningLight.visible = false;
+    this.lightningFill.name = 'weather-lightning-fill';
     this.lightningLayer.add(
       this.lightningLight,
-      ...this.lightningBolts.map((bolt) => bolt.line),
+      this.lightningLight.target,
+      this.lightningFill,
+      ...this.lightningBolts,
     );
     scene.add(this.root);
 
@@ -315,13 +252,25 @@ export class WeatherEffects {
     this.applyProfile();
   }
 
+  setMistOffsetZ(offset: number): void {
+    this.mist.points.position.z = offset;
+  }
+
+  setLightningView(camera: PerspectiveCamera): void {
+    camera.getWorldDirection(this.lightningViewDirection);
+    this.lightningViewHeading = Math.atan2(this.lightningViewDirection.x, this.lightningViewDirection.z);
+    const verticalHalfFov = camera.getEffectiveFOV() * Math.PI / 360;
+    // Leave space for branches at both edges, including narrow portrait views.
+    this.lightningViewSpread = Math.atan(Math.tan(verticalHalfFov) * camera.aspect) * 0.45;
+  }
+
   update(time: number, delta: number, cameraPosition: Readonly<Vector3>): void {
     if (this.disposed) return;
     const animationTime = Number.isFinite(time) ? time : 0;
     const step = Number.isFinite(delta) ? Math.max(0, delta) : 0;
     this.root.position.set(cameraPosition.x, 0, cameraPosition.z);
 
-    if (this.rain.points.visible) this.updateRain(animationTime);
+    if (this.rain.visible) this.updateRain(animationTime);
     if (this.mist.points.visible) this.updateMist(animationTime);
     if (this.impacts.points.visible) this.updateImpacts(animationTime);
     if (this.spray.points.visible) this.updateSpray(animationTime);
@@ -332,19 +281,18 @@ export class WeatherEffects {
     return this.stateValue;
   }
 
-  setLightningStrikeListener(listener: () => void): void {
-    this.lightningStrikeListener = listener;
+  setThunderListener(listener: () => void): void {
+    this.thunderListener = listener;
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.lightningStrikeListener = () => undefined;
+    this.thunderListener = () => undefined;
+    this.thunderRemaining = 0;
     this.root.removeFromParent();
-    this.rain.points.geometry.dispose();
-    this.rain.points.material.dispose();
-    this.farRain.points.geometry.dispose();
-    this.farRain.points.material.dispose();
+    this.rain.dispose();
+    this.farRain.dispose();
     this.mist.points.geometry.dispose();
     this.mist.points.material.dispose();
     this.impacts.points.geometry.dispose();
@@ -352,19 +300,18 @@ export class WeatherEffects {
     this.spray.points.geometry.dispose();
     this.spray.points.material.dispose();
     for (const bolt of this.lightningBolts) {
-      bolt.line.geometry.dispose();
-      bolt.line.material.dispose();
+      bolt.geometry.dispose();
+      bolt.material.dispose();
     }
     this.lightningLight.intensity = 0;
-    this.lightningLight.visible = false;
+    this.lightningFill.intensity = 0;
   }
 
   private applyProfile(): void {
     const isCalm = this.profile.id === 'calm';
-    const isFog = this.profile.id === 'fog';
     const isWind = this.profile.id === 'wind';
     this.applyRainProfile();
-    this.applyMistProfile(isCalm, isFog, isWind);
+    this.applyMistProfile(isCalm, isWind);
     this.applySprayProfile(isCalm, isWind);
     this.lightningLayer.visible = this.profile.lightning;
     this.resetProfileLightning();
@@ -372,15 +319,17 @@ export class WeatherEffects {
 
   private applyRainProfile(): void {
     const visible = this.profile.rainIntensity > 0;
-    this.configurePool(this.rain, this.profile.rainIntensity, visible);
-    this.configurePool(this.farRain, this.profile.rainIntensity, visible);
+    this.rain.setIntensity(this.profile.rainIntensity);
+    this.farRain.setIntensity(this.profile.rainIntensity * 0.55);
     this.configurePool(this.impacts, this.profile.rainIntensity, visible);
   }
 
-  private applyMistProfile(isCalm: boolean, isFog: boolean, isWind: boolean): void {
+  private applyMistProfile(isCalm: boolean, isWind: boolean): void {
     this.configurePool(this.mist, this.profile.mistIntensity, !isCalm && this.profile.mistIntensity > 0);
-    this.setPoolStyle(this.mist, isFog ? 1.08 : isWind ? 0.48 : 0.62,
-      isFog ? 0.55 : isWind ? 0.62 : 0.85, isFog ? 0.9 : isWind ? 3.4 : 1.2);
+    this.setPoolStyle(this.mist, isWind ? 0.48 : 0.62,
+      isWind ? 0.62 : 0.85, isWind ? 3.4 : 1.2);
+    this.mist.points.material.uniforms.edgeStart!.value = this.profile.lightning ? 0.02 : 0.28;
+    if (this.profile.lightning) this.setPoolStyle(this.mist, 1.8, 1, 2.2);
   }
 
   private applySprayProfile(isCalm: boolean, isWind: boolean): void {
@@ -390,9 +339,9 @@ export class WeatherEffects {
 
   private resetProfileLightning(): void {
     if (!this.profile.lightning) {
-      this.lightningFlashRemaining = 0;
+      this.lightningFlashAge = LIGHTNING_FLASH_DURATION;
       this.lightningLight.intensity = 0;
-      this.lightningLight.visible = false;
+      this.lightningFill.intensity = 0;
     }
     this.setLightningBolts(0);
   }
@@ -420,46 +369,33 @@ export class WeatherEffects {
   }
 
   private updateRain(time: number): void {
-    this.updateRainPool(this.farRain, time, 0.94, 11.5, 23.5, 27, 5.2, 1.08);
-    this.updateRainPool(this.rain, time, 1.18, 8.2, 16.5, 19, 3.6, 1.35);
-  }
-
-  private updateRainPool(
-    pool: ParticlePool,
-    time: number,
-    fallRate: number,
-    driftX: number,
-    startY: number,
-    fallDistance: number,
-    driftZ: number,
-    opacityScale: number,
-  ): void {
-    const count = pool.points.geometry.drawRange.count;
-    for (let index = 0; index < count; index += 1) {
-      const offset = index * 3;
-      const fall = cycle(pool.phases[index]! + time * pool.speeds[index]! * fallRate);
-      pool.positions[offset] = pool.origins[offset]! + fall * driftX;
-      pool.positions[offset + 1] = startY - fall * fallDistance;
-      pool.positions[offset + 2] = pool.origins[offset + 2]! - fall * driftZ;
-      pool.opacities[index] = Math.min(1, (1 - fall) * opacityScale);
-    }
-    this.markUpdated(pool);
+    const gust = this.profile.lightning ? 1.3 + Math.sin(time * 0.73) * 0.18 + Math.sin(time * 1.61) * 0.08 : 1;
+    this.rain.update(time, gust);
+    this.farRain.update(time, gust);
   }
 
   private updateMist(time: number): void {
     const count = this.mist.points.geometry.drawRange.count;
     const wind = this.profile.id === 'wind';
-    const fog = this.profile.id === 'fog';
-    const driftRate = wind ? 0.46 : fog ? 0.045 : 0.13;
+    const storm = this.profile.lightning;
+    let driftRate = wind ? 0.46 : 0.13;
+    let baseHeight = 1.2;
+    let heightScale = 0.52;
+    let opacity = 0.82;
+    if (storm) {
+      driftRate = 0.24;
+      baseHeight = 0.45;
+      heightScale = 0.12;
+      opacity = 0.25;
+    }
     for (let index = 0; index < count; index += 1) {
       const offset = index * 3;
       const drift = cycle(this.mist.phases[index]! + time * this.mist.speeds[index]! * driftRate);
       this.mist.positions[offset] = (wind ? -34 : -24) + drift * (wind ? 68 : 48);
-      this.mist.positions[offset + 1] = (fog ? 0.45 : 1.2)
-        + this.mist.origins[offset + 1]! * (fog ? 0.34 : 0.52);
+      this.mist.positions[offset + 1] = baseHeight + this.mist.origins[offset + 1]! * heightScale;
       this.mist.positions[offset + 2] = this.mist.origins[offset + 2]!
-        - (wind ? drift * 7.5 : 0);
-      this.mist.opacities[index] = Math.sin(Math.PI * drift) * (fog ? 0.95 : 0.82);
+        - (wind || storm ? drift * 7.5 : 0);
+      this.mist.opacities[index] = Math.sin(Math.PI * drift) * opacity;
     }
     this.markUpdated(this.mist);
   }
@@ -469,11 +405,9 @@ export class WeatherEffects {
     for (let index = 0; index < count; index += 1) {
       const offset = index * 3;
       const pulse = cycle(this.impacts.phases[index]! + time * this.impacts.speeds[index]! * 1.35);
-      const angle = this.impacts.origins[offset]!;
-      const radius = pulse * 0.72;
-      this.impacts.positions[offset] = this.impacts.origins[offset]! + Math.cos(angle) * radius;
-      this.impacts.positions[offset + 1] = 0.12 + pulse * 0.08;
-      this.impacts.positions[offset + 2] = this.impacts.origins[offset + 2]! + Math.sin(angle) * radius;
+      this.impacts.positions[offset] = this.impacts.origins[offset]!;
+      this.impacts.positions[offset + 1] = 0.12;
+      this.impacts.positions[offset + 2] = this.impacts.origins[offset + 2]!;
       this.impacts.opacities[index] = 1 - pulse;
     }
     this.markUpdated(this.impacts);
@@ -504,39 +438,38 @@ export class WeatherEffects {
 
   private updateLightning(delta: number): void {
     if (!this.profile.lightning) return;
+    this.lightningFlashAge += delta;
+    if (this.thunderRemaining > 0) {
+      this.thunderRemaining = Math.max(0, this.thunderRemaining - delta);
+      if (this.thunderRemaining === 0) this.thunderListener();
+    }
     this.lightningClock += delta;
-    let crossedInterval = false;
-    let interval = LIGHTNING_INTERVALS[this.lightningIntervalIndex]!;
-    while (this.lightningClock >= interval) {
-      this.lightningClock -= interval;
-      this.lightningIntervalIndex = (this.lightningIntervalIndex + 1) % LIGHTNING_INTERVALS.length;
-      crossedInterval = true;
-      interval = LIGHTNING_INTERVALS[this.lightningIntervalIndex]!;
-    }
-    if (crossedInterval) {
+    if (this.lightningClock >= this.lightningInterval) {
+      // Do not replay missed strikes after a suspended frame.
+      this.lightningClock = 0;
       this.prepareLightningStrike();
-      this.lightningFlashRemaining = LIGHTNING_FLASH_DURATION;
-      this.lightningStrikeListener();
+      this.lightningFlashAge = 0;
+      this.lightningRepeatDelay = 0.09 + this.lightningRandom() * 0.14;
+      this.lightningStrength = 0.7 + this.lightningRandom() * 0.6;
+      this.lightningInterval = 1.4 + this.lightningRandom() * 1.6;
+      const primary = this.lightningBolts[this.activeLightningBoltIndices[0]!]!;
+      this.lightningLight.position.copy(primary.position);
+      this.lightningLight.position.y += 24 * primary.scale.y;
+      this.thunderRemaining = primary.position.length() / 343;
     }
+    const flash = lightningFlashIntensity(this.lightningFlashAge, this.lightningRepeatDelay) * this.lightningStrength;
+    this.lightningLight.intensity = 3.2 * flash;
+    this.lightningFill.intensity = 0.32 * flash;
+    this.setLightningBolts(flash);
+    this.setParticleLightning(flash);
+  }
 
-    if (this.lightningFlashRemaining <= 0) {
-      this.lightningLight.intensity = 0;
-      this.lightningLight.visible = false;
-      this.setLightningBolts(0);
-      return;
-    }
-    const flashRatio = this.lightningFlashRemaining / LIGHTNING_FLASH_DURATION;
-    const keyedFlash = flashRatio > 0.72
-      ? 1
-      : flashRatio > 0.52
-        ? 0.18
-        : flashRatio > 0.2
-          ? 0.78
-          : 0.24;
-    this.lightningLight.visible = true;
-    this.lightningLight.intensity = 1.9 * keyedFlash;
-    this.setLightningBolts(keyedFlash);
-    this.lightningFlashRemaining = Math.max(0, this.lightningFlashRemaining - delta);
+  private setParticleLightning(flash: number): void {
+    this.rain.material.uniforms.lightningGlow!.value = flash;
+    this.farRain.material.uniforms.lightningGlow!.value = flash;
+    this.mist.points.material.uniforms.lightningGlow!.value = flash * 0.4;
+    this.spray.points.material.uniforms.lightningGlow!.value = flash;
+    this.impacts.points.material.uniforms.lightningGlow!.value = flash;
   }
 
   private setLightningBolts(opacity: number): void {
@@ -548,10 +481,9 @@ export class WeatherEffects {
           && this.activeLightningBoltIndices[1] === index
           ? 1
           : -1;
-      bolt.line.visible = opacity > 0 && activeSlot >= 0;
-      bolt.line.material.opacity = activeSlot >= 0
+      bolt.setIntensity(activeSlot >= 0
         ? opacity * (activeSlot === 0 ? 1 : 0.68)
-        : 0;
+        : 0);
     }
   }
 
@@ -576,23 +508,25 @@ export class WeatherEffects {
   }
 
   private randomizeLightningBolt(index: number): void {
-    const line = this.lightningBolts[index]!.line;
-    const angle = this.lightningRandom() * Math.PI * 2;
-    const radius = 22 + this.lightningRandom() * 18;
-    const heightOffset = -1 + this.lightningRandom() * 3;
-    const scale = 0.82 + this.lightningRandom() * 0.38;
-    line.position.set(Math.sin(angle) * radius, heightOffset, Math.cos(angle) * radius);
-    line.rotation.y = this.lightningRandom() * Math.PI * 2;
-    line.scale.setScalar(scale);
+    const bolt = this.lightningBolts[index]!;
+    const angle = this.lightningViewHeading + (this.lightningRandom() * 2 - 1) * this.lightningViewSpread;
+    const radius = 140 + this.lightningRandom() * 190;
+    const heightOffset = -0.5;
+    const scale = 1 + this.lightningRandom() * 0.7;
+    bolt.position.set(Math.sin(angle) * radius, heightOffset, Math.cos(angle) * radius);
+    bolt.rotation.y = this.lightningRandom() * Math.PI * 2;
+    bolt.scale.set(1, scale, 1);
   }
 
   private resetLightning(): void {
     this.lightningClock = 0;
-    this.lightningIntervalIndex = 0;
-    this.lightningFlashRemaining = 0;
+    this.lightningInterval = 0.65;
+    this.lightningFlashAge = LIGHTNING_FLASH_DURATION;
+    this.thunderRemaining = 0;
     this.activeLightningBoltCount = 0;
     this.lightningLight.intensity = 0;
-    this.lightningLight.visible = false;
+    this.lightningFill.intensity = 0;
+    this.setParticleLightning(0);
     this.setLightningBolts(0);
   }
 }

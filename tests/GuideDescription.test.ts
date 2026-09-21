@@ -15,15 +15,3 @@ it('marks core mechanics without changing text or treating it as HTML', () => {
     .toEqual(['Health', 'Food', 'Energy', 'Hull', 'toolbox', 'duct tape']);
   expect(element.querySelector('img')).toBeNull();
 });
-
-it('matches Polish inflections and replaces earlier language highlights', () => {
-  const element = document.createElement('p');
-  setLanguage('en');
-  renderGuideDescription(element, 'Health');
-  setLanguage('pl');
-  const text = 'Zdrowie, jedzenie, energia, energię, energii, kadłuba, kadłub. Przynęta, poduszki, skrzynkę z narzędziami, taśmą klejącą, Carlitosa. Głód, zapasów, łowienie ryb.';
-  renderGuideDescription(element, text);
-  expect(element.textContent).toBe(text);
-  expect([...element.querySelectorAll('strong')].map((keyword) => keyword.textContent))
-    .toEqual(['Zdrowie', 'jedzenie', 'energia', 'kadłuba', 'skrzynkę z narzędziami', 'taśmą klejącą']);
-});

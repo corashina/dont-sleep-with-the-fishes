@@ -15,6 +15,7 @@ import type {
 import type { AudioVoice } from './AudioBackend';
 import type { AudioScope } from './AudioScope';
 import type { SoundId } from './audioManifest';
+import type { SinkingSoundCue } from '../survival/SinkingEndingPresentation';
 
 const WEATHER_GAINS: Readonly<Record<
   PresentationWeatherId,
@@ -41,8 +42,8 @@ const WEATHER_GAINS: Readonly<Record<
     strongWind: 1, rain: 0, boatCreak: 0.68,
   }),
   thunderstorm: Object.freeze({
-    calmOcean: 0.05, roughOcean: 0.9, lightWind: 0.05,
-    strongWind: 0.8, rain: 1, boatCreak: 0.8,
+    calmOcean: 0, roughOcean: 1, lightWind: 0,
+    strongWind: 1, rain: 1, boatCreak: 0.95,
   }),
   waves: Object.freeze({
     calmOcean: 0.05, roughOcean: 1, lightWind: 0.1,
@@ -123,6 +124,8 @@ export class SurvivalAudio {
   private midnightAttackPlayed = false;
   private planeFlybyVoice: AudioVoice | null = null;
   private rescueEngine: AudioVoice | null = null;
+  private sinkingActive = false;
+  private sinkingBreakVoice: AudioVoice | null = null;
   private radioSignalVoice: AudioVoice | null = null;
   private paused = false;
   private radioSignalPaused = false;
@@ -144,7 +147,7 @@ export class SurvivalAudio {
   }
 
   update(deltaSeconds: number): void {
-    if (this.disposed) return;
+    if (this.disposed || this.paused || this.sinkingActive) return;
     const elapsed = Math.max(0, deltaSeconds);
     this.waveClock += elapsed;
     if (this.midnightDigVoice !== null) {
@@ -350,6 +353,7 @@ export class SurvivalAudio {
       || eventId === 'seagull-theft'
       || eventId === 'drifting-chest'
       || eventId === 'flying-saucer'
+      || eventId === 'something-under-us'
     ) return;
     if (eventId === 'bad-sleep') {
       this.scope.play('yawn');
@@ -373,6 +377,18 @@ export class SurvivalAudio {
   beginEvent(eventId: string): void {
     this.clearEvent();
     if (this.disposed) return;
+    if (eventId === 'thunderstorm') {
+      this.scope.startLoop('stormRumble');
+      this.scope.setLoopGain('stormRumble', 0, 0);
+      this.scope.setLoopGain('stormRumble', 1, 0.6);
+      return;
+    }
+    if (eventId === 'something-under-us') {
+      this.scope.startLoop('underUsPresence');
+      this.scope.setLoopGain('underUsPresence', 0, 0);
+      this.scope.setLoopGain('underUsPresence', 1, 2.5);
+      return;
+    }
     if (eventId === 'seagull-theft') {
       this.scope.startLoop('seagulls');
       this.scope.setLoopGain('seagulls', 0, 0);
@@ -411,6 +427,9 @@ export class SurvivalAudio {
   }
 
   beginEventReaction(eventId: string, outcome: ActionOutcome): void {
+    if (!this.disposed && eventId === 'something-under-us') {
+      this.scope.setLoopGain('underUsPresence', 0, 3.5);
+    }
     if (!this.disposed && eventId === 'flying-saucer') {
       this.scope.setLoopGain('ufoFlyby', 0, 5);
     }
@@ -468,7 +487,9 @@ export class SurvivalAudio {
     this.scope.stopLoop('seagulls', 0.8);
     this.scope.stopLoop('tentacleMovement', 0.08);
     this.scope.stopLoop('tornadoWind', 0.08);
+    this.scope.stopLoop('stormRumble', 0.8);
     this.scope.stopLoop('ufoFlyby', 0.08);
+    this.scope.stopLoop('underUsPresence', 0.3);
     this.stopEventMelody(0.08);
   }
 
@@ -509,16 +530,38 @@ export class SurvivalAudio {
 
   ending(id: SurvivalEndingId): void {
     if (this.disposed) return;
+    if (id === 'sinking') return;
     if (id === 'rescue') this.scope.play('rescueHorn');
     const cue = id === 'rescue'
       ? 'rescueEnding'
-      : id === 'sinking'
-        ? 'sinkingEnding'
-        : 'deathEnding';
+      : 'deathEnding';
     const voice = this.scope.play(cue);
     if (id === 'rescue') {
       this.rescueEngine = voice;
       voice?.setGain(0.2);
+    }
+  }
+
+  sinkingCue(cue: SinkingSoundCue): void {
+    if (this.disposed) return;
+    if (cue === 'strain') {
+      this.clearEvent();
+      this.cancelDive();
+      this.clearRadioSignal();
+      this.sinkingActive = true;
+      this.scope.setLoopGain('boatCreak', 0, 0.2);
+      this.scope.startLoop('sinkingCreak');
+      this.scope.setLoopGain('sinkingCreak', 0.3, 0);
+      this.scope.setLoopGain('sinkingCreak', 1, 1.6);
+    } else if (cue === 'break') {
+      this.sinkingBreakVoice = this.scope.play('sinkingEnding');
+      for (const loop of WEATHER_LOOPS) this.scope.stopLoop(loop, 0.15);
+      this.scope.stopLoop('sinkingCreak', 0.15);
+    } else {
+      for (const loop of WEATHER_LOOPS) this.scope.stopLoop(loop, 0.7);
+      this.scope.stopLoop('sinkingCreak', 0.7);
+      this.sinkingBreakVoice?.stop(0.7);
+      this.sinkingBreakVoice = null;
     }
   }
 

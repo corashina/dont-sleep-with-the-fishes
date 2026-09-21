@@ -139,6 +139,17 @@ function expectEventEffectRootsCleared(scene: Object3D): void {
   const itemEffects = scene.getObjectByName('event-item-effects');
   expect(itemEffects, 'event-item-effects exists').toBeDefined();
   itemEffects!.children.forEach((effect) => {
+    if (effect.name === 'event-item-flashlight-beam') {
+      expect(
+        effect.getObjectByName('event-item-flashlight-cone')!.visible,
+        'flashlight cone hidden',
+      ).toBe(false);
+      expect(
+        (effect.getObjectByName('event-item-flashlight-light') as PointLight).intensity,
+        'flashlight light inactive',
+      ).toBe(0);
+      return;
+    }
     expect(effect.visible, `event-item-effects/${effect.name} hidden`).toBe(false);
   });
   for (const name of [
@@ -290,6 +301,32 @@ function focusedPresenterTestDouble(eventId: string): FocusedPresenterTestDouble
 }
 
 describe('BoatWorld helpers', () => {
+  // Importance: 95/100. Protects the terminal handoff and prevents replaying the ending after event outcomes.
+  it('holds the blackout after a visible break and fall before showing the ending', async () => {
+    const camera = new PerspectiveCamera();
+    const world = new BoatWorld(camera, createTestPropModels(), ...createTestSkyTextures());
+    const sound = vi.fn();
+    world.setSinkingSoundListener(sound);
+    try {
+      const finished = world.play('sinking');
+      world.update(2.15, 2.15);
+      expect(await remainsPending(finished)).toBe(true);
+      const view = world.scene.getObjectByName('sinking-blackout')!;
+      expect(view.visible).toBe(false);
+      world.update(2.75, 0.6);
+      expect(view.visible).toBe(true);
+      const rig = world.scene.getObjectByName('boat-cue-camera-rig')!;
+      const pose = rig.position.clone();
+      world.updateAmbient(3.25, 0.5);
+      expect(rig.position).toEqual(pose);
+      world.update(3.75, 1);
+      await finished;
+      expect(view.visible).toBe(true);
+      await world.play('sinking');
+      expect(sound.mock.calls.flat()).toEqual(['strain', 'break', 'finish']);
+    } finally { world.dispose(); }
+  });
+
   it('keeps repair selectable and clears the flare gun after moving the toolbox back', () => {
     const camera = new PerspectiveCamera(63, 16 / 9, 0.08, 220);
     const world = new BoatWorld(camera, createTestPropModels(), ...createTestSkyTextures());
@@ -310,29 +347,6 @@ describe('BoatWorld helpers', () => {
       world.dispose();
     }
   });
-
-  it('preserves the forward direction and centers the chest in the shorter boat', () => {
-    const camera = new PerspectiveCamera(63, 16 / 9, 0.08, 220);
-    const world = new BoatWorld(camera, createTestPropModels(), ...createTestSkyTextures());
-    try {
-      const direction = camera.getWorldDirection(new Vector3());
-      expect(direction.x).toBeCloseTo(0);
-      expect(direction.y).toBeCloseTo(0);
-      expect(direction.z).toBeCloseTo(-1);
-      world.setRearCameraView(true, true);
-      world.update(0.01, 0.01);
-      world.scene.updateMatrixWorld(true);
-      const chest = world.scene.getObjectByName('persistent-chest')!;
-      const screen = chest.getWorldPosition(new Vector3()).project(camera);
-      expect(Math.abs(screen.x)).toBeLessThan(0.65);
-      expect(Math.abs(screen.y)).toBeLessThan(0.65);
-      expect(screen.z).toBeGreaterThan(-1);
-      expect(screen.z).toBeLessThan(1);
-    } finally {
-      world.dispose();
-    }
-  });
-
 
   it('runs and restores the Midnight Tour attack cutscene on each seeded side', async () => {
     const propModels = createTestPropModels();
@@ -472,6 +486,45 @@ describe('BoatWorld helpers', () => {
       } finally {
         world.dispose();
         create.mockRestore();
+        propModels.dispose();
+      }
+    },
+  );
+
+  // Importance: 95/100. Prevents recovered cargo disappearing during the storage handoff.
+  it.each(['retrieveDriftingItem', 'delegateDriftingItem'] as const)(
+    '%s keeps the recovered chest visible until boat storage takes over',
+    async (method) => {
+      const propModels = createTestPropModels();
+      const world = new BoatWorld(
+        new PerspectiveCamera(),
+        propModels,
+        ...createTestSkyTextures(),
+      );
+
+      try {
+        world.syncInventory(snapshot([]));
+        world.stageEvent('drifting-chest');
+        const cargo = world.scene.getObjectByName('drifting-chest:model')!;
+        const storedChest = world.scene.getObjectByName('persistent-chest')!;
+        const retrieval = world[method]('drifting-chest');
+        world.update(2, 2);
+        await retrieval;
+
+        expect(cargo.visible).toBe(true);
+        expect(cargo.getWorldPosition(new Vector3()).distanceTo(
+          storedChest.getWorldPosition(new Vector3()),
+        )).toBeLessThan(0.00001);
+        world.update(3, 1);
+        expect(cargo.visible).toBe(true);
+
+        world.clearEvent();
+        world.syncInventory(snapshot([], { chest: { state: 'closed', acquiredDay: 1 } }));
+        world.update(5, 2);
+        expect(cargo.visible).toBe(false);
+        expect(storedChest.visible).toBe(true);
+      } finally {
+        world.dispose();
         propModels.dispose();
       }
     },
@@ -637,6 +690,36 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  // Importance: 95/100. Removed choices must not start shared item animations through the hull.
+  it('rejects Flashlight use during Something Under Us before borrowing the item', async () => {
+    const item = savedItem('flashlight');
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
+    const world = new BoatWorld(camera, propModels, ...createTestSkyTextures(), [item]);
+    const borrow = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
+    try {
+      world.syncInventory(snapshot([item]));
+      world.setPhase('night');
+      world.stageEvent('something-under-us');
+      const position = camera.position.clone();
+      const rotation = camera.quaternion.clone();
+      const onAction = vi.fn();
+      const use = world.playEventItemUse('something-under-us', 'flashlight', item.instanceId, onAction);
+      expect(borrow).not.toHaveBeenCalled();
+      await use;
+      world.update(1, 1);
+      expect(world.scene.getObjectByName('event-item-flashlight-cone')!.visible).toBe(false);
+      expect((world.scene.getObjectByName('event-item-flashlight-light') as PointLight).intensity).toBe(0);
+      expect(onAction).not.toHaveBeenCalled();
+      expect(camera.position).toEqual(position);
+      expect(camera.quaternion.toArray()).toEqual(rotation.toArray());
+    } finally {
+      world.dispose();
+      borrow.mockRestore();
+      propModels.dispose();
+    }
+  });
+
   it('cancels a generic item-use fallback when the event is cleared', async () => {
     const bucket = savedItem('bucket');
     const propModels = createTestPropModels();
@@ -664,6 +747,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  // Importance: 95/100. Item use and cancellation must preserve the player position.
   it('cancels every shared item effect family at forty percent', async () => {
     const cases: readonly [
       context: EventItemUseContext,
@@ -975,6 +1059,16 @@ describe('BoatWorld helpers', () => {
       weatherItemUseDuration('shower-night', 'umbrella')!,
       0.5,
     ],
+    // Importance: 95/100. Prevents a silent umbrella use in Windy Night.
+    [
+      'windy-night',
+      'umbrella',
+      'umbrella',
+      'weather-event-world',
+      'umbrella-overhead',
+      weatherItemUseDuration('windy-night', 'umbrella')!,
+      0.5,
+    ],
     [
       'ghosts',
       'flareGun',
@@ -1029,11 +1123,17 @@ describe('BoatWorld helpers', () => {
       }
 
       const use = world.playEventItemUse(eventId, choiceId, item.instanceId);
+      const initialActor = borrow.mock.results[0]?.value as BorrowedSupplyActor | undefined;
+      const initialPosition = initialActor?.root.getWorldPosition(new Vector3());
       const sceneDelta = sceneDuration * sceneProbeProgress;
       world.update(sceneDelta, sceneDelta);
       expect(world.scene.getObjectByName(sceneProbe)?.visible).toBe(true);
       expect(borrow).toHaveBeenCalledTimes(1);
       expect(begin).toHaveBeenCalledTimes(1);
+      if (context === 'umbrella-overhead') {
+        expect(initialActor!.root.getWorldPosition(new Vector3()).distanceTo(initialPosition!))
+          .toBeGreaterThan(0.1);
+      }
 
       const useDuration = Math.max(sceneDuration, eventItemUseDuration(context));
       world.update(useDuration, useDuration - sceneDelta);
@@ -1069,7 +1169,7 @@ describe('BoatWorld helpers', () => {
       );
       world.update(8, 4);
       await reaction;
-      if (eventId === 'shower-night') {
+      if (context === 'umbrella-overhead') {
         expect(release).not.toHaveBeenCalled();
         expect(actor.root.visible).toBe(true);
         world.clearEvent();
@@ -1246,7 +1346,8 @@ describe('BoatWorld helpers', () => {
     const sirenMistLayer = world.scene.getObjectByName(
       'supernatural-sea-mist-layer-1',
     ) as Mesh<BufferGeometry, ShaderMaterial>;
-    expect(sirenMist.scale.toArray()).toEqual([1, 1, 1]);
+    expect(sirenMist.scale.x).toBeGreaterThan(1);
+    expect(sirenMist.scale.y).toBeGreaterThan(3);
     expect(sirenMistLayer.material.uniforms.uOpacity!.value).toBeGreaterThan(
       ghostMistOpacity,
     );

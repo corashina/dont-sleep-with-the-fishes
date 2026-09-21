@@ -13,7 +13,6 @@ const catalog = {
   open: { en: 'OPEN', pl: 'OTWÓRZ', 'es-AR': "ABRIR" },
   chestDescription: { en: 'A closed chest. Opening it costs 3 energy.', pl: 'Zamknięta skrzynia. Otwarcie kosztuje 3 punkty energii.', 'es-AR': "Un cofre cerrado. Abrirlo cuesta 3 puntos de energía." },
   carlitosDescription: { en: 'Check his hunger and happiness.', pl: 'Sprawdź jego głód i nastrój.', 'es-AR': "Revisá su hambre y felicidad." },
-  hand: { en: 'HAND', pl: 'DŁOŃ', 'es-AR': "MANO" },
   handDescription: { en: 'Touch the waiting hand.', pl: 'Dotknij czekającej dłoni.', 'es-AR': "Tocá la mano que espera." },
   offerChest: { en: 'Offer the closed chest to the hand.', pl: 'Podaj dłoni zamkniętą skrzynię.', 'es-AR': "Ofrecele el cofre cerrado a la mano." },
   island: { en: 'ISLAND', pl: 'WYSPA', 'es-AR': "ISLA" },

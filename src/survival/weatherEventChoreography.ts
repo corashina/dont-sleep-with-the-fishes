@@ -1,4 +1,5 @@
 import { clamp01, pulse, smoothstep, smootherstep } from './animationMath';
+import { lightningFlashIntensity } from '../world/lightningFlash';
 import {
   isEventPresentationRoute,
   type WeatherAnimationEventId,
@@ -14,7 +15,6 @@ export type WeatherItemEffectKind =
   | 'spyglass-optical-push'
   | 'fog-flashlight-sweep'
   | 'bad-sleep-bucket-rock'
-  | 'bad-sleep-flashlight-glow'
   | 'bad-sleep-ring-drift'
   | 'bad-sleep-umbrella-fold';
 
@@ -120,7 +120,6 @@ const ITEM_CHOREOGRAPHY: Readonly<
   }),
   'bad-sleep': Object.freeze({
     bucket: Object.freeze({ duration: 1.3, effectKind: 'bad-sleep-bucket-rock' }),
-    flashlight: Object.freeze({ duration: 1.25, effectKind: 'bad-sleep-flashlight-glow' }),
     swimRing: Object.freeze({ duration: 1.35, effectKind: 'bad-sleep-ring-drift' }),
     umbrella: Object.freeze({ duration: 1.4, effectKind: 'bad-sleep-umbrella-fold' }),
   }),
@@ -257,7 +256,7 @@ function sampleWeatherRevealMotion(
     return false;
   }
   if (eventId === 'windy-night') sampleWindyReveal(t, output);
-  if (eventId === 'thunderstorm') output.lightningEmphasis = pulse(t, 0.44, 0.55, 0.68);
+  if (eventId === 'thunderstorm') output.lightningEmphasis = lightningFlashIntensity((t - 0.515) * 4);
   if (eventId === 'monster-in-the-fog') {
     output.figureVisibility = smoothstep((t - 0.2) / 0.18);
     output.figureDistance = 0;
@@ -364,12 +363,6 @@ function sampleBadSleepItem(
       output.y = 0.46 * hold;
       output.roll = 0.16 * Math.sin(2 * Math.PI * t) * hold;
       output.effect = pulse(t, 0.12, 0.5, 0.86);
-      break;
-    case 'flashlight':
-      output.y = 0.3 * hold;
-      output.pitch = -0.12 * hold;
-      output.effect = pulse(t, 0.08, 0.46, 0.9);
-      output.cameraYaw = 0.08 * Math.sin(Math.PI * t) * hold;
       break;
     case 'swimRing':
       output.x = 0.18 * Math.sin(2 * Math.PI * t) * hold;

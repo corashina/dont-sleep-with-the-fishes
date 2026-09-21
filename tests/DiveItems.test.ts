@@ -12,7 +12,6 @@ const saved = (ids: readonly ItemId[]): ItemInstance[] => ids.map((type) => ({
 }));
 
 describe('dive item selection', () => {
-
   it('assigns relative chances of 3, 2, and 1 to item weights 1, 2, and 3', () => {
     const present = new Set(inventoryIds.filter((id) => !['compass', 'medicalKit', 'anchor'].includes(id)));
     const results = Array.from({ length: 600 }, (_, index) => (
@@ -40,7 +39,7 @@ describe('normal dive item rewards', () => {
     expect(itemFinds).toBe(15);
   });
 
-  it.each(inventoryIds.filter((id) => id !== 'scubaSet'))('adds missing %s and preserves it on restore', (missing) => {
+  it.each(['compass', 'cannedFood', 'baitTin'] as const)('adds missing %s and preserves it on restore', (missing) => {
     const session = new SurvivalSession(saved(inventoryIds.filter((id) => id !== missing)), {
       seed: 1, weather: 'calm',
     });

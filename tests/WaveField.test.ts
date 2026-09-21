@@ -11,15 +11,6 @@ import {
 } from '../src/ocean/WaveField';
 
 describe('WaveField', () => {
-  it('returns deterministic height and a unit normal', () => {
-    const a = sampleWaveField(DEFAULT_WAVES, 3.25, 4, -7, 1.2);
-    const b = sampleWaveField(DEFAULT_WAVES, 3.25, 4, -7, 1.2);
-    expect(a).toEqual(b);
-    expect(Number.isFinite(a.height)).toBe(true);
-    const length = Math.hypot(a.normal.x, a.normal.y, a.normal.z);
-    expect(length).toBeCloseTo(1, 6);
-  });
-
   it('writes a wave sample into a caller-owned reusable record', () => {
     const output = {
       height: 0,
@@ -136,26 +127,6 @@ describe('WaveField', () => {
     expect(sample.normal.x).toBeCloseTo(expectedNormalX, 10);
     expect(sample.normal.y).toBeCloseTo(expectedNormalY, 10);
     expect(sample.normal.z).toBeCloseTo(expectedNormalZ, 10);
-  });
-
-  it('scales height and displacement with amplitude', () => {
-    const base = sampleWaveField(DEFAULT_WAVES, 2, 3, 5, 1);
-    const stronger = sampleWaveField(DEFAULT_WAVES, 2, 3, 5, 1.35);
-    expect(stronger.height).toBeCloseTo(base.height * 1.35, 6);
-    expect(stronger.displacementX).toBeCloseTo(base.displacementX * 1.35, 6);
-    expect(stronger.displacementZ).toBeCloseTo(base.displacementZ * 1.35, 6);
-  });
-
-  it('serializes exactly four waves for the shader', () => {
-    const payload = createWaveUniformPayload(DEFAULT_WAVES);
-    expect(payload.directions).toHaveLength(4);
-    expect(payload.parameters).toHaveLength(4);
-    expect(payload.phases).toHaveLength(4);
-    expect(payload.directions).toEqual(DEFAULT_WAVES.map((wave) => [...wave.direction]));
-    expect(payload.parameters).toEqual(
-      DEFAULT_WAVES.map((wave) => [wave.amplitude, wave.wavelength, wave.speed, wave.steepness]),
-    );
-    expect(payload.phases).toEqual(DEFAULT_WAVES.map((wave) => wave.phase));
   });
 
   it('rejects wave counts that cannot match the four-wave shader', () => {

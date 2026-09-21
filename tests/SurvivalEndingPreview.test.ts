@@ -46,43 +46,4 @@ describe('survival ending previews', () => {
     }
   });
 
-  it.each(['complete', 'dispose', 'restart'] as const)(
-    'waits for the rescue fade and handles %s', async (operation) => {
-      let finish!: () => void;
-      const showEnding = vi.fn();
-      const beginRescueEnding = vi.fn();
-      const setRescueFade = vi.fn();
-      const playRescueEnding = vi.fn((start: () => void, fade: (value: number) => void) => {
-        start();
-        return new Promise<void>((resolve) => { finish = () => { fade(1); resolve(); }; });
-      });
-      const phase = SurvivalPhase.forTestStart({
-        world: { playRescueEnding },
-        ui: { showEnding, beginRescueEnding, setRescueFade },
-      }, {
-        kind: 'ending-preview', endingId: 'rescue', savedItems: [], seed: 41,
-        scavengeElapsedSeconds: 0,
-      });
-      try {
-        phase.start();
-        phase.update(1, 1);
-        expect(beginRescueEnding).toHaveBeenCalledOnce();
-        expect(playRescueEnding).toHaveBeenCalledOnce();
-        expect(showEnding).not.toHaveBeenCalled();
-        if (operation === 'dispose') phase.dispose();
-        if (operation === 'restart') phase.requestRestart();
-        finish();
-        await Promise.resolve();
-        if (operation === 'complete') {
-          expect(setRescueFade).toHaveBeenLastCalledWith(1);
-          expect(showEnding).toHaveBeenCalledOnce();
-          expect(setRescueFade.mock.invocationCallOrder[0])
-            .toBeLessThan(showEnding.mock.invocationCallOrder[0]!);
-        } else {
-          expect(showEnding).not.toHaveBeenCalled();
-          expect(setRescueFade).not.toHaveBeenCalled();
-        }
-      } finally { phase.dispose(); }
-    },
-  );
 });

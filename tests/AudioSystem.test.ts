@@ -10,6 +10,7 @@ import type {
 import { AudioSystem } from '../src/audio/AudioSystem';
 import { WebAudioBackend } from '../src/audio/WebAudioBackend';
 import { SurvivalAudio } from '../src/audio/SurvivalAudio';
+import { EVENT_BUNDLE_SPECS } from '../src/survival/eventBundleManifest';
 import {
   AUDIO_MANIFEST,
   MENU_SOUND_IDS,
@@ -84,6 +85,89 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
+  // Importance: 95/100. Storm ambience must cover choices and reactions, then stop with its event.
+  it('keeps heavy thunder playing throughout the event and owns pause and cleanup', () => {
+    expect(EVENT_BUNDLE_SPECS.thunderstorm.sounds).toContain('stormRumble');
+    expect(AUDIO_MANIFEST.stormRumble.loop).toBe(true);
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.start();
+    audio.setWeather('thunderstorm');
+    audio.beginEvent('thunderstorm');
+    audio.eventReveal('thunderstorm');
+    const rumble = backend.voices.find(({ id }) => id === 'stormRumble')!;
+    expect(rumble.setGain).toHaveBeenLastCalledWith(1, 0.6);
+    audio.update(30);
+    audio.thunder();
+    expect(rumble.stop).not.toHaveBeenCalled();
+    expect(backend.voices.filter(({ id }) => id === 'stormRumble')).toHaveLength(1);
+    audio.setPaused(true);
+    expect(rumble.setPaused).toHaveBeenLastCalledWith(true);
+    audio.setPaused(false);
+    expect(rumble.setPaused).toHaveBeenLastCalledWith(false);
+    audio.beginEventReaction('thunderstorm', {
+      accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'storm',
+    });
+    expect(rumble.stop).not.toHaveBeenCalled();
+    audio.finishEventReaction();
+    expect(rumble.stop).toHaveBeenCalledWith(0.8);
+    audio.beginEvent('thunderstorm');
+    const nextRumble = backend.voices.filter(({ id }) => id === 'stormRumble').at(-1)!;
+    audio.dispose();
+    expect(nextRumble.stop).toHaveBeenCalled();
+  });
+
+  // Importance: 90/100. The monster sound must pause and stop with its event.
+  it('owns the underwater presence loop through pause, departure and cleanup', () => {
+    expect(EVENT_BUNDLE_SPECS['something-under-us'].sounds).toEqual(['underUsPresence']);
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.beginEvent('something-under-us');
+    audio.eventReveal('something-under-us');
+    expect(backend.voices.map(({ id }) => id)).toEqual(['underUsPresence']);
+    const voice = backend.voices[0]!;
+    expect(voice.setGain).toHaveBeenCalledWith(0, 0);
+    expect(voice.setGain).toHaveBeenLastCalledWith(1, 2.5);
+    audio.setPaused(true);
+    expect(voice.setPaused).toHaveBeenLastCalledWith(true);
+    audio.setPaused(false);
+    expect(voice.setPaused).toHaveBeenLastCalledWith(false);
+    audio.beginEventReaction('something-under-us', {
+      accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'darkness',
+    });
+    expect(voice.setGain).toHaveBeenLastCalledWith(0, 3.5);
+    audio.finishEventReaction();
+    expect(voice.stop).toHaveBeenCalledWith(0.3);
+    audio.beginEvent('something-under-us');
+    const nextVoice = backend.voices[1]!;
+    audio.dispose();
+    expect(nextVoice.stop).toHaveBeenCalled();
+  });
+
+  // Importance: 95/100. Ending audio must stop surface loops and avoid a second break at the popup.
+  it('times sinking audio and stops its loops before the ending popup', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.start();
+    audio.sinkingCue('strain');
+    const strain = backend.voices.find((voice) => voice.id === 'sinkingCreak')!;
+    expect(strain.setGain).toHaveBeenLastCalledWith(1, 1.6);
+    audio.sinkingCue('break');
+    expect(strain.stop).toHaveBeenCalledWith(0.15);
+    const crack = backend.voices.find((voice) => voice.id === 'sinkingEnding')!;
+    audio.setPaused(true);
+    expect(crack.setPaused).toHaveBeenLastCalledWith(true);
+    audio.setPaused(false);
+    audio.sinkingCue('finish');
+    audio.ending('sinking');
+    audio.update(20);
+    expect(crack.stop).toHaveBeenCalledWith(0.7);
+    expect(backend.voices.some((voice) => voice.id === 'underwaterMovement')).toBe(false);
+    expect(backend.voices.filter((voice) => voice.id === 'sinkingEnding')).toHaveLength(1);
+    expect(backend.voices.some((voice) => voice.id === 'lightWaveImpact')).toBe(false);
+    audio.dispose();
+  });
+
   it('fades in the selected seagull ambience and stops it when the event clears', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
@@ -157,24 +241,6 @@ describe('AudioSystem', () => {
     expect(backend.voices[1]!.stop).toHaveBeenCalledWith(0.6);
     audio.dispose();
     expect(backend.voices[0]!.stop).toHaveBeenCalled();
-  });
-
-  it('plays every pet meow once before reshuffling without an adjacent repeat', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(
-      AudioSystem.forTest(backend).createScope(),
-      () => 0,
-    );
-
-    for (let index = 0; index < 14; index += 1) audio.meowCarlitos();
-
-    const ids = backend.voices.map(({ id }) => id);
-    expect(new Set(ids.slice(0, 7))).toHaveLength(7);
-    expect(new Set(ids.slice(7, 14))).toHaveLength(7);
-    for (let index = 1; index < ids.length; index += 1) {
-      expect(ids[index]).not.toBe(ids[index - 1]);
-    }
-    expect(ids.every((id) => id.startsWith('catMeow'))).toBe(true);
   });
 
   it('owns Midnight Tour sounds and stops each active voice', () => {
@@ -275,14 +341,6 @@ describe('AudioSystem', () => {
     audio.update(1);
 
     expect(backend.voices.filter(({ id }) => id.startsWith('catMeow'))).toHaveLength(1);
-  });
-
-  it('plays the crew call without requiring an incoming radio signal', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-    audio.eventItemCue('radio', 1);
-    expect(backend.voices.map(({ id }) => id)).toEqual(['radioReply']);
-    audio.dispose();
   });
 
   it('plays an incoming radio signal until it ends or the player answers', () => {

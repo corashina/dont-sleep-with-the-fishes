@@ -247,6 +247,7 @@ export class World {
   private readonly oceanExclusions!: readonly WaterExclusionRegion[];
   private readonly oceanAtmosphere = {
     phase: 'day' as 'day' | 'night',
+    denseFog: false,
     fogColor: new Color(),
     horizonColor: new Color(),
     skyColor: new Color(),
@@ -727,6 +728,7 @@ export class World {
       cameraPosition,
     );
     const atmosphere = this.environment.atmosphere;
+    this.oceanAtmosphere.denseFog = this.environment.weatherProfile.id === 'fog';
     this.oceanAtmosphere.fogColor.copy(atmosphere.fogColor);
     this.oceanAtmosphere.horizonColor.copy(atmosphere.horizonColor);
     this.oceanAtmosphere.skyColor.copy(atmosphere.zenithColor);

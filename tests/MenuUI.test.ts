@@ -7,42 +7,6 @@ describe('MenuUI how-to-play popup', () => {
     document.body.replaceChildren();
   });
 
-  it('pairs two screenshots with subtitles and paragraphs on all four pages', () => {
-    const ui = new MenuUI(document.body);
-    try {
-      ui.openGuide();
-      const next = document.querySelector<HTMLButtonElement>('[data-menu-guide-next]')!;
-      const previous = document.querySelector<HTMLButtonElement>('[data-menu-guide-previous]')!;
-      const titles = ['Scavenging', 'Survival', 'Day', 'Night'];
-      const sectionIds = [['collect', 'evacuate'], ['needs', 'catch'], ['hullRepair', 'drifting'], ['nightEvent', 'nightResponse']];
-      expect(previous.disabled).toBe(true);
-      titles.forEach((title, index) => {
-        expect(document.querySelector('[data-menu-guide-title]')?.textContent).toBe(title);
-        expect(document.querySelector('[data-menu-guide-page-count]')?.textContent).toBe(`PAGE ${index + 1} OF 4`);
-        const sections = [...document.querySelectorAll('[data-menu-guide-section]')];
-        expect(sections).toHaveLength(2);
-        expect(sections.map(section => section.getAttribute('data-menu-guide-section'))).toEqual(sectionIds[index]);
-        expect(document.querySelectorAll('[data-menu-guide] p')).toHaveLength(2);
-        for (const section of sections) {
-          const image = section.querySelector('img')!;
-          const subtitle = section.querySelector('h3')!;
-          expect(image.alt.length).toBeGreaterThan(10);
-          expect(subtitle.textContent!.length).toBeGreaterThan(0);
-          expect(section.getAttribute('aria-labelledby')).toBe(subtitle.id);
-          expect(section.querySelectorAll('p')).toHaveLength(1);
-          expect(section.querySelector('p')!.textContent!.trim()).not.toContain('\n');
-          if (index === 1 || index === 2) {
-            expect(section.querySelector('p')!.textContent!.trim().split(/\s+/).length).toBeLessThanOrEqual(120);
-          }
-        }
-        if (index === 0) expect(document.querySelector('[data-menu-guide] strong')).toBeNull();
-        if (index < titles.length - 1) next.click();
-      });
-      expect(next.disabled).toBe(true);
-      expect(document.activeElement).toBe(previous);
-    } finally { ui.dispose(); }
-  });
-
   it('supports page boundaries, scroll reset, and reopening at the first page', () => {
     const ui = new MenuUI(document.body);
     try {

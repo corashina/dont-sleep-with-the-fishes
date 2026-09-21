@@ -200,6 +200,9 @@ export class BoatAnchorView {
   private eventPresentationActive = false;
   private itemAnimationLab = false;
   private hoveredAnchorId: string | null = null;
+  private pointerAnchorId: string | null = null;
+  private pointerX = 0;
+  private pointerY = 0;
   private focusedAnchorId: string | null = null;
   private publishedAnchorId: string | null = null;
   private cycledAnchorId: string | null = null;
@@ -265,6 +268,8 @@ export class BoatAnchorView {
     this.anchorLayer.addEventListener('click', this.handleAnchorClick);
     this.carlitosCard.addEventListener('click', this.handleCarlitosClick);
     this.anchorLayer.addEventListener('pointerover', this.handleAnchorPointerOver);
+    this.anchorLayer.addEventListener('pointermove', this.handleAnchorPointerOver);
+    this.anchorLayer.addEventListener('mousedown', this.handleAnchorMouseDown);
     this.anchorLayer.addEventListener('pointerout', this.handleAnchorPointerOut);
     this.anchorLayer.addEventListener('focusin', this.handleAnchorFocusIn);
     this.anchorLayer.addEventListener('focusout', this.handleAnchorFocusOut);
@@ -311,6 +316,7 @@ export class BoatAnchorView {
       this.positionCarlitosCard(companionAnchor);
     }
     if (highlightInvalidated) this.publishAnchorHighlight();
+    if (this.pointerAnchorId !== null) this.updatePointerHighlight();
     this.syncCommandState();
   }
 
@@ -320,6 +326,10 @@ export class BoatAnchorView {
       : false;
     this.anchors.set(anchor.id, anchor);
     const button = this.anchorButtons.get(anchor.id) ?? this.createAnchorButton(anchor);
+    const preciseHit = anchor.hitTest !== undefined;
+    if (button.hasAttribute('data-precise-hit') !== preciseHit) {
+      button.toggleAttribute('data-precise-hit', preciseHit);
+    }
     this.setEventFocusId(button, anchor.eventFocusId);
     this.updateAnchorLayout(button, anchor);
     this.refreshAnchorTooltip(button, anchor);
@@ -614,6 +624,10 @@ export class BoatAnchorView {
   }
 
   clearHighlight(): void {
+    if (this.pointerAnchorId !== null) {
+      this.anchorButtons.get(this.pointerAnchorId)?.classList.remove('is-pointer-hit');
+      this.pointerAnchorId = null;
+    }
     this.hoveredAnchorId = null;
     this.focusedAnchorId = null;
     this.publishAnchorHighlight();
@@ -643,6 +657,8 @@ export class BoatAnchorView {
     clean(() => this.anchorLayer.removeEventListener('click', this.handleAnchorClick));
     clean(() => this.carlitosCard.removeEventListener('click', this.handleCarlitosClick));
     clean(() => this.anchorLayer.removeEventListener('pointerover', this.handleAnchorPointerOver));
+    clean(() => this.anchorLayer.removeEventListener('pointermove', this.handleAnchorPointerOver));
+    clean(() => this.anchorLayer.removeEventListener('mousedown', this.handleAnchorMouseDown));
     clean(() => this.anchorLayer.removeEventListener('pointerout', this.handleAnchorPointerOut));
     clean(() => this.anchorLayer.removeEventListener('focusin', this.handleAnchorFocusIn));
     clean(() => this.anchorLayer.removeEventListener('focusout', this.handleAnchorFocusOut));
@@ -1369,7 +1385,7 @@ export class BoatAnchorView {
     if (!(target instanceof Element)) return;
     const button = target.closest<HTMLButtonElement>('button');
     if (button === null || !this.anchorLayer.contains(button) || button.disabled) return;
-    if (this.modalOpen) return;
+    if (!this.acceptsAnchorClick(button, event)) return;
     if (this.handleCarlitosAnchorClick(button)) return;
     if (this.handleEventFocusClick(button)) return;
     if (this.handleEventItemClick(button)) return;
@@ -1500,15 +1516,61 @@ export class BoatAnchorView {
     if (!this.carlitosCard.hidden && anchor !== undefined) this.positionCarlitosCard(anchor);
   };
 
-  private readonly handleAnchorPointerOver = (event: Event): void => {
-    this.hoveredAnchorId = this.highlightAnchorId(event.target);
+  private readPointerPosition(event: MouseEvent): void {
+    const bounds = this.host.getBoundingClientRect();
+    this.pointerX = event.clientX - bounds.left;
+    this.pointerY = event.clientY - bounds.top;
+  }
+
+  private acceptsAnchorClick(button: HTMLButtonElement, event: MouseEvent): boolean {
+    if (this.modalOpen) return false;
+    const hitTest = this.anchors.get(button.dataset.anchorId ?? '')?.hitTest;
+    if (event.detail === 0 || hitTest === undefined) return true;
+    this.readPointerPosition(event);
+    return hitTest(this.pointerX, this.pointerY);
+  }
+
+  private updatePointerHighlight(): void {
+    const id = this.pointerAnchorId;
+    const anchor = id === null ? undefined : this.anchors.get(id);
+    const button = id === null ? undefined : this.anchorButtons.get(id);
+    const hit = this.pointerHitsAnchor(anchor, button);
+    button?.classList.toggle('is-pointer-hit', hit);
+    this.hoveredAnchorId = hit ? id : null;
     this.publishAnchorHighlight();
+  }
+
+  private pointerHitsAnchor(
+    anchor: BoatInteractionAnchor | undefined,
+    button: HTMLButtonElement | undefined,
+  ): boolean {
+    return !this.modalOpen && !this.paused && anchor?.visible === true && button !== undefined
+      && this.highlightAnchorId(button) !== null
+      && (anchor.hitTest?.(this.pointerX, this.pointerY) ?? true);
+  }
+
+  private readonly handleAnchorMouseDown = (event: MouseEvent): void => {
+    if (!(event.target instanceof Element)) return;
+    // Pointer focus must not keep a hand outlined after the pointer leaves its mesh.
+    if (event.target.closest('[data-precise-hit]') !== null) event.preventDefault();
+  };
+
+  private readonly handleAnchorPointerOver = (event: MouseEvent): void => {
+    const id = this.highlightAnchorId(event.target);
+    if (this.pointerAnchorId !== id && this.pointerAnchorId !== null) {
+      this.anchorButtons.get(this.pointerAnchorId)?.classList.remove('is-pointer-hit');
+    }
+    this.pointerAnchorId = id;
+    if (id !== null && this.anchors.get(id)?.hitTest !== undefined) this.readPointerPosition(event);
+    this.updatePointerHighlight();
   };
 
   private readonly handleAnchorPointerOut = (event: Event): void => {
     const pointerEvent = event as MouseEvent;
     const current = this.highlightAnchorId(event.target);
     if (current === null || this.highlightAnchorId(pointerEvent.relatedTarget) === current) return;
+    this.anchorButtons.get(current)?.classList.remove('is-pointer-hit');
+    if (this.pointerAnchorId === current) this.pointerAnchorId = null;
     if (this.hoveredAnchorId === current) this.hoveredAnchorId = null;
     this.publishAnchorHighlight();
   };

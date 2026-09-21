@@ -119,7 +119,7 @@ describe('FlashlightBeam', () => {
       target.visible = false;
       beam.updateTarget();
       beam.apply(new Object3D(), 1, 1);
-      expect(beam.visible).toBe(false);
+      expect(beam.beam.visible).toBe(false);
       expect(beam.light.intensity).toBe(0);
     } finally {
       beam.dispose();
@@ -138,7 +138,7 @@ describe('FlashlightBeam', () => {
         beam.setTarget(next);
         beam.updateTarget();
         beam.apply(new Object3D(), 1, 1);
-        expect(beam.visible).toBe(false);
+        expect(beam.beam.visible).toBe(false);
         expect(beam.light.intensity).toBe(0);
       }
     } finally {
@@ -171,7 +171,7 @@ describe('FlashlightBeam', () => {
       expectCoverage(effects.flashlight, [target]);
       expect(effects.flashlight.beam.scale.x).toBeLessThan(length);
       adapter.clear();
-      expect(effects.flashlight.visible).toBe(false);
+      expect(effects.flashlight.beam.visible).toBe(false);
       expect(effects.flashlight.copyTargetCenter(new Vector3())).toBe(false);
     } finally {
       adapter.dispose();

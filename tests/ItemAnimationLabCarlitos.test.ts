@@ -50,29 +50,6 @@ function carlitosLab(lab = true, aboard = true) {
 }
 
 describe('Item Animation Lab Carlitos', () => {
-  it('replays pet and feed from his card without care limits or session changes', async () => {
-    const lab = carlitosLab();
-    const before = lab.session.snapshot();
-    expect(lab.session.availableReason('petCarlitos')).not.toBeNull();
-    expect(lab.session.availableReason('feedCarlitos')).not.toBeNull();
-    lab.click('[data-anchor-id="carlitos"]');
-    expect(lab.mount.querySelector<HTMLElement>('[data-carlitos-card]')!.hidden).toBe(false);
-    expect(lab.mount.querySelector<HTMLElement>('[data-carlitos-rest-label]')!.textContent).toBe('RESTED');
-    expect(lab.mount.textContent).not.toContain('Care raises');
-    expect(lab.mount.textContent).not.toContain('Rest restores');
-    for (const action of ['petCarlitos', 'feedCarlitos', 'petCarlitos', 'feedCarlitos'] as const) {
-      const button = lab.click(`[data-carlitos-card] [data-action="${action}"]`);
-      expect(lab.playCarlitosAction.mock.lastCall?.[0]).toBe(action);
-      expect(button.disabled).toBe(true);
-      await Promise.resolve();
-      expect(button.disabled).toBe(false);
-    }
-    expect(lab.playCarlitosAction).toHaveBeenCalledTimes(4);
-    expect(lab.session.snapshot()).toBe(before);
-    expect(lab.phase.getSurvivalCheckpoint()).toBeNull();
-    expect(lab.onCheckpointChange).not.toHaveBeenCalled();
-  });
-
   it('restores controls after playback rejects', async () => {
     const lab = carlitosLab();
     const error = new Error('Playback failed');

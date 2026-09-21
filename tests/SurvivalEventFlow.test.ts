@@ -132,6 +132,9 @@ function createRig(
         : (choice as { choiceId: string }).choiceId;
       calls.push(`choice:${choiceId}`);
     }),
+    prepareEventOutcome: vi.fn((eventId: string) => {
+      calls.push(`prepare:${eventId}`);
+    }),
     reactToEventOutcome: vi.fn(async (eventId: string) => {
       calls.push(`react:${eventId}`);
     }),
@@ -396,8 +399,9 @@ describe('event selection contracts', () => {
       seed: 105, random: sequenceRandom([0, 0.99, 0.99, 0.99]),
       initial: { day: 20 }, initialEventId: 'handyman',
     }));
+    // Importance: 95/100. A Handyman payment must have exactly one animation owner.
     const use = deferred();
-    rig.world.playEventItemUse.mockImplementation(() => use.promise);
+    rig.world.playEventChoice.mockImplementation(() => use.promise);
     await rig.flow.revealPending(rig.realSession.snapshot());
 
     rig.flow.resolveItem(source, selectedId);
@@ -407,6 +411,10 @@ describe('event selection contracts', () => {
     use.resolve();
 
     await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+    expect(rig.world.playEventItemUse).not.toHaveBeenCalled();
+    expect(rig.world.playEventChoice).toHaveBeenCalledExactlyOnceWith('handyman', {
+      choiceId: source, instanceId: selectedId, condition: 'usable',
+    });
     expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({
       kind: 'item', choiceId: source, instanceId: selectedId,
     });
@@ -601,6 +609,83 @@ describe('event selection contracts', () => {
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });
 
+  // Importance: 95/100. Spent guns must remain until the fade fully covers their return.
+  it.each(['shotgun', 'flareGun'] as const)(
+    'clears the spent %s only after the event fade covers the scene', async (itemId) => {
+      const instanceId: ItemInstanceId = `${itemId}-1`;
+      const rig = createSessionRig(new SurvivalSession([{ instanceId, type: itemId }], {
+        seed: 42, random: sequenceRandom([0, 0.99, 0.99, 0.99]),
+        initial: { day: 15 }, initialEventId: 'ghost-ship',
+      }));
+      const hold = deferred();
+      const cover = deferred();
+      try {
+        await rig.flow.revealPending(rig.realSession.snapshot());
+        rig.ui.holdEventOutcome.mockImplementation(() => hold.promise);
+        rig.ui.setSleepCovered.mockImplementation((covered) => covered ? cover.promise : Promise.resolve());
+        rig.world.clearEvent.mockClear();
+        rig.ui.setSleepCovered.mockClear();
+        rig.flow.resolveItem(itemId, instanceId);
+        await vi.waitFor(() => expect(rig.ui.holdEventOutcome).toHaveBeenCalledOnce());
+        expect(rig.realSession.snapshot().inventory[instanceId]?.condition).toBe('consumed');
+        expect(rig.world.clearEvent).not.toHaveBeenCalled();
+        hold.resolve();
+        await vi.waitFor(() => expect(rig.ui.setSleepCovered).toHaveBeenCalledWith(true));
+        expect(rig.world.clearEvent).not.toHaveBeenCalled();
+        cover.resolve();
+        await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+        expect(rig.world.clearEvent).toHaveBeenCalledOnce();
+        const uncover = rig.ui.setSleepCovered.mock.calls.findIndex(([covered]) => !covered);
+        expect(uncover).toBeGreaterThanOrEqual(0);
+        expect(rig.world.clearEvent.mock.invocationCallOrder[0]).toBeLessThan(
+          rig.ui.setSleepCovered.mock.invocationCallOrder[uncover]!,
+        );
+        expect(rig.onFatalError).not.toHaveBeenCalled();
+      } finally {
+        hold.resolve();
+        cover.resolve();
+        rig.flow.dispose();
+      }
+    },
+  );
+
+  it('starts the sleep fade before the outcome hold and waits before clearing Ghost Ship', async () => {
+    const rig = createSessionRig(new SurvivalSession([], {
+      seed: 42, random: sequenceRandom([0, 0.99, 0.99, 0.99]), initial: { day: 15 }, initialEventId: 'ghost-ship',
+    }));
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    const hold = deferred();
+    const cover = deferred();
+    rig.ui.holdEventOutcome.mockImplementation(() => hold.promise);
+    rig.ui.setSleepCovered.mockImplementation((covered) => covered ? cover.promise : Promise.resolve());
+    rig.world.clearEvent.mockClear();
+    rig.ui.setSleepCovered.mockClear();
+    rig.flow.resolveContextual('sleep');
+    expect(rig.ui.setSleepCovered).toHaveBeenCalledWith(true);
+    expect(rig.world.clearEvent).not.toHaveBeenCalled();
+    cover.resolve();
+    await vi.waitFor(() => expect(rig.ui.holdEventOutcome).toHaveBeenCalledOnce());
+    expect(rig.world.clearEvent).not.toHaveBeenCalled();
+    hold.resolve();
+    await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+    expect(rig.world.clearEvent).toHaveBeenCalledOnce();
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+    rig.flow.dispose();
+  });
+
+  it('uncovers the event when sleep is rejected', async () => {
+    const pending = snapshot({ state: 'nightEvent', pendingEventId: 'ghost-ship' });
+    const rig = createRig(pending);
+    rig.setResolveEvent(() => accepted({ accepted: false }));
+    await rig.flow.revealPending(pending);
+    rig.ui.setSleepCovered.mockClear();
+    rig.flow.resolveContextual('sleep');
+    await vi.waitFor(() => expect(rig.audio.deny).toHaveBeenCalledOnce());
+    expect(rig.ui.setSleepCovered).toHaveBeenLastCalledWith(false);
+    await vi.waitFor(() => expect(rig.flow.isStableChoice()).toBe(true));
+    rig.flow.dispose();
+  });
+
   it('ends Ghost Ship only after the presenter reports the whole ship has passed', async () => {
     const rig = createSessionRig(new SurvivalSession([], {
       seed: 42, random: sequenceRandom([0, 0.99, 0.99, 0.99]), initial: { day: 15 }, initialEventId: 'ghost-ship',
@@ -789,6 +874,30 @@ describe('event selection contracts', () => {
 });
 
 describe('SurvivalEventFlow', () => {
+  it('prepares the Midnight Tour grave before uncovering the island', async () => {
+    const rig = createRig(snapshot({ state: 'nightEvent', pendingEventId: 'midnight-tour' }));
+    rig.setResolveEvent(() => {
+      rig.setSnapshot(snapshot({ state: 'nightEvent', pendingEventId: null }));
+      return accepted({
+        eventResult: {
+          eventId: 'midnight-tour', choiceId: 'visit', resultId: 'tour-grave',
+        },
+      });
+    });
+    await rig.flow.revealPending(rig.session.snapshot());
+    rig.flow.resolveContextual('visit');
+    await vi.waitFor(() => expect(rig.setBusy).toHaveBeenLastCalledWith(false));
+
+    rig.calls.length = 0;
+    rig.flow.resolveContextual('visit');
+    await vi.waitFor(() => expect(rig.world.reactToEventOutcome).toHaveBeenCalledOnce());
+
+    expect(rig.calls.indexOf('prepare:midnight-tour')).toBeGreaterThan(-1);
+    expect(rig.calls.indexOf('prepare:midnight-tour')).toBeLessThan(rig.calls.indexOf('uncover'));
+    expect(rig.calls.indexOf('uncover')).toBeLessThan(rig.calls.indexOf('react:midnight-tour'));
+    rig.flow.dispose();
+  });
+
   it.each([false, true])('holds the bite blackout after dawn settles, disposed=%s', async (disposeDuringHold) => {
     const settled = deferred<boolean>();
     const hold = deferred();
@@ -1116,7 +1225,6 @@ describe('SurvivalEventFlow', () => {
     expect(second.dispose).toHaveBeenCalledOnce();
   });
 });
-
 
 it.each([false, true])('shows grave gains only after dawn and waits for close, disposed=%s', async (disposeDuringPopup) => {
   const settled = deferred<boolean>();

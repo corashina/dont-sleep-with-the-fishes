@@ -65,6 +65,7 @@ export type EventWorldPort = Pick<
   | 'revealEvent'
   | 'playEventItemUse'
   | 'playEventChoice'
+  | 'prepareEventOutcome'
   | 'reactToEventOutcome'
   | 'clearEvent'
   | 'setEventEligibleItems'
@@ -964,7 +965,7 @@ export class SurvivalEventFlow {
     this.dependencies.ui.setEventUsing?.(instanceId);
     this.dependencies.world.setEventEligibleItems?.(new Set());
     this.dependencies.world.setEventSelectedItem?.(instanceId);
-    if (eventId !== 'chest-attack') {
+    if (eventId !== 'chest-attack' && eventId !== 'night-trader' && eventId !== 'handyman') {
       await this.playEventItemUseWithSound(
         eventId,
         choiceId,
@@ -1131,7 +1132,7 @@ export class SurvivalEventFlow {
       return;
     }
     if (!outcome.accepted) {
-      this.rejectContextualChoice(eventId, generation);
+      await this.rejectContextualChoice(eventId, choiceId, generation, operation);
       return;
     }
     await this.completeContextualChoice(
@@ -1246,6 +1247,9 @@ export class SurvivalEventFlow {
       ? choice
       : choice.choiceId;
     await Promise.all([
+      choice.choiceId === 'sleep'
+        ? this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve()
+        : Promise.resolve(),
       this.dependencies.ui.playEventChoiceBeat?.(choice.choiceId) ?? Promise.resolve(),
       this.dependencies.world.playEventChoice?.(eventId, worldChoice) ?? Promise.resolve(),
     ]);
@@ -1253,10 +1257,16 @@ export class SurvivalEventFlow {
     return this.resumeAfterVisibility(generation, operation);
   }
 
-  private rejectContextualChoice(
+  private async rejectContextualChoice(
     eventId: string,
+    choiceId: EventResponseId,
     generation: number,
-  ): void {
+    operation: number,
+  ): Promise<void> {
+    if (choiceId === 'sleep') {
+      await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
+      if (!this.isCurrent(generation, operation)) return;
+    }
     this.cancelDeferredPresentationSync(generation);
     this.dependencies.audio.deny();
     this.dependencies.ui.setEventSleepMask?.(eventId, false);
@@ -1638,6 +1648,7 @@ export class SurvivalEventFlow {
   ): Promise<boolean> {
     this.setBusy(true);
     this.dependencies.ui.hideEventReveal?.();
+    this.dependencies.world.prepareEventOutcome(eventId, outcome);
     await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
     if (!this.isCurrent(generation, operation)) return false;
     if (!await this.resumeAfterVisibility(generation, operation)) return false;
@@ -2267,7 +2278,8 @@ export class SurvivalEventFlow {
     const visibleEligibility = isInspectableEventId(event.id)
       ? new Map<ItemInstanceId, EventResponseId>()
       : this.eligibility;
-    this.dependencies.world.setEventEligibleItems?.(new Set(visibleEligibility.keys()));
+    const eligibleInstanceIds = new Set(visibleEligibility.keys());
+    this.dependencies.world.setEventEligibleItems?.(eligibleInstanceIds);
     this.sync(revealed);
     this.dependencies.ui.setEventSelection?.(
       visibleEligibility,
@@ -2356,11 +2368,11 @@ export class SurvivalEventFlow {
     event: NonNullable<ReturnType<typeof survivalEventById>>,
     snapshot: SurvivalSnapshot,
   ): Map<ItemInstanceId, EventResponseId> {
-    if (event.id === 'night-trader') return new Map();
     const choiceByItem = new Map(
       event.choices
         .filter((choice) => choice.itemId !== undefined
           && this.meetsRequirements(choice.requirements, snapshot)
+          && this.nightTraderChoiceUnavailableReasons(event, choice, snapshot).length === 0
           && (choice.requiredChestState === undefined
             || choice.requiredChestState === snapshot.chest.state))
         .map((choice) => [choice.itemId!, choice.id] as const),
@@ -2379,7 +2391,7 @@ export class SurvivalEventFlow {
     snapshot: SurvivalSnapshot,
   ): EventContextChoice[] {
     return event.choices
-      .filter((choice) => choice.itemId === undefined || event.id === 'night-trader')
+      .filter((choice) => choice.itemId === undefined)
       .flatMap((choice) => {
         const view = this.contextualChoiceFor(event, choice, snapshot);
         return view === null ? [] : [view];
@@ -2463,6 +2475,7 @@ export class SurvivalEventFlow {
     }
     return reasons;
   }
+
 
   private contextualChoiceEnergy(
     choice: SurvivalEventChoice,

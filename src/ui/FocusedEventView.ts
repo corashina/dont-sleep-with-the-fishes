@@ -20,10 +20,6 @@ const FOCUSED_EVENT_TITLES: Readonly<Record<InspectableEventId, string>> = Objec
   get 'drifting-supplies'() { return uiText('suppliesTitle'); },
   get 'drifting-chest'() { return uiText('chestTitle'); },
 });
-const FOCUSED_EVENT_DESCRIPTIONS: Readonly<Record<InspectableEventId, string>> = Object.freeze({
-  get 'drifting-supplies'() { return uiText('suppliesDescription'); },
-  get 'drifting-chest'() { return uiText('chestDescription'); },
-});
 
 export class FocusedEventView {
   readonly root: HTMLElement;
@@ -38,7 +34,6 @@ export class FocusedEventView {
 
   private readonly choicesRoot: HTMLElement;
   private readonly title: HTMLElement;
-  private readonly description: HTMLElement;
   private currentEventId: InspectableEventId | null = null;
   private readonly choicesById = new Map<EventResponseId, FocusedEventChoiceView>();
   private selectedChoiceId: EventResponseId | null = null;
@@ -49,7 +44,6 @@ export class FocusedEventView {
     refreshUiText(this.root);
     if (this.currentEventId !== null) {
       this.title.textContent = FOCUSED_EVENT_TITLES[this.currentEventId];
-      this.description.textContent = FOCUSED_EVENT_DESCRIPTIONS[this.currentEventId];
     }
     for (const choice of this.choicesById.values()) {
       const button = this.choiceButton(choice.id);
@@ -68,10 +62,9 @@ export class FocusedEventView {
   constructor(private readonly coordinateRoot: HTMLElement) {
     const template = document.createElement('template');
     template.innerHTML = `
-      <section class="focused-event-view" data-focused-event-view role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="focused-event-title" aria-describedby="focused-event-description" inert>
+      <section class="focused-event-view" data-focused-event-view role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="focused-event-title" inert>
         <div class="dive-result__paper focused-event-view__card scuba-popup-paper">
           <h2 class="dive-result__title scuba-popup-title ui-role-display" id="focused-event-title" data-focused-event-title></h2>
-          <p class="focused-event-view__description ui-role-narrative" id="focused-event-description" data-focused-event-description></p>
           <nav data-focused-event-choices data-ui-aria="eventChoices" aria-label="${uiText('eventChoices')}"></nav>
         </div>
         <button type="button" class="focused-event-view__back" data-focused-event-back data-ui-aria="returnBoat" aria-label="${uiText('returnBoat')}">
@@ -82,7 +75,6 @@ export class FocusedEventView {
     this.card = requireElement(this.root, '.focused-event-view__card');
     this.backButton = requireElement(this.root, '[data-focused-event-back]');
     this.title = requireElement(this.root, '[data-focused-event-title]');
-    this.description = requireElement(this.root, '[data-focused-event-description]');
     this.choicesRoot = requireElement(this.root, '[data-focused-event-choices]');
     this.root.addEventListener('click', this.handleClick);
     window.addEventListener('resize', this.handleWindowResize);
@@ -95,7 +87,6 @@ export class FocusedEventView {
     this.currentEventId = view.eventId;
     this.backButton.setAttribute('aria-label', uiText('returnBoat'));
     this.title.textContent = FOCUSED_EVENT_TITLES[view.eventId];
-    this.description.textContent = FOCUSED_EVENT_DESCRIPTIONS[view.eventId];
     this.choicesById.clear();
     for (const choice of view.choices) this.choicesById.set(choice.id, choice);
     this.selectedChoiceId = null;
@@ -113,7 +104,6 @@ export class FocusedEventView {
     this.choicesById.clear();
     this.selectedChoiceId = null;
     this.title.textContent = '';
-    this.description.textContent = '';
     this.choicesRoot.replaceChildren();
     this.choicesRoot.hidden = false;
   }
@@ -170,7 +160,11 @@ export class FocusedEventView {
     ) return;
     const choiceId = button.dataset.eventChoice as EventResponseId | undefined;
     const choice = choiceId === undefined ? undefined : this.choicesById.get(choiceId);
-    if (choice !== undefined) this.onChoice({ id: choice.id, instanceId: choice.instanceId });
+    if (choice === undefined) return;
+    this.visible = false;
+    // Keep the choice buttons until the flow has settled its press beat.
+    this.onHide();
+    this.onChoice({ id: choice.id, instanceId: choice.instanceId });
   }
 
   initialFocus(): HTMLElement {

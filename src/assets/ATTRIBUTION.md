@@ -307,7 +307,7 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | lightWind | `lightWind.mp3` | [Soft Breeze / Vrymaa](https://freesound.org/people/Vrymaa/sounds/734663/) |
 | strongWind | `strongWind.mp3` | [Heavy Gusts / SamsterBirdies](https://freesound.org/people/SamsterBirdies/sounds/565140/) |
 | rain | `rain.mp3` | [Rain Loop / Snoopy20111](https://freesound.org/people/Snoopy20111/sounds/399072/) |
-| thunderLightning | `thunderLightning.mp3` | [Thunder2 / Yoyodaman234](https://freesound.org/people/Yoyodaman234/sounds/267551/) |
+| thunderLightning / stormRumble | `thunderLightning.mp3` | [Thunder2 / Yoyodaman234](https://freesound.org/people/Yoyodaman234/sounds/267551/) |
 | thunderLightningCrack | `thunderLightningCrack.mp3` | [Thunderclap / Fission9](https://freesound.org/people/Fission9/sounds/534023/) |
 | thunderLightningDry | `thunderLightningDry.mp3` | [big thunder clap / seth-m](https://freesound.org/people/seth-m/sounds/458015/) |
 | roomTone | `roomTone.mp3` | [Ferry Room Tone / kyles](https://freesound.org/people/kyles/sounds/454012/) |
@@ -318,6 +318,7 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | jump | `jump.mp3` | [Quick Whoosh / florianreichelt](https://freesound.org/people/florianreichelt/sounds/683101/) |
 | itemHandling | `itemHandling.mp3` | [Short Whoosh / petenice](https://freesound.org/people/petenice/sounds/9509/) |
 | boatCreak | `boatCreak.mp3` | [Boat Creaking / craigsmith](https://freesound.org/people/craigsmith/sounds/675783/) |
+| sinkingCreak | `boatCreak.mp3` | Reuses Boat Creaking above at a louder ending mix. |
 | lightWaveImpact | `lightWaveImpact.mp3` | [Waves Against Fishing Boat / kyles](https://freesound.org/people/kyles/sounds/637645/) |
 | hardWaveImpact | `hardWaveImpact.mp3` | [Strong Waves / Sheyvan](https://freesound.org/people/Sheyvan/sounds/520511/) |
 | confirm | `confirm.mp3` | [Wooden Confirmation / qubodup](https://freesound.org/people/qubodup/sounds/822568/) |
@@ -365,6 +366,7 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | leak | `leak.mp3` | [Water - Leak, small / colinpoh](https://freesound.org/people/colinpoh/sounds/146346/) |
 | tentacleMovement | `tentacleMovement.mp3` | [Slimy flesh / iampagan](https://freesound.org/people/iampagan/sounds/177017/) |
 | eerieMelody | `eerieMelody.mp3` | [woman humming cathedral / Pennywind](https://freesound.org/people/Pennywind/sounds/816687/) |
+| underUsPresence | `underUsPresence.wav` | Original synthesized underwater groans. Generated with `scripts/generate-under-us-audio.mjs`; no external samples. |
 | chest | `chest.mp3` | [Wooden Chest Open / The_Frisbee_of_Peace](https://freesound.org/people/The_Frisbee_of_Peace/sounds/573654/) |
 | rescueEnding | `rescueEnding.mp3` | [Rescue Vessel Engine / Lydmakeren](https://freesound.org/people/Lydmakeren/sounds/510907/) |
 | rescueHorn | `rescueHorn.mp3` | [horn.wav / chrobi](https://freesound.org/people/chrobi/sounds/118644/) (CC0 1.0) |

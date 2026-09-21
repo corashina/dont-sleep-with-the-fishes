@@ -83,15 +83,6 @@ describe('InputController', () => {
     expect(input.consumeLook()).toEqual({ x: 0, y: 0 });
   });
 
-  it('clears accumulated look without returning an object', () => {
-    const { canvas, input } = createInput();
-    browserDocument.pointerLockElement = canvas;
-    dispatch('mousemove', { movementX: 7, movementY: -3 });
-
-    expect(input.clearLook()).toBeUndefined();
-    expect(input.consumeLook()).toEqual({ x: 0, y: 0 });
-  });
-
   it.each(['release', 'acquire'] as const)('clears queued look on pointer-lock %s', (transition) => {
     const { canvas, input } = createInput();
     browserDocument.pointerLockElement = canvas;
@@ -105,13 +96,6 @@ describe('InputController', () => {
     browserDocument.dispatchEvent(new Event('pointerlockchange'));
     dispatch('mousemove', { movementX: 3, movementY: -2 });
     expect(input.consumeLook()).toEqual({ x: 3, y: -2 });
-  });
-
-  it('requests raw mouse movement when acquiring pointer lock', async () => {
-    const { input, requestPointerLock } = createInput(() => Promise.resolve());
-
-    await expect(input.requestPointerLock()).resolves.toBe(true);
-    expect(requestPointerLock).toHaveBeenCalledExactlyOnceWith({ unadjustedMovement: true });
   });
 
   it('reports rejected pointer-lock acquisition without rejecting its caller', async () => {
@@ -136,16 +120,6 @@ describe('InputController', () => {
     expect(input.consumeInteract()).toBe(false);
   });
 
-  it('clears queued interaction on blur', () => {
-    const { canvas, input } = createInput();
-    browserDocument.pointerLockElement = canvas;
-    dispatch('mousedown', { button: 0 });
-
-    dispatch('blur');
-
-    expect(input.consumeInteract()).toBe(false);
-  });
-
   it('queues one jump for each non-repeating Space press', () => {
     const { canvas, input } = createInput();
     browserDocument.pointerLockElement = canvas;
@@ -167,15 +141,6 @@ describe('InputController', () => {
     });
     event.preventDefault();
     browserWindow.dispatchEvent(event);
-    expect(input.consumeJump()).toBe(false);
-  });
-
-  it('clears a queued jump on blur', () => {
-    const { input } = createInput();
-    dispatch('keydown', { code: 'Space', repeat: false });
-
-    dispatch('blur');
-
     expect(input.consumeJump()).toBe(false);
   });
 

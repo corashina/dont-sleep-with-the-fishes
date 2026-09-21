@@ -80,6 +80,7 @@ function createFixture(): ProjectorFixture {
     itemAimTarget: vi.fn(() => null),
   };
   const roots: BoatInteractionProjectorRoots = {
+    boatRoot: new Group(),
     supplyRecords: [supplyRecord],
     carlitosRoot,
     carlitosInteractionRoot,
@@ -103,6 +104,31 @@ function createFixture(): ProjectorFixture {
 }
 
 describe('BoatInteractionProjector', () => {
+  // Importance: 95/100. Prevents selecting the hand through the hull or empty space.
+  it('requires a visible mesh hit for precise event targets', () => {
+    const { projector, roots } = createFixture();
+    const hand = meshRoot('hand');
+    projector.installFocusedInteractionTargets([{
+      id: 'handyman:hand', label: '?', description: 'Hand', choiceId: 'touch',
+      root: hand, preciseHitTest: true, minimumHitWidth: 82, minimumHitHeight: 82,
+    }]);
+    const anchor = projector.projectAnchors(1280, 720).find(({ id }) => id === 'handyman:hand')!;
+    expect(anchor.hitTest).toBeTypeOf('function');
+    expect(anchor.hitTest!(640, 360)).toBe(true);
+    expect(anchor.hitTest!(675, 360)).toBe(false);
+    const hull = meshRoot('hull', 0, 0, -3);
+    roots.boatRoot.add(hull);
+    expect(anchor.hitTest!(640, 360)).toBe(false);
+    hull.position.z = -7;
+    expect(anchor.hitTest!(640, 360)).toBe(true);
+    hull.position.z = -3;
+    hull.visible = false;
+    expect(anchor.hitTest!(640, 360)).toBe(true);
+    hand.visible = false;
+    expect(anchor.hitTest!(640, 360)).toBe(false);
+    projector.dispose();
+  });
+
   it('covers the full fishing rod, including its handle, with the click target', () => {
     const fixture = createFixture();
     fixture.roots.fishingRoot.scale.y = 10;
@@ -137,19 +163,21 @@ describe('BoatInteractionProjector', () => {
     const fixture = createFixture();
     fixture.projector.installFocusedInteractionTargets([{
       id: 'handyman:hand', choiceId: 'touch', root: fixture.roots.repairRoot,
-      get label() { return presentationUiText('hand'); },
+      label: '?',
       get description() { return presentationUiText('handDescription'); },
+      tooltip: true,
     }]);
     const anchors = fixture.projector.projectAnchors(1280, 720);
     const chest = anchors.find(({ id }) => id === 'persistent-chest')!;
     const hand = anchors.find(({ id }) => id === 'handyman:hand')!;
     const position = { x: hand.x, y: hand.y };
     expect(chest.label).toBe('OPEN');
-    expect(hand.label).toBe('HAND');
+    expect(hand.label).toBe('?');
+    expect(hand.tooltip).toBe(true);
     try {
       setLanguage('pl');
       expect(chest.label).toBe('OTWÓRZ');
-      expect(hand.label).toBe('DŁOŃ');
+      expect(hand.label).toBe('?');
       expect(hand.description).toBe('Dotknij czekającej dłoni.');
       expect({ x: hand.x, y: hand.y }).toEqual(position);
     } finally {

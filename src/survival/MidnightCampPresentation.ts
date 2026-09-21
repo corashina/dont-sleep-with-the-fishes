@@ -7,9 +7,9 @@ import { EVENT_MODEL_SPECS } from '../world/eventModelManifest';
 export const CAMP_RESULT_DURATION_SECONDS = 8;
 
 const LOG_PLACEMENTS = [
-  [-1.05, 0.3, -0.4, 1],
-  [0.95, -0.65, 0.7, 0.8],
-  [1.05, -0.45, -0.25, 0.6],
+  [0, -1.3, 0, 1],
+  [-1.3, 0.1, Math.PI / 2, 1],
+  [1.3, 0.1, Math.PI / 2, 1],
 ] as const;
 
 /** Owns the camp pose. The enclosing event owns and disposes mesh resources. */
@@ -24,9 +24,10 @@ export class MidnightCampPresentation {
     if (fire === null) throw new Error('Missing required Midnight Tour campfire model.');
     fire.root.position.y = -EVENT_MODEL_SPECS.midnightCampfire.normalizedBounds.min[1];
     this.root.add(fire.root);
-    for (const [x, z, rotation, scale] of LOG_PLACEMENTS) {
+    for (const [index, [x, z, rotation, scale]] of LOG_PLACEMENTS.entries()) {
       const log = propModels.createEventModel('midnightWoodLog');
       if (log === null) throw new Error('Missing required Midnight Tour wood log model.');
+      log.root.name = `midnight-tour-camp-seat-${index + 1}`;
       log.root.scale.setScalar(scale);
       log.root.rotation.y = rotation;
       log.root.position.set(x, -EVENT_MODEL_SPECS.midnightWoodLog.normalizedBounds.min[1] * scale, z);

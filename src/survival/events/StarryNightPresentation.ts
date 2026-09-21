@@ -12,7 +12,7 @@ import { StarryNightGeometry } from './starryNightGeometry';
 
 type Beat = 'reveal' | 'blessing' | 'sleep';
 export const STARRY_NIGHT_REVEAL_SECONDS = 9;
-export const STARRY_NIGHT_BLESSING_SECONDS = 5;
+export const STARRY_NIGHT_BLESSING_SECONDS = 0.6;
 const ease = (value: number): number => {
   const t = Math.min(1, Math.max(0, value));
   return t*t*(3-2*t);
@@ -106,7 +106,7 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
     if (beat === 'reveal') {
       this.revealProgress = progress;
       this.light.intensity = ease(progress)*0.6;
-    } else if (beat === 'sleep') {
+    } else {
       this.visibility = 1-ease(progress);
       this.light.intensity = this.visibility*0.6;
     }

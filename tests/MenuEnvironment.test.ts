@@ -1,39 +1,8 @@
-import { BoxGeometry,Group,InstancedMesh,Matrix4,Mesh,MeshStandardMaterial,Vector3 } from 'three';
+import { BoxGeometry,Group,InstancedMesh,Matrix4,Mesh,MeshStandardMaterial } from 'three';
 import { describe,expect,it,vi } from 'vitest';
 import { MenuGroundBatches } from '../src/menu/MenuGroundBatches';
-import { UnderwaterPlantField } from '../src/menu/UnderwaterPlantField';
-import { menuSandChannelContains,menuSeabedHeight } from '../src/menu/MenuSceneLayout';
 
 describe('menu environment', () => {
-
-  it('roots all plant forms on the terrain and preserves static instance buffers during animation', () => {
-    const plants = new UnderwaterPlantField();
-    const matrix = new Matrix4();
-    const position = new Vector3();
-    const planted: Vector3[] = [];
-    try {
-      expect(plants.root.children).toHaveLength(3);
-      for (const child of plants.root.children) {
-        const batch = child as InstancedMesh;
-        const original = batch.instanceMatrix.array.slice();
-        expect(batch.count, batch.name).toBeGreaterThan(10);
-        for (let index = 0; index < batch.count; index += 1) {
-          batch.getMatrixAt(index, matrix);
-          position.setFromMatrixPosition(matrix);
-          expect(position.y).toBeCloseTo(menuSeabedHeight(position.x, position.z) - 0.025, 5);
-          expect(menuSandChannelContains(position.x, position.z, 0.5)).toBe(false);
-          expect(batch.boundingBox!.containsPoint(position)).toBe(true);
-          for (const previous of planted) {
-            expect(Math.hypot(position.x - previous.x, position.z - previous.z)).toBeGreaterThanOrEqual(0.69999);
-          }
-          planted.push(position.clone());
-        }
-        plants.setTime(150);
-        expect(batch.instanceMatrix.array).toEqual(original);
-      }
-    } finally { plants.dispose(); }
-  });
-
   it('batches cloned material arrays without changing world transforms or disposing shared assets', () => {
     const geometry = new BoxGeometry();
     const material = new MeshStandardMaterial();

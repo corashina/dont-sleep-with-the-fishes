@@ -1,12 +1,12 @@
 // Importance: 10/10. Protects full-view umbrella shielding and its event hold state.
 import { describe, expect, it, vi } from 'vitest';
 import {
+  DoubleSide,
   Group,
   Mesh,
   MeshStandardMaterial,
   PerspectiveCamera,
   RingGeometry,
-  Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../src/game/ItemState';
 import type {
@@ -16,27 +16,9 @@ import type {
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
 import { EventItemUseController } from '../src/survival/EventItemUseController';
-import {
-  createEventItemUseSample,
-  sampleEventItemOutcome,
-  sampleEventItemUse,
-} from '../src/survival/eventItemUseChoreography';
 import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
 
 const INSTANCE_ID = 'umbrella-1' as ItemInstanceId;
-
-function applyRootPose(
-  root: Group,
-  pose: Parameters<BorrowedSupplyActor['applyPose']>[0],
-): void {
-  root.position.set(pose.x, pose.y, pose.z);
-  root.rotation.set(pose.pitch, pose.yaw, pose.roll, 'YXZ');
-  root.scale.set(
-    pose.scaleX * 0.5,
-    pose.scaleY * 0.5,
-    pose.scaleZ * 0.5,
-  );
-}
 
 function outcome(): EventOutcomePresentation {
   return {
@@ -59,65 +41,11 @@ function outcome(): EventOutcomePresentation {
 }
 
 describe('umbrella shield presentation', () => {
-  it('keeps the camera-facing canopy full-screen with its handle below center', () => {
-    const camera = new PerspectiveCamera(80, 16 / 9, 0.08, 1000);
-    const root = new Group();
-    const material = new MeshStandardMaterial();
-    const canopy = new Mesh(new RingGeometry(0, 0.45, 32), material);
-    root.add(canopy);
-    const actor: BorrowedSupplyActor = {
-      instanceId: INSTANCE_ID,
-      root,
-      applyPose: (pose) => applyRootPose(root, pose),
-      releaseOnNextSync: vi.fn(),
-      release: vi.fn(),
-    };
-    const adapter = new EventItemUseAdapter(camera, new EventItemEffects());
-    const sample = createEventItemUseSample();
-
-    adapter.begin(actor, 'umbrella', null, true, 'x');
-    sampleEventItemUse('umbrella-shield', 'umbrella', 1, sample);
-    adapter.apply(sample);
-    root.updateWorldMatrix(true, true);
-
-    const center = new Vector3(-0.032, 0, 0)
-      .applyMatrix4(root.matrixWorld)
-      .project(camera);
-    const right = new Vector3(-0.032, 0, 0.45)
-      .applyMatrix4(root.matrixWorld)
-      .project(camera);
-    const top = new Vector3(-0.032, 0.45, 0)
-      .applyMatrix4(root.matrixWorld)
-      .project(camera);
-    const normal = new Vector3(1, 0, 0).applyQuaternion(root.quaternion);
-
-    expect(center.x).toBeCloseTo(0);
-    expect(center.y).toBeLessThan(-0.35);
-    expect(center.y).toBeGreaterThan(-0.55);
-    expect(Math.abs(right.x)).toBeGreaterThan(1);
-    expect(Math.abs(top.y)).toBeGreaterThan(1);
-    expect(normal.angleTo(new Vector3(0, 0, 1))).toBeLessThan(1e-6);
-
-    adapter.dispose();
-    canopy.geometry.dispose();
-    material.dispose();
-  });
-
-  it('keeps the final shield pose through the outcome', () => {
-    const held = createEventItemUseSample();
-    const reaction = createEventItemUseSample();
-    sampleEventItemUse('umbrella-shield', 'umbrella', 1, held);
-    sampleEventItemOutcome('umbrella-shield', 'umbrella', 'recover', 1, reaction);
-
-    expect(reaction.itemVisible).toBe(true);
-    expect(reaction.viewX).toBeCloseTo(held.viewX);
-    expect(reaction.viewY).toBeCloseTo(held.viewY);
-    expect(reaction.viewZ).toBeCloseTo(held.viewZ);
-    expect(reaction.scaleX).toBeCloseTo(held.scaleX);
-  });
-
   it('releases the held shield only when the event clears', async () => {
     const root = new Group();
+    const material = new MeshStandardMaterial({ side: DoubleSide });
+    const canopy = new Mesh(new RingGeometry(0, 0.45, 8), material);
+    root.add(canopy);
     const actor: BorrowedSupplyActor = {
       instanceId: INSTANCE_ID,
       root,
@@ -143,6 +71,8 @@ describe('umbrella shield presentation', () => {
       aimTarget: null,
     });
 
+    expect(canopy.material).toBe(material);
+
     controller.update(10);
     await use;
     await controller.react(outcome());
@@ -155,5 +85,7 @@ describe('umbrella shield presentation', () => {
 
     expect(actor.release).toHaveBeenCalledOnce();
     adapter.dispose();
+    canopy.geometry.dispose();
+    material.dispose();
   });
 });

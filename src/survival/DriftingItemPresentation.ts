@@ -280,8 +280,8 @@ export class DriftingItemPresentation {
       this.root.updateMatrixWorld(true);
       this.root.attach(this.lifeboatCooler);
       this.retrievalFade.begin([this.roots.lifeboat]);
-    } else if (variant === 'debris') {
-      this.retrievalFade.begin([this.roots.debris]);
+    } else if (variant === 'debris' || variant === 'container') {
+      this.retrievalFade.begin([this.roots[variant]]);
     }
     this.animationStartPosition.copy(target.position);
     this.animationStartQuaternion.copy(target.quaternion);
@@ -289,7 +289,7 @@ export class DriftingItemPresentation {
     if (variant !== 'chest') {
       this.retrievalAimTarget.position.copy(this.roots[variant].position);
       this.contactBounds.setFromObject(target, true).getSize(this.targetPositionScratch);
-      // Stop the item's surface in front of the player, including large containers.
+      // Stop the item's surface in front of the player.
       this.playerContactDistance = Math.max(0.65, this.targetPositionScratch.length() / 2 + 0.2);
     }
     this.state = 'retrieving';
@@ -345,7 +345,9 @@ export class DriftingItemPresentation {
 
     animation.elapsed = Math.min(animation.duration, animation.elapsed + Math.max(0, delta));
     const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
-    if (variant === 'debris' || variant === 'lifeboat') this.applyFloatingPose(variant, time);
+    if (variant === 'debris' || variant === 'lifeboat' || variant === 'container') {
+      this.applyFloatingPose(variant, time);
+    }
     this.applyRetrievePose(variant, progress);
     if (progress < 1) return;
 
@@ -408,7 +410,7 @@ export class DriftingItemPresentation {
   }
 
   private applyRetrievePose(variant: DriftingCargoKind, progress: number): void {
-    if (variant === 'debris') {
+    if (variant === 'debris' || variant === 'container') {
       this.retrievalFade.apply(1 - smoothstep(progress));
       return;
     }
@@ -436,7 +438,7 @@ export class DriftingItemPresentation {
   private finishRetrieve(variant: DriftingCargoKind): void {
     this.state = 'held';
     if (variant === 'debris') this.debris.setPose(this.side);
-    else this.applyHeldPose(variant);
+    else if (variant !== 'container') this.applyHeldPose(variant);
     if (variant !== 'chest') this.resultRoot()!.visible = false;
     if (variant === 'lifeboat') this.roots.lifeboat.visible = false;
   }

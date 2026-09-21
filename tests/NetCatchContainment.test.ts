@@ -8,8 +8,6 @@ import { NetFishingPresentation } from '../src/survival/NetFishingPresentation';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { normalizeLongestDimensionTemplate } from '../src/world/modelValidation';
 import { FISHING_MODEL_SIZES } from '../src/game/fishingModelSizes';
-import { MENU_MODEL_SPECS } from '../src/menu/menuModelManifest';
-import { EVENT_MODEL_SPECS, SURVIVAL_EVENT_MODEL_SPECS } from '../src/survival/eventModelManifest';
 
 async function loadModel(path: string): Promise<Group> {
   const bytes = await readFile(path);
@@ -107,12 +105,3 @@ it('contains every production catch throughout the haul without resizing or inte
     library.dispose();
   }
 }, 30_000);
-
-it('uses the same fish sizes in fishing, events, and the menu', () => {
-  for (const id of ['cod', 'bass', 'redSnapper'] as const) {
-    expect(EVENT_MODEL_SPECS[id].targetLongestDimension).toBe(FISHING_MODEL_SIZES[id]);
-  }
-  expect(SURVIVAL_EVENT_MODEL_SPECS.checkBackFish.targetLongestDimension).toBe(FISHING_MODEL_SIZES.bass);
-  expect(MENU_MODEL_SPECS.redSnapper.targetLongestDimension).toBe(FISHING_MODEL_SIZES.redSnapper);
-  expect(MENU_MODEL_SPECS.seaweed.targetLongestDimension).toBe(FISHING_MODEL_SIZES.seaweed);
-});

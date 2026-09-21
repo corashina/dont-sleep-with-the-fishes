@@ -6,7 +6,6 @@ import {
   SURVIVAL_EVENTS,
   survivalEventById,
 } from '../src/survival/eventCatalog';
-import { validateSurvivalEventCatalog } from '../src/survival/eventCatalogValidation';
 
 beforeEach(() => initializeLanguage(null));
 
@@ -84,9 +83,4 @@ describe('event translations', () => {
       .toThrow(/Unknown event result/);
   });
 
-  it('keeps the translated event catalog valid', () => {
-    expect(() => validateSurvivalEventCatalog(SURVIVAL_EVENTS)).not.toThrow();
-    setLanguage('pl');
-    expect(() => validateSurvivalEventCatalog(SURVIVAL_EVENTS)).not.toThrow();
-  });
 });

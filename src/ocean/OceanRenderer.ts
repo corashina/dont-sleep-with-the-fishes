@@ -27,6 +27,7 @@ import {
 import type { WaterQuality } from '../rendering/waterQuality';
 import {
   MAX_OCEAN_EXCLUSIONS,
+  OCEAN_SHADER_QUALITY,
   applyOceanShaderQuality,
   createOceanShaderDefinition,
   type OceanShaderUniforms,
@@ -65,6 +66,7 @@ const finiteOrZero = (value: number): number => Number.isFinite(value) ? value :
 
 export interface OceanAtmosphere {
   phase: 'day' | 'night';
+  denseFog: boolean;
   fogColor: Color;
   horizonColor: Color;
   skyColor: Color;
@@ -177,8 +179,19 @@ export class OceanRenderer {
 
   private applyAtmosphere(): void {
     this.uniforms.uLightDirection.value.set(...this.lightDirection).normalize();
+    // Dense fog must fully hide distant water, including reflections and highlights.
+    const horizonFog = OCEAN_SHADER_QUALITY[this.quality].horizonFog;
+    const denseFog = this.atmosphere?.denseFog === true;
+    this.uniforms.uHorizonFog.value.set(horizonFog[0], horizonFog[1], denseFog ? 1 : horizonFog[2]);
     if (this.quality === 'high') {
       applyHighWaterLook(this.uniforms, this.atmosphere?.phase ?? 'day');
+      if (denseFog) {
+        this.uniforms.uFogDensity.value = this.fogDensity;
+        this.uniforms.uFogColor.value.copy(this.atmosphere!.fogColor);
+        this.uniforms.uHorizonColor.value.copy(this.atmosphere!.fogColor);
+        this.uniforms.uDirectLightStrength.value *= 0.15;
+        return;
+      }
       if (this.atmosphere) {
         const amount = this.uniforms.uBloodOceanIntensity.value;
         this.uniforms.uFogColor.value.lerp(this.atmosphere.fogColor, amount);
@@ -192,6 +205,7 @@ export class OceanRenderer {
     if (!atmosphere) return;
     this.uniforms.uFogColor.value.copy(atmosphere.fogColor);
     this.uniforms.uHorizonColor.value.copy(atmosphere.horizonColor);
+    if (denseFog) this.uniforms.uHorizonColor.value.copy(atmosphere.fogColor);
     this.uniforms.uSkyColor.value.copy(atmosphere.skyColor);
     this.uniforms.uSunColor.value.copy(atmosphere.sunColor);
     this.uniforms.uDirectLightStrength.value = Number.isFinite(

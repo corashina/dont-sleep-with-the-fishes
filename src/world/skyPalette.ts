@@ -1,6 +1,6 @@
 import { Color } from 'three';
 
-export type SkyWeather = 'calm' | 'overcast' | 'squall';
+export type SkyWeather = 'calm' | 'overcast' | 'squall' | 'fog';
 export type SkyPhase = 'day' | 'night';
 
 export interface SkyState {
@@ -49,6 +49,26 @@ type PaletteNumbers = Omit<SkyPalette,
   };
 
 const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
+  fog: {
+    day: {
+      zenithColor: 0x78898c, upperColor: 0x899797, horizonColor: 0x899797,
+      fogColor: 0x899797, sunColor: 0xd4cdb9, moonColor: 0xc6d0d4,
+      starColor: 0xd8e0e2, ambientLightColor: 0xb5c3c3, keyLightColor: 0xcac8bd,
+      sunVisibility: 0.025, moonVisibility: 0, starVisibility: 0, haze: 1,
+      cloudCoverage: 0, cloudContrast: 0, horizonBandStrength: 0, horizonBandWidth: 0,
+      exposure: 1, ambientLightIntensity: 0.72, keyLightIntensity: 0.28,
+      fogDensity: 0.085,
+    },
+    night: {
+      zenithColor: 0x26343b, upperColor: 0x34454a, horizonColor: 0x34454a,
+      fogColor: 0x34454a, sunColor: 0xffdda0, moonColor: 0xc3ced2,
+      starColor: 0xd4dcdf, ambientLightColor: 0x78959f, keyLightColor: 0x96acb8,
+      sunVisibility: 0, moonVisibility: 0.015, starVisibility: 0, haze: 1,
+      cloudCoverage: 0, cloudContrast: 0, horizonBandStrength: 0, horizonBandWidth: 0,
+      exposure: 1, ambientLightIntensity: 0.3, keyLightIntensity: 0.1,
+      fogDensity: 0.1,
+    },
+  },
   calm: {
     day: {
       zenithColor: 0x145f91, upperColor: 0x4e9abb, horizonColor: 0xb9d1cd,
@@ -131,7 +151,7 @@ const clamp01 = (value: number): number => Number.isFinite(value)
   : 0;
 
 function isWeather(value: unknown): value is SkyWeather {
-  return value === 'calm' || value === 'overcast' || value === 'squall';
+  return value === 'calm' || value === 'overcast' || value === 'squall' || value === 'fog';
 }
 
 function isPhase(value: unknown): value is SkyPhase {

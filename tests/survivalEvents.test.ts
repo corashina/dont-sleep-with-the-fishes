@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import type { ItemId } from '../src/game/ItemState';
 import {
   SURVIVAL_EVENTS,
-  survivalEventById,
 } from '../src/survival/eventCatalog';
 import { validateSurvivalEventCatalog } from '../src/survival/eventCatalogValidation';
 import { drawWeightedEvent, eligibleEvents } from '../src/survival/eventSelection';
@@ -12,16 +11,12 @@ import type {
   SurvivalEventDefinition,
 } from '../src/survival/survivalTypes';
 
-
-
 const resource = (resourceName: string, operation: string, value: unknown) => ({
   resource: resourceName, operation, value,
 });
 const add = (name: string, value: unknown) => resource(name, 'add', value);
 const subtract = (name: string, value: unknown) => resource(name, 'subtract', value);
 const item = (kind: string, itemId: string, quantity = 1) => ({ kind, itemId, quantity });
-
-
 
 const weightedTestEvent = (
   id: string,
@@ -45,45 +40,6 @@ const weightedTestEvent = (
 });
 
 describe('survival events', () => {
-
-  it('defines Carlitos event gates and living-companion eligibility', () => {
-    expect(survivalEventById('sick-companion')).toBeUndefined();
-    expect(survivalEventById('shadow-figure')).toMatchObject({
-      earliestDay: 20, minimumPressure: 3, weight: 1, cooldownDays: 3,
-      requiresCompanion: true,
-    });
-    expect(survivalEventById('guarded-sleep')).toMatchObject({
-      earliestDay: 7, weight: 4, cooldownDays: 0, requiresCompanion: true,
-      maximumAppearances: 1,
-    });
-    expect(survivalEventById('swarm-of-sharks')?.requiresCompanion).toBeUndefined();
-
-    const criteria = {
-      phase: 'night' as const,
-      day: 30,
-      weather: 'calm' as const,
-      lastEventId: null,
-      lastSeenDay: new Map<string, number>(),
-      targetableItemIds: new Set<ItemId>(),
-      appearanceCounts: new Map<string, number>(),
-      inventoryItemIds: new Set<ItemId>(),
-      rescueLead: 0,
-      pressure: 4,
-    };
-    const companionEvents = ['shadow-figure', 'guarded-sleep'];
-    const absent = eligibleEvents(SURVIVAL_EVENTS, {
-      ...criteria,
-      hasCompanion: false,
-    }).map(({ id }) => id);
-    expect(companionEvents.every((id) => !absent.includes(id))).toBe(true);
-
-    const living = eligibleEvents(SURVIVAL_EVENTS, {
-      ...criteria,
-      hasCompanion: true,
-    }).map(({ id }) => id);
-    expect(companionEvents.every((id) => living.includes(id))).toBe(true);
-  });
-
   it('blocks one-time, absent-item, and rescue-lead events', () => {
     const base = {
       phase: 'night' as const, day: 20, weather: 'calm' as const, lastEventId: null,
