@@ -60,7 +60,7 @@ writeFileSync(outputPath, JSON.stringify(report), 'utf8');
 
 const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
 console.log(`[${label}] done ${report.totalRuns} runs in ${elapsed}s`
-  + ` | rescued ${report.rescued}`
+  + ` | rescued ${report.rescued} | kraken ${report.kraken}`
   + ` | dead ${report.dead}`
   + ` | sunk ${report.sunk}`
   + ` | report ${outputPath}`);

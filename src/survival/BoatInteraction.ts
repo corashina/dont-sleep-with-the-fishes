@@ -28,6 +28,7 @@ export interface BoatInteractionAnchor {
   readonly label?: string;
   readonly description?: string;
   readonly tooltip?: boolean;
+  readonly tooltipOnly?: boolean;
   readonly eventChoiceId?: EventResponseId;
   readonly eventFocusId?: InspectableEventId;
   readonly itemType: ItemId | null;

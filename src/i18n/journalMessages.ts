@@ -1,6 +1,7 @@
 import { defineMessages } from './messages';
 
 export const journalMessage = defineMessages({
+  chestHeartPiece: { en: 'I opened the chest. Inside was a piece of the Heart of the Sea.', pl: 'Otworzyłem skrzynię. W środku był fragment Serca Morza.', 'es-AR': 'Abrí el cofre. Adentro había un fragmento del Corazón del Mar.' },
   nightPending: { en: 'Night in progress.', pl: 'Noc jeszcze trwa.', 'es-AR': 'La noche sigue en curso.' },
   night: { en: (day: number) => `NIGHT ${day}`, pl: (day: number) => `NOC ${day}`, 'es-AR': (day: number) => `NOCHE ${day}` },
   sinking: { en: 'Dorothy hit something below the water. By the time I reached the lifeboat, she was going under. I saved what I could carry.', pl: 'Dorothy uderzył w coś pod wodą. Kiedy dotarłem do szalupy, już tonął. Uratowałem tyle, ile zdołałem unieść.', 'es-AR': "Dorothy chocó con algo bajo el agua. Cuando llegué al bote, ya se estaba hundiendo. Salvé lo que pude cargar." },

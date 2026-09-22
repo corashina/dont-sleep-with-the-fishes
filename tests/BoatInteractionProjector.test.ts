@@ -81,6 +81,8 @@ function createFixture(): ProjectorFixture {
   };
   const roots: BoatInteractionProjectorRoots = {
     boatRoot: new Group(),
+    heartBasketRoot: new Group(),
+    heartBasketLabel: () => '?',
     supplyRecords: [supplyRecord],
     carlitosRoot,
     carlitosInteractionRoot,

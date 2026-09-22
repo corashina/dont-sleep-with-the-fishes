@@ -1,3 +1,4 @@
+import { heartPieceCount } from '../survival/heartOfTheSea';
 import { uiDynamic } from '../i18n/uiDynamicMessages';
 import { uiText } from '../i18n/uiMessages';
 import type { EndingRecord } from '../game/ending';
@@ -29,6 +30,9 @@ function baseRows(record: EndingRecord): EndingStatistic[] {
 export function survivalEndingStatistics(record: EndingRecord, snapshot: SurvivalSnapshot | null): EndingStatistics {
   const rows = baseRows(record);
   if (snapshot === null) return { rows, graph: null };
+  if (heartPieceCount(snapshot.heartPieces) > 0) {
+    rows.push({ label: uiText('heartName'), value: `${heartPieceCount(snapshot.heartPieces)} / 3`, icon: uiArtwork('heart') });
+  }
   rows.push(
     { label: uiText('health'), value: `${snapshot.health} / 100`, icon: uiArtwork('health') },
     { label: uiText('hunger'), value: `${snapshot.hunger} / 100`, icon: uiArtwork('hunger') },

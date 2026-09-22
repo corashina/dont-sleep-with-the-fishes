@@ -199,7 +199,18 @@ In the lifeboat, each day gives three energy for daytime actions:
 - **Repair item** consumes Duct Tape to restore one selected broken, repairable supply.
 - **Answer signal** costs one energy while the Radio signal audio plays. Each answer adds diminishing hidden rescue lead.
 - **Eat Energy Bar** consumes the bar and restores energy to three.
-- **Open chest** costs three energy and recovers a missing tool or useful resource.
+- **Open chest** costs three energy. The first chest gives a Heart of the Sea piece. Later chests recover tools or resources.
+
+Collect one Heart of the Sea piece from each source: Flowers, Ocean of Blood, and a chest.
+Collect the brain at Flowers by hand, with a Net, or with a Bucket. Use Scuba Gear in the Ocean of Blood.
+Both events reward only their Heart of the Sea piece, without food or other items.
+Missed sources can return. Collected sources stop appearing. Heart pieces stay separate from tools.
+The complete heart guarantees a Kraken encounter at the next nightfall.
+Collected heart pieces fit inside a small open basket on the bench, right of the bait.
+The Kraken rises and watches, grips each piece from the basket, then slowly submerges over a 30-second sequence.
+The empty basket remains on the bench. “The Sea Releases You” appears after the last tentacle disappears.
+Fatal damage can still end the run before this encounter.
+Event Test includes the Kraken encounter and its ending preview. Saves use version 8; older saves are rejected.
 - **End day** advances into the day and night event sequence.
 
 Health, Food, Energy, and Hull remain visible as condition meters. Food is the inverse of internal hunger, so it drains toward zero as the survivor becomes hungry. Food and bait remain separate stores used by actions and outcomes, but they are not persistently tallied in the HUD.

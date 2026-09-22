@@ -1236,7 +1236,7 @@ export class BoatAnchorView {
     id: string,
     anchor: BoatInteractionAnchor,
   ): AnchorInteractionState {
-    if (!this.eventPresentationActive) return 'ordinary';
+    if (!this.eventPresentationActive || anchor.tooltipOnly) return 'ordinary';
     if (this.itemAnimationLab && anchor.action === 'openChest') {
       return this.busy ? 'eventLocked' : 'ordinary';
     }

@@ -1,3 +1,4 @@
+import { HEART_PIECE_IDS, isHeartComplete, type HeartPieceId, parseHeartPieces } from './heartOfTheSea';
 import type { RewardEntry } from './survivalTypes';
 import { DOMAIN_MESSAGES } from '../i18n/domainMessages';
 import { PRESENTATION_WEATHER_IDS, type PresentationWeatherId } from '../weather/presentationWeather';
@@ -41,7 +42,7 @@ import type {
 } from './survivalTypes';
 import type { FishingCatchId } from './fishingCatalog';
 
-export const SURVIVAL_SAVE_VERSION = 7 as const;
+export const SURVIVAL_SAVE_VERSION = 8 as const;
 
 export interface SurvivalSaveDocument {
   readonly version: typeof SURVIVAL_SAVE_VERSION;
@@ -263,8 +264,14 @@ function parseRewardSummary(value: unknown): ActionOutcome['rewardSummary'] | un
   return parseRewardEntry(value);
 }
 
+function parseHeartReward(value: Record<string, unknown>): RewardEntry | undefined {
+  return Object.keys(value).length === 3 && HEART_PIECE_IDS.includes(value.id as HeartPieceId) && value.quantity === 1
+    ? Object.freeze({ kind: 'heartPiece', id: value.id as HeartPieceId, quantity: 1 }) : undefined;
+}
+
 function parseRewardEntry(value: unknown): RewardEntry | undefined {
   if (!isRecord(value) || typeof value.id !== 'string') return undefined;
+  if (value.kind === 'heartPiece') return parseHeartReward(value);
   if (value.kind === 'resource' && (value.id === 'food' || value.id === 'bait')) {
     const quantity = parseInteger(value.quantity, 1, MAX_COUNTER);
     return quantity === null ? undefined : Object.freeze({ kind: 'resource', id: value.id, quantity });
@@ -285,9 +292,17 @@ function parseEventResult(value: unknown): ActionOutcome['eventResult'] | undefi
   return Object.freeze({ eventId: value.eventId, choiceId: value.choiceId, resultId: value.resultId });
 }
 
+function parseJournalHeartPiece(value: Record<string, unknown>): JournalDayActionRecord | null {
+
+      const deltas = parseResourceDeltas(value.deltas);
+      return Object.keys(value).length === 3 && value.pieceId === 'chest' && deltas?.energy === -3 && Object.keys(deltas).length === 1
+        ? Object.freeze({ kind: 'heartPiece', pieceId: 'chest', deltas: Object.freeze(deltas) }) : null;
+}
+
 function parseJournalAction(value: unknown): JournalDayActionRecord | null {
   if (!isRecord(value) || typeof value.kind !== 'string') return null;
   switch (value.kind) {
+    case 'heartPiece': return parseJournalHeartPiece(value);
     case 'fishing': return parseJournalFishingAction(value);
     case 'dayAction': return parseJournalSurvivalAction(value);
     case 'carlitosCare': return parseJournalCarlitosCareAction(value);
@@ -518,6 +533,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
     fishingCounter, seed, randomState];
   if (!hasValidSessionScalars(state, scavengeFields)) return null;
   if (!hasSessionFlags(value)) return null;
+  const heartPieces = parseHeartPieces(value.heartPieces);
   const chest = parseChest(value.chest, day!);
   const inventory = parseInventory(value.inventory);
   const savedItems = parseItemList(value.savedItems);
@@ -539,7 +555,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const pendingJournalActions = parseJournalActions(value.pendingJournalActions);
   const journalEntries = parseJournalEntries(value.journalEntries);
   const history = parseHistory(value.history, day!);
-  if ([chest, inventory, savedItems, lastSeenDays, appearanceCounts,
+  if ([heartPieces, chest, inventory, savedItems, lastSeenDays, appearanceCounts,
     lastHealthCause, pendingJournalActions, journalEntries, history].some((field) => field === null)) return null;
   if ([carlitos, lastEventId, lastOutcome, lastHullEventId, pendingJournalDaytime,
     pendingJournalNighttime].some((field) => field === undefined)) return null;
@@ -547,7 +563,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const pendingEventId = parseEventIdOrNull(value.pendingEventId);
   const pendingEventTargetId = parsePendingEventTargetId(value.pendingEventTargetId, inventory!);
   if (pendingEventId === undefined || pendingEventTargetId === undefined) return null;
-  if (!hasValidPendingEventState(state, pendingEventId, pendingEventTargetId)) return null;
+  if (!hasValidPendingEventState(state, pendingEventId, pendingEventTargetId, heartPieces!)) return null;
   if (!hasValidSessionInventory(inventory!, savedItems!, savedPickupCount!, carlitos!)) return null;
   if (!hasValidPendingEventDefinition(
     state, pendingEventId, pendingEventTargetId, inventory!,
@@ -557,7 +573,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
     state: state as SurvivalSessionCheckpoint['state'], day: day!, pressure: pressure!, health: health!, hunger: hunger!, energy: energy!, hull: hull!,
     food: food!, bait: bait!, recoveredFood: recoveredFood!, recoveredBait: recoveredBait!, rescueLead: rescueLead! as RescueLead,
     rescueTraceFinds: rescueTraceFinds! as 0 | 1 | 2, radioSignalAvailable: value.radioSignalAvailable, radioSignalsSent: radioSignalsSent!, radioSignalsEnabled: value.radioSignalsEnabled,
-    chest: chest!, weather: value.weather, actedToday: value.actedToday, inventory: inventory!, savedItems: savedItems!, savedPickupCount: savedPickupCount!, carlitos: carlitos!,
+    heartPieces: heartPieces!, chest: chest!, weather: value.weather, actedToday: value.actedToday, inventory: inventory!, savedItems: savedItems!, savedPickupCount: savedPickupCount!, carlitos: carlitos!,
     pendingEventId, pendingEventTargetId, nextDawnEnergyOverride: nextDawnEnergyOverride as DawnEnergy | null,
     crewRestorationAtDawn: value.crewRestorationAtDawn,
     lastEventId: lastEventId!, lastSeenDays: lastSeenDays!, appearanceCounts: appearanceCounts!, lastOutcome: lastOutcome!, lastHealthCause: lastHealthCause!, lastHullEventId: lastHullEventId!,
@@ -637,7 +653,9 @@ function hasValidPendingEventState(
   state: SurvivalSessionCheckpoint['state'],
   pendingEventId: string | null,
   pendingEventTargetId: ItemInstanceId | null,
+  heartPieces: import('./heartOfTheSea').HeartPieces,
 ): boolean {
+  if (pendingEventId === 'kraken' && !isHeartComplete(heartPieces)) return false;
   if (state === 'day') return pendingEventId === null && pendingEventTargetId === null;
   return pendingEventId !== null;
 }
@@ -762,12 +780,17 @@ function parseOutcomeText(value: unknown): OutcomeText | null {
     case 'eventResult': return parseResultText(value);
     case 'fishing': return parseFishingText(value);
     case 'chestResource': return parseChestResourceText(value);
+    case 'chestHeartPiece': return Object.keys(value).length === 1 ? Object.freeze({ kind: 'chestHeartPiece' }) : null;
     case 'chestItem': return parseChestItemText(value);
-    case 'backpackItem': return typeof value.itemId === 'string' && ITEM_ID_SET.has(value.itemId)
-      && ITEM_DEFINITIONS[value.itemId as ItemId].weight === 1
-      ? Object.freeze({ kind: 'backpackItem', itemId: value.itemId as ItemId }) : null;
+    case 'backpackItem': return parseBackpackItemText(value);
     default: return null;
   }
+}
+
+function parseBackpackItemText(value: Record<string, unknown>): OutcomeText | null {
+  return typeof value.itemId === 'string' && ITEM_ID_SET.has(value.itemId)
+    && ITEM_DEFINITIONS[value.itemId as ItemId].weight === 1
+    ? Object.freeze({ kind: 'backpackItem', itemId: value.itemId as ItemId }) : null;
 }
 
 function parseDomainText(value: Record<string, unknown>): OutcomeText | null {

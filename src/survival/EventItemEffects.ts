@@ -116,7 +116,7 @@ export class EventItemEffects {
     this.clear();
   }
 
-  apply(sample: Readonly<EventItemUseSample>, actor: Object3D): void {
+  apply(sample: Readonly<EventItemUseSample>, actor: Object3D, heldFill: boolean): void {
     if (this.disposed) return;
     this.hideEffects();
     if (sample.effectKind !== 'shotgun-blast') this.shotgun.reset();
@@ -125,10 +125,7 @@ export class EventItemEffects {
     actor.getWorldPosition(this.actorPosition);
     this.root.position.copy(this.actorPosition);
     actor.getWorldQuaternion(this.root.quaternion);
-    this.heldFillLight.visible = sample.cameraSpaceBlend > 0 && sample.itemVisible;
-    this.heldFillLight.intensity = sample.itemVisible
-      ? clamp01Unchecked(sample.cameraSpaceBlend) * 3.4
-      : 0;
+    this.applyHeldFill(sample, heldFill);
 
     if (sample.effectKind === 'none') return;
 
@@ -160,6 +157,13 @@ export class EventItemEffects {
         this.binocularStrength = primary;
         break;
     }
+  }
+
+  private applyHeldFill(sample: Readonly<EventItemUseSample>, enabled: boolean): void {
+    this.heldFillLight.visible = enabled && sample.cameraSpaceBlend > 0 && sample.itemVisible;
+    this.heldFillLight.intensity = this.heldFillLight.visible
+      ? clamp01Unchecked(sample.cameraSpaceBlend) * 3.4
+      : 0;
   }
 
   private applyFlare(

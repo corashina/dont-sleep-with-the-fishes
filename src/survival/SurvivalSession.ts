@@ -1,3 +1,4 @@
+import { EMPTY_HEART, COMPLETE_HEART, isHeartComplete, collectHeartPiece, type HeartPieceId, type HeartPieces } from './heartOfTheSea';
 import { cloneActionOutcome, domainMessageId, domainText, resolveOutcomeText, withOutcomeText, type OutcomeText } from './outcomeText';
 import { domainMessage as t } from '../i18n/domainMessages';
 import { presentationWeatherForEvent } from '../weather/presentationWeather';
@@ -145,6 +146,7 @@ export interface SurvivalSessionOptions {
   >>;
   initialConditions?: Partial<Record<ItemInstanceId, ItemCondition>>;
   initialEventId?: string;
+  initialHeartPieces?: HeartPieces;
   initialChest?: ChestSnapshot;
   initialAppearanceCounts?: Readonly<Record<string, number>>;
   initialCarlitos?: Partial<CarlitosSnapshot>;
@@ -233,6 +235,7 @@ interface SessionInitialization {
   readonly hull: number;
   readonly rescueLead: RescueLead;
   readonly rescueTraceFinds: 0 | 1 | 2;
+  readonly heartPieces: HeartPieces;
   readonly chestState: ChestState;
   readonly chestAcquiredDay: number | null;
   readonly inventory: SurvivalInventoryState;
@@ -264,6 +267,7 @@ function checkpointInitialization(
     hull: checkpoint.hull,
     rescueLead: checkpoint.rescueLead,
     rescueTraceFinds: checkpoint.rescueTraceFinds,
+    heartPieces: checkpoint.heartPieces,
     chestState: checkpoint.chest.state,
     chestAcquiredDay: checkpoint.chest.acquiredDay,
     inventory: SurvivalInventoryState.restore(checkpoint.inventory),
@@ -335,6 +339,7 @@ function newSessionInitialization(
     weather: options.weather ?? 'calm',
     ...resources,
     rescueTraceFinds: initialRescueTraceFinds(options),
+    heartPieces: Object.freeze({ ...(options.initialHeartPieces ?? EMPTY_HEART) }),
     chestState: chest.state,
     chestAcquiredDay: chest.acquiredDay,
     inventory: new SurvivalInventoryState(inventoryItems),
@@ -376,6 +381,7 @@ export class SurvivalSession {
   private rescueTraceFinds: 0 | 1 | 2;
   private radioSignalAvailable = false;
   private radioSignalsSent = 0;
+  private heartPieces: HeartPieces;
   private chestState: ChestState;
   private chestAcquiredDay: number | null;
   private weather: WeatherId;
@@ -423,6 +429,7 @@ export class SurvivalSession {
     this.hull = initialization.hull;
     this.rescueLead = initialization.rescueLead;
     this.rescueTraceFinds = initialization.rescueTraceFinds;
+    this.heartPieces = initialization.heartPieces;
     this.chestState = initialization.chestState;
     this.chestAcquiredDay = initialization.chestAcquiredDay;
     this.inventory = initialization.inventory;
@@ -445,6 +452,7 @@ export class SurvivalSession {
     endingId: SurvivalEndingId,
   ): SurvivalSession {
     const session = new SurvivalSession(savedItems, {
+      ...(endingId === 'kraken' ? { initialEventId: 'kraken', initialHeartPieces: COMPLETE_HEART } : {}),
       seed,
       radioSignalsEnabled: false,
       initial: {
@@ -579,6 +587,7 @@ export class SurvivalSession {
       recoveredBait: this.recoveredBait,
       rescueLead: this.rescueLead,
       rescueTraceFinds: this.rescueTraceFinds,
+      heartPieces: this.heartPieces,
       radioSignalAvailable: this.radioSignalAvailable,
       radioSignalsSent: this.radioSignalsSent,
       radioSignalsEnabled: this.radioSignalsEnabled,
@@ -636,6 +645,7 @@ export class SurvivalSession {
       recoveredBait: this.recoveredBait,
       rescueLead: this.rescueLead,
       rescueTraceFinds: this.rescueTraceFinds,
+      heartPieces: this.heartPieces,
       radioSignalAvailable: this.radioSignalAvailable,
       radioSignalsSent: this.radioSignalsSent,
       chest: Object.freeze({
@@ -860,6 +870,12 @@ export class SurvivalSession {
 
     this.radioSignalAvailable = false;
 
+    if (isHeartComplete(this.heartPieces)) {
+      const kraken = survivalEventById('kraken')!;
+      this.openEvent(kraken);
+      return this.commit('event-opened', { kind: 'eventPrompt', eventId: kraken.id }, {}, 'nightfall');
+    }
+
     if (this.chestState === 'closed'
       && this.chestAcquiredDay !== null
       && shouldBecomeMimic(this.chestAcquiredDay, this.day, this.random)) {
@@ -1002,6 +1018,7 @@ export class SurvivalSession {
       choiceId,
       resolved,
       applied.fallbackFoodGranted,
+      applied.grantedHeartPiece,
       this.appliedResourceDelta(before, this.resourceValues()),
       applied.inventoryMutations,
     );
@@ -1017,6 +1034,9 @@ export class SurvivalSession {
   }
 
   private eventChoiceRejection(choice: EventChoiceDefinition): Rejection | null {
+    if (this.pendingEvent?.id === 'kraken' && !isHeartComplete(this.heartPieces)) {
+      return { code: 'requirements-unmet', message: t('requirements') };
+    }
     const tradeRejection = this.tradeChoiceRejection(choice);
     if (tradeRejection !== null) return tradeRejection;
     const companionRejection = this.unavailableCompanionEventAction(choice.companionAction);
@@ -1120,6 +1140,7 @@ export class SurvivalSession {
   ): {
     readonly inventoryMutations: JournalInventoryMutation[];
     readonly fallbackFoodGranted: boolean;
+    readonly grantedHeartPiece: HeartPieceId | null;
   } {
     const inventoryMutations: JournalInventoryMutation[] = [];
     for (const effect of resolved.effects.resources ?? []) {
@@ -1139,7 +1160,10 @@ export class SurvivalSession {
     );
     this.applyChestEffect(resolved.effects.chest);
     if (resolved.effects.restoreCrew) this.restoreCrew();
-    return { inventoryMutations, fallbackFoodGranted };
+    const piece = resolved.effects.grantHeartPiece;
+    const grantedHeartPiece = piece !== undefined && !this.heartPieces[piece] ? piece : null;
+    if (grantedHeartPiece !== null) this.heartPieces = collectHeartPiece(this.heartPieces, grantedHeartPiece);
+    return { inventoryMutations, fallbackFoodGranted, grantedHeartPiece };
   }
 
   private restoreCrew(): void {
@@ -1193,6 +1217,10 @@ export class SurvivalSession {
       ) as DawnEnergy;
     }
     this.resolveTerminal();
+    if (!this.isTerminal() && event.id === 'kraken' && resolved.resultId === 'heart-returned') {
+      this.ending = Object.freeze({ id: 'kraken', day: this.day, savedPickupCount: this.savedPickupCount });
+      this.state = 'rescued';
+    }
     this.lastEventId = event.id;
     if (event.id === 'drifting-supplies') {
       const kind = driftingSupplyKindFromSeed(
@@ -1210,6 +1238,7 @@ export class SurvivalSession {
     choiceId: EventResponseId,
     resolved: WeightedEventOutcome,
     fallbackFoodGranted: boolean,
+    grantedHeartPiece: HeartPieceId | null,
     deltas: ResourceDelta,
     inventoryMutations: readonly JournalInventoryMutation[],
   ): ActionOutcome {
@@ -1219,6 +1248,7 @@ export class SurvivalSession {
       deltas,
       inventoryMutations,
       resolved.resultId,
+      grantedHeartPiece,
     );
     const resultId = resolved.resultId;
     if (resolved.resultId === undefined) throw new Error('Event outcome requires a stable result ID.');
@@ -1381,6 +1411,7 @@ export class SurvivalSession {
   }
 
   private rescueAtDawn(): ActionOutcome | null {
+    if (isHeartComplete(this.heartPieces)) return null;
     const rescueChance = rescueChanceForDay(this.day, this.rescueLead);
     if (rescueChance <= 0 || this.random.next() >= rescueChance) return null;
     this.ending = Object.freeze({
@@ -1654,10 +1685,17 @@ export class SurvivalSession {
 
   private openChest(): ActionOutcome {
     const activeItemIds = this.presentItemIds();
-    const reward = drawChestReward(activeItemIds, this.random);
+    const reward = drawChestReward(activeItemIds, this.heartPieces, this.random);
     this.chestState = 'none';
     this.chestAcquiredDay = null;
 
+    if (reward.kind === 'heartPiece') {
+      this.heartPieces = collectHeartPiece(this.heartPieces, 'chest');
+      const deltas = { energy: -SURVIVAL_BALANCE.actions.openChestEnergy };
+      this.pendingJournalActions.push(Object.freeze({ kind: 'heartPiece', pieceId: 'chest', deltas: Object.freeze(deltas) }));
+      return this.commit('chest-opened', { kind: 'chestHeartPiece' }, deltas, 'none',
+        { kind: 'heartPiece', id: 'chest', quantity: 1 });
+    }
     if (reward.kind === 'resource') {
       const deltas: ResourceDelta = {
         energy: -SURVIVAL_BALANCE.actions.openChestEnergy,
@@ -1688,6 +1726,8 @@ export class SurvivalSession {
     excludedIds: ReadonlySet<string> = NO_EVENT_EXCLUSIONS,
   ): SurvivalEventDefinition {
     const scheduledExclusions = new Set(excludedIds);
+    if (this.heartPieces.flowers) scheduledExclusions.add('flowers');
+    if (this.heartPieces.blood) scheduledExclusions.add('ocean-of-blood');
     if (phase === 'day') {
       const supplyKind = driftingSupplyKindFromSeed(
         deriveEventVariantSeed(this.seed, this.day, 'drifting-supplies'),
@@ -1729,11 +1769,13 @@ export class SurvivalSession {
     deltas: ResourceDelta,
     mutations: readonly JournalInventoryMutation[],
     resultId: string | undefined,
+    grantedHeartPiece: HeartPieceId | null,
   ): RewardSummary | undefined {
-    const trade = eventId === 'handyman' || eventId === 'night-trader';
+    const trade = ['handyman', 'night-trader'].includes(eventId);
     const grave = eventId === 'midnight-tour' && resultId === 'tour-grave';
-    if ((!trade && !grave && eventId !== 'drifting-supplies') || choiceId === 'sleep') return undefined;
+    if (![trade, grave, eventId === 'drifting-supplies', grantedHeartPiece !== null].includes(true) || choiceId === 'sleep') return undefined;
     const rewards = this.gainedItemRewards(mutations);
+    if (grantedHeartPiece !== null) rewards.push({ kind: 'heartPiece', id: grantedHeartPiece, quantity: 1 });
     if (trade) return rewards[0] === undefined ? undefined : Object.freeze(rewards[0]);
     for (const id of ['food', 'bait'] as const) {
       const quantity = deltas[id] ?? 0;
@@ -1913,7 +1955,7 @@ export class SurvivalSession {
       const resource = key as keyof ResourceDelta;
       return [resource, after[resource] - before[resource]];
     })) as ResourceDelta;
-    const terminalCue = this.state === 'dead' ? 'death' : this.state === 'sunk' ? 'sinking' : this.state === 'rescued' ? 'rescue' : cue;
+    const terminalCue = this.presentationCue(cue);
     const outcome: ActionOutcome = withOutcomeText({
       accepted: true,
       code,
@@ -1955,7 +1997,7 @@ export class SurvivalSession {
   private presentationCue(cue: PresentationCue): PresentationCue {
     if (this.state === 'dead') return 'death';
     if (this.state === 'sunk') return 'sinking';
-    if (this.state === 'rescued') return 'rescue';
+    if (this.state === 'rescued') return this.ending?.id === 'kraken' ? 'none' : 'rescue';
     return cue;
   }
 

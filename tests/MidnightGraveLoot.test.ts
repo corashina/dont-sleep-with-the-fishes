@@ -52,7 +52,7 @@ describe('Midnight grave rewards', () => {
     expect(session.snapshot()).toMatchObject({ day: 2, energy: 2 });
     if (reward.kind === 'resource') {
       expect(session.snapshot()[reward.id]).toBe(reward.quantity);
-    } else {
+    } else if (reward.kind === 'item') {
       expect(Object.values(session.snapshot().inventory).some((item) => item?.type === reward.id)).toBe(true);
       expect(ITEM_DEFINITIONS[reward.id].weight).toBe(1);
     }

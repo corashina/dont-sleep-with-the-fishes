@@ -17,6 +17,25 @@ uses one locally processed Poly Haven CC0 texture set.
 Sources use [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The build embeds and normalizes the models.
 The game adds flames, embers, and light. Source hashes and download dates are in `scripts/event-model-lock.json`.
 
+## Heart of the Sea: blood piece
+
+`src/assets/models/ending/bloodHeart.glb` uses [Heart by Poly by Google](https://poly.pizza/m/5POtMKIT_Ze)
+under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Downloaded on 2026-09-21.
+The source GLB is unchanged. Runtime scaling and placement fit the blood event and Kraken handover.
+Source resource: `a82a0fd9-24dc-429c-ae5b-f894b0778171`. Triangles: 733.
+SHA-256: `B72B11530615D9095CC90C7AAAFA8DD49043424479C73A4FC3D14BC0CD712F31`.
+Fetch all three pieces with `node scripts/fetch-heart-models.mjs`.
+
+The two remaining pieces use these Poly by Google models under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
+Downloaded on 2026-09-21. Source GLBs are unchanged; runtime scaling, rotation, and placement fit the bench and handover.
+
+- Flowers piece: `src/assets/models/ending/flowersHeart.glb`, [Brain](https://poly.pizza/m/5mPRPZkI3qt).
+  Resource: `f16b3b74-1fdd-47a6-b7cd-cdf0d6f10058`. Triangles: 3,070.
+  SHA-256: `bc67afd20c46b06535a00cc9dba10676c79ed1087d9e02d4531adb08223d8d9c`.
+- Chest piece: `src/assets/models/ending/chestHeart.glb`, [Kidneys](https://poly.pizza/m/fF04IGr3X6q).
+  Resource: `e30ab49f-c137-4f7e-92f5-bbf6abefa1ac`. Triangles: 768.
+  SHA-256: `3bb4532470f7f0d6df5455a8fbc2cdf755063076116793bca14c04412c7eeece`.
+
 ## Rescue ending boat
 
 `src/assets/models/ending/rescueBoat.glb` uses [Boat by Poly by Google](https://poly.pizza/m/84-DYhLzxNq)

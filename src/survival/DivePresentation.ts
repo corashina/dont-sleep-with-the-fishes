@@ -56,6 +56,7 @@ export interface DivePostEntryHold {
 
 export interface DivePlayOptions {
   readonly onWaterImpact: () => void;
+  readonly waterAppearance?: 'sea' | 'blood';
   readonly postEntryHold?: DivePostEntryHold;
 }
 
@@ -180,6 +181,9 @@ export class DivePresentation {
   start(options: DivePlayOptions): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (this.cameraCaptured) this.clear();
+    const blood = options.waterAppearance === 'blood';
+    this.waterVeil.material.color.setHex(blood ? 0x7b1018 : 0x4aafbd);
+    this.bubbleMesh.material.color.setHex(blood ? 0xc98078 : 0xb7e5e6);
     this.savedPosition.copy(this.options.camera.position);
     this.savedQuaternion.copy(this.options.camera.quaternion);
     this.cameraCaptured = true;

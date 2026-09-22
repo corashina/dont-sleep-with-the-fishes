@@ -1,3 +1,4 @@
+import type { HeartPieces } from './heartOfTheSea';
 import { cloneActionOutcome } from './outcomeText';
 import type { DeathCause } from '../game/ending';
 import type { SurvivalReading } from '../game/runStatistics';
@@ -43,6 +44,7 @@ export interface SurvivalSessionCheckpoint {
   readonly radioSignalAvailable: boolean;
   readonly radioSignalsSent: number;
   readonly radioSignalsEnabled: boolean;
+  readonly heartPieces: HeartPieces;
   readonly chest: ChestSnapshot;
   readonly weather: WeatherId;
   readonly actedToday: boolean;
@@ -80,6 +82,7 @@ export function createSurvivalSessionCheckpoint(
   return Object.freeze({
     ...checkpoint,
     history: Object.freeze(checkpoint.history.map((reading) => Object.freeze({ ...reading }))),
+    heartPieces: Object.freeze({ ...checkpoint.heartPieces }),
     chest: Object.freeze({ ...checkpoint.chest }),
     inventory: cloneInventory(checkpoint.inventory),
     savedItems: Object.freeze(checkpoint.savedItems.map((item) => Object.freeze({ ...item }))),

@@ -37,6 +37,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     history: [],
     food: 0, bait: 0, recoveredFood: 0, recoveredBait: 0,
     rescueLead: 0, rescueTraceFinds: 0, radioSignalAvailable: false, radioSignalsSent: 0,
+    heartPieces: { flowers: false, blood: false, chest: false },
     chest: { state: 'none', acquiredDay: null },
     weather: 'calm', actedToday: false,
     journalEntries: [], inventory: inventory(), savedItems: [], carlitos: null, pendingEventId: null,
@@ -46,6 +47,50 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 }
 
 describe('survival checkpoints', () => {
+  // Importance: 95/100. Lab-only quest ownership must not leak into regular runs or trigger an ending.
+  it.each([true, false])('loads all heart models only in the item lab: lab=%s', (lab) => {
+    const render = vi.fn();
+    const showEnding = vi.fn();
+    const phase = SurvivalPhase.forTestStart({ world: {}, ui: { render, showEnding } }, {
+      kind: 'fresh', savedItems: [], seed: 41, scavengeElapsedSeconds: 0,
+      ...(lab ? { initialEventId: 'item-animation-lab' } : {}),
+    });
+    try {
+      phase.start();
+      phase.update(1, 1);
+      expect(render).toHaveBeenLastCalledWith(expect.objectContaining({
+        heartPieces: { flowers: lab, blood: lab, chest: lab },
+        state: 'day', pendingEventId: null, ending: null,
+      }), expect.any(Function));
+      expect(showEnding).not.toHaveBeenCalled();
+    } finally { phase.dispose(); }
+  });
+
+  // Importance: 99/100. All Kraken encounters must return the heart automatically once.
+  it.each([true, false])('submits Kraken preview once after reveal: ending=%s', async (endingPreview) => {
+    const reveal = deferred();
+    const reaction = deferred();
+    const reactToEventOutcome = vi.fn(() => reaction.promise);
+    const showEnding = vi.fn();
+    const playRescueEnding = vi.fn();
+    const phase = SurvivalPhase.forTestStart({
+      world: { stageEvent: vi.fn(), revealEvent: vi.fn(() => reveal.promise), reactToEventOutcome, playRescueEnding },
+      ui: { showEnding, setSleepCovered: vi.fn(async () => undefined), showEventReveal: vi.fn(async () => undefined) },
+    }, endingPreview
+      ? { kind: 'ending-preview', savedItems: [], seed: 41, scavengeElapsedSeconds: 0, endingId: 'kraken' }
+      : { kind: 'fresh', savedItems: [], seed: 41, scavengeElapsedSeconds: 0, initialEventId: 'kraken' });
+    try {
+      phase.start(); await flushPromises();
+      expect(reactToEventOutcome).not.toHaveBeenCalled();
+      reveal.resolve(); await flushPromises();
+      expect(reactToEventOutcome).toHaveBeenCalledTimes(1);
+      expect(showEnding).not.toHaveBeenCalled();
+      reaction.resolve(); await flushPromises();
+      phase.start(); await flushPromises();
+      expect(showEnding).toHaveBeenCalledTimes(1);
+      expect(playRescueEnding).not.toHaveBeenCalled();
+    } finally { phase.dispose(); }
+  });
 
   it.each(['drifting-supplies', 'drifting-chest'] as const)(
     'keeps repair, camera controls, and inspection available during %s', async (eventId) => {

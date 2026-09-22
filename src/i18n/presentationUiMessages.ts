@@ -1,6 +1,9 @@
 import { defineMessages } from './messages';
 
 const catalog = {
+  brain: { en: 'Brain', pl: 'Mózg', 'es-AR': 'Cerebro' },
+  heart: { en: 'Heart', pl: 'Serce', 'es-AR': 'Corazón' },
+  kidneys: { en: 'Kidneys', pl: 'Nerki', 'es-AR': 'Riñones' },
   secureSupplies: { en: 'Tape down supplies', pl: 'Przyklej zapasy', 'es-AR': 'Sujetar provisiones con cinta' },
   callCrew: { en: 'Call the passing crew', pl: 'Wywołaj mijającą załogę', 'es-AR': 'Llamar a la tripulación' },
   fishWithNet: { en: 'Fish with net', pl: 'Łów siecią', 'es-AR': 'Pescar con red' },

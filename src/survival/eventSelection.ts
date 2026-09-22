@@ -41,6 +41,7 @@ function matchesEventSchedule(
   eventEntry: SurvivalEventDefinition,
   criteria: EventEligibility,
 ): boolean {
+  if (eventEntry.id === 'kraken') return false;
   if (eventEntry.phase !== criteria.phase || eventEntry.id === criteria.lastEventId) return false;
   if (criteria.day < eventEntry.earliestDay) return false;
   if (eventEntry.latestDay !== undefined && criteria.day > eventEntry.latestDay) return false;

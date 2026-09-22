@@ -1,3 +1,4 @@
+import { COMPLETE_HEART } from '../src/survival/heartOfTheSea';
 import { describe, expect, it } from 'vitest';
 import { ITEM_DEFINITIONS, ITEM_IDS, type ItemId, type ItemInstance } from '../src/game/ItemState';
 import { survivalEventById } from '../src/survival/eventCatalog';
@@ -24,7 +25,7 @@ describe('item circulation', () => {
 
   it('can discard broken equipment without tape, then recover its type from a chest', () => {
     const game = new SurvivalSession(saved(...ITEM_IDS.filter((id) => id !== 'carlitos')), {
-      seed: 2, initialConditions: { 'scubaSet-1': 'broken' },
+      seed: 2, initialHeartPieces: COMPLETE_HEART, initialConditions: { 'scubaSet-1': 'broken' },
       initialChest: { state: 'closed', acquiredDay: 0 },
     });
     expect(game.perform('discardItem', { kind: 'itemDiscard', target: 'scubaSet-1' }).accepted).toBe(true);

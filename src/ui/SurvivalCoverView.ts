@@ -1,3 +1,4 @@
+import { presentationUiText } from '../i18n/presentationUiMessages';
 import { rewardTitle } from '../i18n/uiDynamicMessages';
 import { onLanguageChange } from '../i18n/language';
 import { refreshUiText } from './translatedText';
@@ -206,8 +207,9 @@ export class SurvivalCoverView {
             : uiText('closeDive'),
     );
     this.renderReward(view.reward);
-    this.resultLines.hidden = view.lines.length === 0;
-    this.resultLines.replaceChildren(...view.lines.map((line) => {
+    const lines = view.heartCompleted ? [uiText('heartComplete'), ...view.lines] : view.lines;
+    this.resultLines.hidden = lines.length === 0;
+    this.resultLines.replaceChildren(...lines.map((line) => {
       const item = document.createElement('li');
       item.textContent = line;
       return item;
@@ -413,9 +415,12 @@ export class SurvivalCoverView {
   }
 
   private appendReward(reward: RewardEntry): void {
-    const itemId = driftingCargoRewardItemId(reward);
+    const itemId = reward.kind === 'heartPiece'
+      ? ({ flowers: 'flowersHeart', blood: 'bloodHeart', chest: 'chestHeart' } as const)[reward.id]
+      : driftingCargoRewardItemId(reward);
     const entry = document.createElement('span');
     entry.className = 'dive-result__reward-entry';
+    if (reward.kind === 'heartPiece') entry.dataset.heartPiece = reward.id;
     const circle = document.createElement('span');
     circle.className = 'weight-circle is-filled dive-result__reward';
     circle.dataset.itemType = itemId;
@@ -442,12 +447,17 @@ export class SurvivalCoverView {
     const name = document.createElement('strong');
     name.className = 'dive-result__reward-name ui-role-context';
     name.dataset.diveResultRewardName = '';
-    name.textContent = diveRewardName(reward);
-    const quantity = document.createElement('span');
-    quantity.className = 'dive-result__reward-quantity ui-role-numeral';
-    quantity.dataset.diveResultRewardQuantity = '';
-    quantity.textContent = `×${reward.quantity}`;
-    copy.append(name, quantity);
+    name.textContent = reward.kind === 'heartPiece'
+      ? presentationUiText(({ flowers: 'brain', blood: 'heart', chest: 'kidneys' } as const)[reward.id])
+      : diveRewardName(reward);
+    copy.append(name);
+    if (reward.kind !== 'heartPiece') {
+      const quantity = document.createElement('span');
+      quantity.className = 'dive-result__reward-quantity ui-role-numeral';
+      quantity.dataset.diveResultRewardQuantity = '';
+      quantity.textContent = `×${reward.quantity}`;
+      copy.append(quantity);
+    }
     entry.append(circle, copy);
     this.resultRewards.append(entry);
   }

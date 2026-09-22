@@ -27,6 +27,7 @@ import type {
 } from './survivalTypes';
 
 export const SURVIVAL_EVENT_IDS = Object.freeze([
+  'kraken',
   'quiet-night',
   'starry-night',
   'ocean-of-blood',
@@ -81,6 +82,7 @@ export function driftingItemRetrieveKey(eventId: DriftingItemEventId): EventPres
 }
 
 const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.freeze({
+  kraken: 'krakenReveal',
   'starry-night': 'starryNightReveal',
   'ocean-of-blood': 'bloodOceanReveal',
   'quiet-night': 'eventText277',
@@ -449,11 +451,11 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(50, 'eventText172', effects([subtract('hull', { min: 15, max: 25 })], [loseRandom(1)]))),
   ]),
   event('ocean-of-blood', 'night', 'bloodOceanTitle', 'uncertain', 'darkness', 1, 12, 8, [
-    choice('fishingNet', 'bloodOceanNetChoice', 'fishingNet',
-      outcome(1, 'bloodOceanNetResult', effects([add('food', 1), add('pressure', 1)]), 'blood-ocean-searched')),
+    choice('scubaSet', 'bloodOceanDiveChoice', 'scubaSet',
+      outcome(1, 'bloodOceanDiveResult', { ...effects([add('pressure', 1)]), grantHeartPiece: 'blood' }, 'blood-ocean-searched')),
     contextualChoice('sleep', 'bloodOceanWaitChoice',
       outcome(1, 'bloodOceanWaitResult', { maximumNextDawnEnergy: 2 }, 'blood-ocean-waited')),
-  ], undefined, { minimumPressure: 2, maximumAppearances: 1 }),
+  ], undefined, { minimumPressure: 2 }),
   event('monster-in-the-fog', 'night', 'eventText043', 'dangerous', 'darkness', 1, 6, 4, [
     choice('compass', 'eventText062', 'compass',
       outcome(1, 'eventText173',
@@ -592,14 +594,16 @@ const survivalEvents: SurvivalEventDefinition[] = [
     contextualChoice('sleep', 'eventText086',
       featuredOutcome('check-the-back.ignore', 1, 'eventText236')),
   ], undefined, { allowedChestStates: ['none'] }),
-  event('flowers', 'night', 'eventText053', 'safe', 'sighting', 1, 2, 0, [
+  event('flowers', 'night', 'eventText053', 'safe', 'sighting', 1, 2, 4, [
+    contextualChoice('collect', 'flowersCollectChoice',
+      featuredOutcome('flowers.collect', 1, 'flowersCollectResult', { grantHeartPiece: 'flowers' })),
     choice('fishingNet', 'eventText066', 'fishingNet',
-      featuredOutcome('flowers.collect', 1, 'eventText237')),
+      featuredOutcome('flowers.collect', 1, 'eventText237', { grantHeartPiece: 'flowers' })),
     choice('bucket', 'eventText065', 'bucket',
-      featuredOutcome('flowers.collect', 1, 'eventText238')),
+      featuredOutcome('flowers.collect', 1, 'eventText238', { grantHeartPiece: 'flowers' })),
     contextualChoice('sleep', 'eventText087',
       featuredOutcome('flowers.drift', 1, 'eventText239')),
-  ], 13, { maximumAppearances: 1 }),
+  ]),
   event('chest-attack', 'night', 'eventText054', 'dangerous', 'impact', 1, 1, 0, [
     choice('knife', 'eventText068', 'knife',
       outcome(1, 'eventText240', {
@@ -747,6 +751,9 @@ const survivalEvents: SurvivalEventDefinition[] = [
     ]),
     weather: ['calm'],
   },
+  event('kraken', 'night', 'krakenTitle', 'uncertain', 'sighting', 1, 1, 0, [
+    contextualChoice('return-heart', 'krakenReturnHeart', outcome(1, 'krakenReturned', {}, 'heart-returned')),
+  ]),
   event('quiet-night', 'night', 'eventText276', 'safe', 'none', 3, 1, 15, [
     contextualChoice('sleep', 'eventText063', outcome(1, 'eventText279')),
   ]),

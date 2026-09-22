@@ -120,6 +120,7 @@ function formatSurvivalAction(record: JournalSurvivalActionRecord): string {
 
 function formatDayAction(record: JournalDayActionRecord): string {
   switch (record.kind) {
+    case 'heartPiece': return t('chestHeartPiece');
     case 'fishing': return formatFishing(record);
     case 'dayAction': return formatSurvivalAction(record);
     case 'carlitosCare':

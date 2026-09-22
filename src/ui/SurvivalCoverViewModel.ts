@@ -3,6 +3,7 @@ import type { RewardSummary } from '../survival/survivalTypes';
 export type SleepCoverProfile = 'solid' | 'dive' | 'midnight-tour' | 'midnight-attack';
 
 export interface RewardResultView {
+  readonly heartCompleted?: true;
   readonly title: 'DIVE RESULT' | 'CHEST REWARD' | 'SALVAGE' | 'ISLAND REWARDS';
   readonly reward: RewardSummary | null;
   readonly lines: readonly string[];

@@ -116,6 +116,7 @@ export class EventItemUseAdapter {
   private profile: EventItemMotionProfile | null = null;
   private aimTarget: Object3D | null = null;
   private flashlight = false;
+  private heldFill = true;
   private knifeAttack = false;
   private cameraFacingSurface: CameraFacingSurface = 'none';
   private lockItemToHeldCamera = false;
@@ -150,6 +151,7 @@ export class EventItemUseAdapter {
     this.profile = eventItemMotionProfile(itemId);
     this.aimTarget = aimTarget;
     this.flashlight = itemId === 'flashlight';
+    this.heldFill = itemId !== 'fishingNet';
     if (this.flashlight) this.effects.flashlight.setTarget(aimTarget);
     this.knifeAttack = itemId === 'knife';
     this.cameraFacingSurface = facingSurface ?? (itemId === 'map'
@@ -232,7 +234,7 @@ export class EventItemUseAdapter {
     this.applyCameraFacing(sample, actor);
     this.applyAim(sample, actor, profile);
     this.applyRecoil(sample, actor);
-    this.effects.apply(sample, actor.root);
+    this.effects.apply(sample, actor.root, this.heldFill);
     this.updateInteriorCoverage(sample.primaryEffect);
     actor.root.visible = sample.itemVisible;
   }

@@ -6,7 +6,11 @@ import { createServer as createViteServer } from 'vite';
 const ROOT = resolve('.');
 const OUTPUT_DIR = resolve('src', 'assets', 'models', 'item-thumbnails');
 const OUTPUT_WATCH_GLOB = `${OUTPUT_DIR.replaceAll('\\', '/')}/**`;
-const THUMBNAIL_IDS = await runtimeScavengeItemIds();
+const heartPiecesOnly = process.argv.includes('--heart-pieces');
+const THUMBNAIL_IDS = [
+  ...(heartPiecesOnly ? [] : await runtimeScavengeItemIds()),
+  'flowersHeart', 'bloodHeart', 'chestHeart',
+];
 const expectedIds = new Set(THUMBNAIL_IDS);
 
 async function runtimeScavengeItemIds() {
@@ -122,8 +126,8 @@ async function main() {
       '--disable-gpu-sandbox',
       '--no-first-run',
       '--no-default-browser-check',
-      rendererUrl,
-    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+      rendererUrl + (heartPiecesOnly ? '?heart-pieces' : ''),
+    ], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
     browser.stderr.on('data', (chunk) => process.stderr.write(chunk));
     browser.once('error', rejectComplete);
     browser.once('exit', (code) => {

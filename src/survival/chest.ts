@@ -1,3 +1,4 @@
+import type { HeartPieces } from './heartOfTheSea';
 import { ITEM_IDS, type ItemId } from '../game/ItemState';
 import { drawMissingItem } from './itemRewards';
 import type { RandomSource } from './survivalTypes';
@@ -6,6 +7,7 @@ export const CHEST_MIMIC_MIN_NIGHTS = 2;
 export const CHEST_MIMIC_CHANCE = 0.35;
 
 export type ChestReward =
+  | { readonly kind: 'heartPiece'; readonly id: 'chest' }
   | { readonly kind: 'item'; readonly itemId: ItemId }
   | {
       readonly kind: 'resource';
@@ -17,8 +19,10 @@ const CHEST_ITEM_REWARDS = ITEM_IDS.filter((id) => id !== 'carlitos');
 
 export function drawChestReward(
   ownedItemIds: ReadonlySet<ItemId>,
+  heartPieces: HeartPieces,
   random: RandomSource,
 ): ChestReward {
+  if (!heartPieces.chest) return { kind: 'heartPiece', id: 'chest' };
   const itemId = drawMissingItem(
     ownedItemIds,
     CHEST_ITEM_REWARDS,

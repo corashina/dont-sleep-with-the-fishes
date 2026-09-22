@@ -17,6 +17,7 @@ import { FLYBY_CHOICE_WINDOW_SECONDS, UFO_CHOICE_WINDOW_SECONDS } from '../src/s
 import { formatJournalEntry } from '../src/survival/journal';
 import type { EventResponse } from '../src/survival/survivalTypes';
 import { sequenceRandom } from './helpers/random';
+import { COMPLETE_HEART } from '../src/survival/heartOfTheSea';
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -53,6 +54,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     rescueTraceFinds: 0,
     radioSignalAvailable: false,
     radioSignalsSent: 0,
+    heartPieces: { flowers: false, blood: false, chest: false },
     chest: { state: 'none', acquiredDay: null },
     weather: 'calm',
     actedToday: false,
@@ -284,6 +286,65 @@ function createSessionRig(
 }
 
 describe('event selection contracts', () => {
+  // Importance: 99/100. The ending must wait for handover before showing its panel.
+  it('waits for Kraken release and retains its scene for the ending', async () => {
+    const rig = createSessionRig(new SurvivalSession([], {
+      seed: 41, initialEventId: 'kraken', initialHeartPieces: COMPLETE_HEART,
+    }));
+    const reaction = deferred();
+    rig.world.reactToEventOutcome.mockImplementation(() => reaction.promise);
+    const reveal = deferred();
+    rig.world.revealEvent.mockImplementation(() => reveal.promise);
+    const finished = rig.flow.revealPending(rig.realSession.snapshot());
+    await vi.waitFor(() => expect(rig.world.revealEvent).toHaveBeenCalledOnce());
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    rig.world.clearEvent.mockClear();
+    reveal.resolve();
+    await vi.waitFor(() => expect(rig.world.reactToEventOutcome).toHaveBeenCalledOnce());
+    expect(rig.realSession.snapshot().ending?.id).toBe('kraken');
+    expect(rig.session.resolveEvent).toHaveBeenCalledOnce();
+    expect(rig.ui.setEventSelection).not.toHaveBeenCalled();
+    expect(rig.presentTerminal).not.toHaveBeenCalled();
+    reaction.resolve();
+    await finished;
+    await vi.waitFor(() => expect(rig.presentTerminal).toHaveBeenCalledOnce());
+    expect(rig.world.clearEvent).not.toHaveBeenCalled();
+    expect(rig.session.beginDawn).not.toHaveBeenCalled();
+    rig.flow.clear();
+  });
+
+  // Importance: 99/100. Leaving during reveal must not commit an ending.
+  it('cancels automatic Kraken handover when cleared during reveal', async () => {
+    const rig = createSessionRig(new SurvivalSession([], {
+      seed: 41, initialEventId: 'kraken', initialHeartPieces: COMPLETE_HEART,
+    }));
+    const reveal = deferred();
+    rig.world.revealEvent.mockImplementation(() => reveal.promise);
+    const finished = rig.flow.revealPending(rig.realSession.snapshot());
+    await vi.waitFor(() => expect(rig.world.revealEvent).toHaveBeenCalledOnce());
+    rig.flow.clear();
+    reveal.resolve();
+    await finished;
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    expect(rig.presentTerminal).not.toHaveBeenCalled();
+  });
+
+  // Importance: 95/100. A reward must remain visible until the player accepts it.
+  it('waits for the blood heart reward before dawn', async () => {
+    const rig = createSessionRig(new SurvivalSession([{ type: 'scubaSet', instanceId: 'scubaSet-1' }], {
+      seed: 41, initialEventId: 'ocean-of-blood', initialHeartPieces: { chest: true, flowers: true, blood: false },
+    }));
+    const reward = deferred();
+    rig.ui.showRewardResult.mockImplementation(() => reward.promise);
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    rig.flow.resolveItem('scubaSet', 'scubaSet-1');
+    await vi.waitFor(() => expect(rig.ui.showRewardResult).toHaveBeenCalledOnce());
+    expect(rig.ui.showRewardResult).toHaveBeenCalledWith(expect.objectContaining({ heartCompleted: true }));
+    expect(rig.session.beginDawn).not.toHaveBeenCalled();
+    reward.resolve();
+    await vi.waitFor(() => expect(rig.session.beginDawn).toHaveBeenCalledOnce());
+    rig.flow.clear();
+  });
   it('resolves seagull theft at contact, keeps the flock, and releases it at night', async () => {
     const rig = createSessionRig(new SurvivalSession([], {
       seed: 41, initial: { day: 4, food: 2 }, initialEventId: 'seagull-theft',

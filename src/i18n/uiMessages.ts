@@ -1,6 +1,8 @@
 import { defineMessages } from './messages';
 
 export const uiCatalog = {
+  heartComplete: { en: 'The heart is whole. Something will find you next night.', pl: 'Serce jest całe. Coś znajdzie cię następnej nocy.', 'es-AR': 'El corazón está completo. Algo te encontrará la próxima noche.' },
+  heartName: { en: 'Heart of the Sea', pl: 'Serce Morza', 'es-AR': 'Corazón del Mar' },
   visitIslandPrompt: { en: 'Visit the island?', pl: 'Odwiedzić wyspę?', 'es-AR': '¿Visitar la isla?' },
   twoEnergy: { en: '⚡2', pl: '⚡2', 'es-AR': '⚡2' },
   netReward: { en: 'Two catches, less junk', pl: 'Dwa znaleziska, mniej śmieci', 'es-AR': 'Dos capturas, menos basura' },

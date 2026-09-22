@@ -1,5 +1,6 @@
 // Importance: 10/10. Protects exhaustive event adapter routing and family delegation.
 import { Group } from 'three';
+import { BoatHeartDisplay } from '../src/survival/BoatHeartDisplay';
 import { beforeEach,describe,expect,it,vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
 import {
@@ -196,6 +197,7 @@ function createDependencies() {
       worldParent: new Group(),
       boatParent: new Group(),
       dedicatedEnvironment: {
+        heartDisplay: new BoatHeartDisplay({ clone: () => new Group() }),
         setBloodOceanIntensity: vi.fn(),
         eventModels: {
           create: vi.fn(() => ({
@@ -205,7 +207,7 @@ function createDependencies() {
           animations: vi.fn(() => []),
           dispose: vi.fn(),
         },
-        featuredModels: {},
+        featuredModels: { clone: () => new Group() },
         dive: {
           play: asyncVoid(),
           clear: vi.fn(),

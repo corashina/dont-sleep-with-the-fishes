@@ -44,6 +44,8 @@ export interface EventInteractionProjectionHost {
 
 export interface BoatInteractionProjectorRoots {
   readonly boatRoot: Object3D;
+  readonly heartBasketRoot: Object3D;
+  readonly heartBasketLabel: () => string;
   readonly supplyRecords: readonly BoatSupplyPresentationRecord[];
   readonly carlitosRoot: Object3D;
   readonly carlitosInteractionRoot: Object3D;
@@ -141,6 +143,9 @@ export class BoatInteractionProjector {
   private readonly pillowCache: BoatObjectBoundsCache | null;
   private readonly chestCache: BoatObjectBoundsCache | null;
   private readonly carlitosCache: BoatObjectBoundsCache | null;
+  private readonly heartBasketCache: BoatObjectBoundsCache | null;
+  private readonly heartBasketProjection = projectionOutput();
+  private readonly heartBasketAnchor: MutableAnchor;
   private focusedEntries: readonly FocusedProjectionEntry[] = EMPTY_FOCUSED_ENTRIES;
   private hasFocusedChestTarget = false;
   private readonly featuredEntries: readonly FeaturedProjectionEntry[];
@@ -166,6 +171,23 @@ export class BoatInteractionProjector {
     private readonly eventHost: EventInteractionProjectionHost,
   ) {
     this.pointerRaycast = new BoatInteractionRaycast(camera, roots.boatRoot);
+    this.heartBasketCache = createBoatObjectBoundsCache(roots.heartBasketRoot);
+    this.heartBasketAnchor = {
+      id: 'heart-basket',
+      get label() { return roots.heartBasketLabel(); },
+      description: '',
+      tooltipOnly: true,
+      itemType: null,
+      toolId: null,
+      action: null,
+      backingInstanceId: null,
+      x: 0,
+      y: 0,
+      visible: false,
+      depleted: false,
+      remainingUses: null,
+      hitArea: hitArea(),
+    };
     this.supplyEntries = roots.supplyRecords.map((record) => {
       const itemType = record.groupId;
       return {
@@ -365,6 +387,7 @@ export class BoatInteractionProjector {
     this.viewportHeight = height;
     this.nextAnchors.length = 0;
     this.projectSupplyAnchors(width, height);
+    this.projectHeartBasketAnchor(width, height);
     this.projectCarlitosAnchor(width, height);
     this.projectRoutineAnchors(width, height);
     const featuredEntry = this.projectFeaturedAnchor(width, height);
@@ -408,6 +431,17 @@ export class BoatInteractionProjector {
       updateHitArea(entry.anchor, entry.projection, 36, 36, 0.72);
       this.nextAnchors.push(entry.anchor);
     }
+  }
+
+  private projectHeartBasketAnchor(width: number, height: number): void {
+    projectCachedBoatObjectBoundsInto(
+      this.heartBasketProjection, this.roots.heartBasketRoot, this.heartBasketCache,
+      this.camera, width, height,
+    );
+    updatePoint(this.heartBasketAnchor, this.heartBasketProjection,
+      this.roots.heartBasketRoot.visible && this.heartBasketProjection.visible);
+    updateHitArea(this.heartBasketAnchor, this.heartBasketProjection, 36, 28);
+    this.nextAnchors.push(this.heartBasketAnchor);
   }
 
   private projectCarlitosAnchor(width: number, height: number): void {
