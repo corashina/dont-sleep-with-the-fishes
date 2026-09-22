@@ -330,18 +330,13 @@ describe('EventPresentationRegistry', () => {
     expect(supernatural.playItemUse).not.toHaveBeenCalled();
   });
 
-  it('preserves a construction error while rollback cleanup continues', () => {
+  it('preserves an animator construction error', () => {
     const constructionError = new Error('weather construction');
-    const cleanupError = new Error('layer cleanup');
-    layer.dispose.mockImplementation(() => {
-      throw cleanupError;
-    });
     constructors.weather.mockImplementationOnce(() => {
       throw constructionError;
     });
     const { dependencies } = createDependencies();
     expect(() => new EventPresentationRegistry().create('shower-night', dependencies))
       .toThrow(constructionError);
-    expect(layer.dispose).toHaveBeenCalledOnce();
   });
 });

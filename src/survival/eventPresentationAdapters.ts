@@ -395,163 +395,71 @@ export const createFeaturedAdapter: EventPresentationAdapterFactory = (
   }, [() => featured.dispose()]);
 };
 
-export const createWeatherAdapter: EventPresentationAdapterFactory = (
-  eventId,
-  dependencies,
-) => {
+export const createWeatherAdapter: EventPresentationAdapterFactory = (eventId, dependencies) => {
   assertRoute(eventId, 'weather');
-  let layer: EventPresentationLayer | null = null;
-  let weather: WeatherEventAnimator | null = null;
+  const animator = new WeatherEventAnimator(
+    dependencies.focusedDependencies.cameraRig,
+    dependencies.focusedDependencies.supplyDisplay,
+    dependencies.dedicatedEnvironment.eventModels,
+    dependencies.focusedDependencies.camera,
+    eventId,
+    dependencies.dedicatedEnvironment,
+  );
   try {
-    layer = new EventPresentationLayer(
-      dependencies.focusedDependencies,
-      dependencies.focusedFactories,
-      eventId,
-    );
-    weather = new WeatherEventAnimator(
-      dependencies.focusedDependencies.cameraRig,
-      dependencies.focusedDependencies.supplyDisplay,
-      dependencies.dedicatedEnvironment.eventModels,
-      dependencies.focusedDependencies.camera,
-      eventId,
-      dependencies.dedicatedEnvironment,
-    );
-    const ownedLayer = layer;
-    const ownedWeather = weather;
     return createAdapter(eventId, [
-      { parent: dependencies.worldParent, root: ownedLayer.root },
-      { parent: dependencies.worldParent, root: ownedWeather.worldRoot },
-      { parent: dependencies.boatParent, root: ownedWeather.boatRoot },
+      { parent: dependencies.worldParent, root: animator.worldRoot },
+      { parent: dependencies.boatParent, root: animator.boatRoot },
     ], {
-      stage: (context) => {
-        ownedLayer.stage(eventId, context.variantSeed);
-        ownedWeather.stage(eventId, context.variantSeed);
-      },
-      reveal: () => Promise.all([
-        ownedLayer.reveal(eventId),
-        ownedWeather.reveal(eventId),
-      ]).then(() => undefined),
+      stage: (context) => animator.stage(eventId, context.variantSeed),
+      reveal: () => animator.reveal(eventId),
       playChoice: noChoice,
-      playItemUse: (choiceId, instanceId) => (
-        ownedWeather.supportsItemUse(eventId, choiceId)
-          ? ownedWeather.playItemUse(eventId, choiceId, instanceId)
-          : Promise.resolve(false)
-      ),
-      itemAimTarget: () => (
-        ownedWeather.itemAimTarget(eventId) ?? ownedLayer.itemAimTarget(eventId)
-      ),
+      playItemUse: (choiceId, instanceId) => animator.supportsItemUse(eventId, choiceId)
+        ? animator.playItemUse(eventId, choiceId, instanceId) : noItemUse(),
+      itemAimTarget: () => animator.itemAimTarget(eventId),
       interactionTargets: noInteractionTargets,
-      interactionRoot: (id) => ownedLayer.interactionRoot(id),
+      interactionRoot: noRoot,
       resultRoot: noRoot,
-      react: (reaction) => Promise.all([
-        ownedWeather.react(
-          eventId,
-          reaction.outcome,
-          reaction.physicalResponse,
-          reaction.result?.selectedInstanceId ?? null,
-        ),
-        ownedLayer.react(eventId, reaction.outcome),
-      ]).then(() => undefined),
-      update: (time, delta) => {
-        ownedLayer.update(time, delta);
-        ownedWeather.update(time, delta);
-      },
-      settleForVisibilityChange: () => {
-        ownedLayer.settleForVisibilityChange();
-        ownedWeather.settleForVisibilityChange();
-      },
-      clear: () => runCleanupSteps([
-        () => ownedLayer.clear(),
-        () => ownedWeather.clear(),
-      ]),
-    }, [
-      () => ownedLayer.dispose(),
-      () => ownedWeather.dispose(),
-    ]);
+      react: (reaction) => animator.react(eventId, reaction.outcome, reaction.physicalResponse,
+        reaction.result?.selectedInstanceId ?? null),
+      update: (time, delta) => animator.update(time, delta),
+      settleForVisibilityChange: () => animator.settleForVisibilityChange(),
+      clear: () => animator.clear(),
+    }, [() => animator.dispose()]);
   } catch (error) {
-    return preserveConstructionError(error, [
-      () => layer?.dispose(),
-      () => weather?.dispose(),
-    ]);
+    return preserveConstructionError(error, [() => animator.dispose()]);
   }
 };
 
-export const createSupernaturalAdapter: EventPresentationAdapterFactory = (
-  eventId,
-  dependencies,
-) => {
+export const createSupernaturalAdapter: EventPresentationAdapterFactory = (eventId, dependencies) => {
   assertRoute(eventId, 'supernatural');
-  let layer: EventPresentationLayer | null = null;
-  let supernatural: SupernaturalEventAnimator | null = null;
+  const animator = new SupernaturalEventAnimator(
+    dependencies.focusedDependencies.cameraRig,
+    dependencies.focusedDependencies.supplyDisplay,
+    dependencies.dedicatedEnvironment.eventModels,
+    dependencies.focusedDependencies.camera,
+    eventId,
+  );
   try {
-    layer = new EventPresentationLayer(
-      dependencies.focusedDependencies,
-      dependencies.focusedFactories,
-      eventId,
-    );
-    supernatural = new SupernaturalEventAnimator(
-      dependencies.focusedDependencies.cameraRig,
-      dependencies.focusedDependencies.supplyDisplay,
-      dependencies.dedicatedEnvironment.eventModels,
-      dependencies.focusedDependencies.camera,
-      eventId,
-    );
-    const ownedLayer = layer;
-    const ownedSupernatural = supernatural;
     return createAdapter(eventId, [
-      { parent: dependencies.worldParent, root: ownedLayer.root },
-      { parent: dependencies.worldParent, root: ownedSupernatural.worldRoot },
+      { parent: dependencies.worldParent, root: animator.worldRoot },
     ], {
-      stage: (context) => {
-        ownedLayer.stage(eventId, context.variantSeed);
-        ownedSupernatural.stage(eventId, context.variantSeed);
-      },
-      reveal: () => Promise.all([
-        ownedLayer.reveal(eventId),
-        ownedSupernatural.reveal(eventId),
-      ]).then(() => undefined),
+      stage: (context) => animator.stage(eventId, context.variantSeed),
+      reveal: () => animator.reveal(eventId),
       playChoice: noChoice,
-      playItemUse: (choiceId, instanceId) => (
-        ownedSupernatural.supportsItemUse(eventId, choiceId)
-          ? ownedSupernatural.playItemUse(eventId, choiceId, instanceId)
-          : Promise.resolve(false)
-      ),
-      itemAimTarget: () => (
-        ownedSupernatural.itemAimTarget(eventId) ?? ownedLayer.itemAimTarget(eventId)
-      ),
+      playItemUse: (choiceId, instanceId) => animator.supportsItemUse(eventId, choiceId)
+        ? animator.playItemUse(eventId, choiceId, instanceId) : noItemUse(),
+      itemAimTarget: () => animator.itemAimTarget(eventId),
       interactionTargets: noInteractionTargets,
-      interactionRoot: (id) => ownedLayer.interactionRoot(id),
+      interactionRoot: noRoot,
       resultRoot: noRoot,
-      react: (reaction) => Promise.all([
-        ownedLayer.react(eventId, reaction.outcome),
-        ownedSupernatural.react(
-          eventId,
-          reaction.outcome,
-          reaction.physicalResponse,
-          reaction.result?.selectedInstanceId ?? null,
-        ),
-      ]).then(() => undefined),
-      update: (time, delta) => {
-        ownedLayer.update(time, delta);
-        ownedSupernatural.update(time, delta);
-      },
-      settleForVisibilityChange: () => {
-        ownedLayer.settleForVisibilityChange();
-        ownedSupernatural.settleForVisibilityChange();
-      },
-      clear: () => runCleanupSteps([
-        () => ownedLayer.clear(),
-        () => ownedSupernatural.clear(),
-      ]),
-    }, [
-      () => ownedLayer.dispose(),
-      () => ownedSupernatural.dispose(),
-    ]);
+      react: (reaction) => animator.react(eventId, reaction.outcome, reaction.physicalResponse,
+        reaction.result?.selectedInstanceId ?? null),
+      update: (time, delta) => animator.update(time, delta),
+      settleForVisibilityChange: () => animator.settleForVisibilityChange(),
+      clear: () => animator.clear(),
+    }, [() => animator.dispose()]);
   } catch (error) {
-    return preserveConstructionError(error, [
-      () => layer?.dispose(),
-      () => supernatural?.dispose(),
-    ]);
+    return preserveConstructionError(error, [() => animator.dispose()]);
   }
 };
 
