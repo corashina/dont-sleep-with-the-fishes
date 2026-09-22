@@ -31,6 +31,7 @@ export interface SkyPalette {
   ambientLightIntensity: number;
   keyLightIntensity: number;
   fogDensity: number;
+  fogVolume: number;
 }
 
 type PaletteNumbers = Omit<SkyPalette,
@@ -54,19 +55,19 @@ const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
       zenithColor: 0x78898c, upperColor: 0x899797, horizonColor: 0x899797,
       fogColor: 0x899797, sunColor: 0xd4cdb9, moonColor: 0xc6d0d4,
       starColor: 0xd8e0e2, ambientLightColor: 0xb5c3c3, keyLightColor: 0xcac8bd,
-      sunVisibility: 0.025, moonVisibility: 0, starVisibility: 0, haze: 1,
+      sunVisibility: 0.22, moonVisibility: 0, starVisibility: 0, haze: 0.78,
       cloudCoverage: 0, cloudContrast: 0, horizonBandStrength: 0, horizonBandWidth: 0,
       exposure: 1, ambientLightIntensity: 0.72, keyLightIntensity: 0.28,
-      fogDensity: 0.085,
+      fogDensity: 0.085, fogVolume: 1,
     },
     night: {
       zenithColor: 0x26343b, upperColor: 0x34454a, horizonColor: 0x34454a,
       fogColor: 0x34454a, sunColor: 0xffdda0, moonColor: 0xc3ced2,
       starColor: 0xd4dcdf, ambientLightColor: 0x78959f, keyLightColor: 0x96acb8,
-      sunVisibility: 0, moonVisibility: 0.015, starVisibility: 0, haze: 1,
+      sunVisibility: 0, moonVisibility: 0.9, starVisibility: 0, haze: 0.55,
       cloudCoverage: 0, cloudContrast: 0, horizonBandStrength: 0, horizonBandWidth: 0,
       exposure: 1, ambientLightIntensity: 0.3, keyLightIntensity: 0.1,
-      fogDensity: 0.1,
+      fogDensity: 0.1, fogVolume: 1,
     },
   },
   calm: {
@@ -77,7 +78,7 @@ const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
       sunVisibility: 1, moonVisibility: 0, starVisibility: 0, haze: 0.12,
       cloudCoverage: 0.48, cloudContrast: 0.14, horizonBandStrength: 0.86, horizonBandWidth: 34,
       exposure: 0.94, ambientLightIntensity: 1.05, keyLightIntensity: 2.05,
-      fogDensity: 0.0108,
+      fogDensity: 0.0108, fogVolume: 0,
     },
     night: {
       zenithColor: 0x030814, upperColor: 0x0b1c31, horizonColor: 0x23394b,
@@ -86,7 +87,7 @@ const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
       sunVisibility: 0, moonVisibility: 0.82, starVisibility: 0.72, haze: 0.18,
       cloudCoverage: 0, cloudContrast: 0, horizonBandStrength: 0, horizonBandWidth: 0,
       exposure: 0.5, ambientLightIntensity: 0.26, keyLightIntensity: 0.2,
-      fogDensity: 0.0189,
+      fogDensity: 0.0189, fogVolume: 0,
     },
   },
   overcast: {
@@ -97,7 +98,7 @@ const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
       sunVisibility: 0.22, moonVisibility: 0, starVisibility: 0, haze: 0.68,
       cloudCoverage: 0.74, cloudContrast: 0.13, horizonBandStrength: 0.72, horizonBandWidth: 30,
       exposure: 0.72, ambientLightIntensity: 0.68, keyLightIntensity: 1.0,
-      fogDensity: 0.0171,
+      fogDensity: 0.0171, fogVolume: 0,
     },
     night: {
       zenithColor: 0x070d16, upperColor: 0x14202c, horizonColor: 0x33414a,
@@ -106,7 +107,7 @@ const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
       sunVisibility: 0, moonVisibility: 0.28, starVisibility: 0.12, haze: 0.72,
       cloudCoverage: 0, cloudContrast: 0, horizonBandStrength: 0, horizonBandWidth: 0,
       exposure: 0.38, ambientLightIntensity: 0.24, keyLightIntensity: 0.18,
-      fogDensity: 0.0216,
+      fogDensity: 0.0216, fogVolume: 0,
     },
   },
   squall: {
@@ -117,7 +118,7 @@ const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
       sunVisibility: 0.08, moonVisibility: 0, starVisibility: 0, haze: 0.92,
       cloudCoverage: 0.88, cloudContrast: 0.12, horizonBandStrength: 0.50, horizonBandWidth: 26,
       exposure: 0.62, ambientLightIntensity: 0.44, keyLightIntensity: 0.58,
-      fogDensity: 0.027,
+      fogDensity: 0.027, fogVolume: 0,
     },
     night: {
       zenithColor: 0x02050a, upperColor: 0x07101a, horizonColor: 0x182630,
@@ -126,7 +127,7 @@ const BASE: Record<SkyWeather, Record<SkyPhase, PaletteNumbers>> = {
       sunVisibility: 0, moonVisibility: 0.07, starVisibility: 0.02, haze: 0.95,
       cloudCoverage: 0, cloudContrast: 0, horizonBandStrength: 0, horizonBandWidth: 0,
       exposure: 0.26, ambientLightIntensity: 0.16, keyLightIntensity: 0.18,
-      fogDensity: 0.0306,
+      fogDensity: 0.0306, fogVolume: 0,
     },
   },
 };
@@ -139,7 +140,7 @@ const COLOR_KEYS = [
 const SCALAR_KEYS = [
   'sunVisibility', 'moonVisibility', 'starVisibility', 'haze', 'exposure',
   'cloudCoverage', 'cloudContrast', 'horizonBandStrength', 'horizonBandWidth',
-  'ambientLightIntensity', 'keyLightIntensity', 'fogDensity',
+  'ambientLightIntensity', 'keyLightIntensity', 'fogDensity', 'fogVolume',
 ] as const;
 
 const SINKING_ZENITH = new Color(0x091118);

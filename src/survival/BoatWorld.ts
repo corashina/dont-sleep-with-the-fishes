@@ -360,7 +360,9 @@ export class BoatWorld {
   private readonly ownedTextures = new Set<Texture>();
   private readonly oceanAtmosphere = {
     phase: 'day' as 'day' | 'night',
-    denseFog: false,
+    fogVolume: 0,
+    fogTime: 0,
+    fogLightColor: new Color(),
     fogColor: new Color(),
     horizonColor: new Color(),
     skyColor: new Color(),
@@ -1650,7 +1652,13 @@ export class BoatWorld {
     const fog = this.scene.fog as FogExp2;
     const atmosphere = this.sky.palette;
     this.oceanAtmosphere.phase = this.skyState.phase;
-    this.oceanAtmosphere.denseFog = this.weatherProfile.id === 'fog';
+    this.oceanAtmosphere.fogVolume = atmosphere.fogVolume;
+    this.oceanAtmosphere.fogTime = this.sky.fogTime;
+    const fogLight = this.oceanAtmosphere.fogLightColor;
+    fogLight.copy(atmosphere.moonColor).multiplyScalar(atmosphere.moonVisibility);
+    fogLight.r += atmosphere.sunColor.r * atmosphere.sunVisibility;
+    fogLight.g += atmosphere.sunColor.g * atmosphere.sunVisibility;
+    fogLight.b += atmosphere.sunColor.b * atmosphere.sunVisibility;
     this.oceanAtmosphere.fogColor.copy(fog.color);
     this.oceanAtmosphere.horizonColor.copy(atmosphere.horizonColor);
     this.oceanAtmosphere.skyColor.copy(atmosphere.zenithColor);

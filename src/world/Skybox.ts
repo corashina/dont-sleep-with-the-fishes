@@ -22,6 +22,8 @@ import {
 import { CLOUD_QUERY_COUNT, createCloudImpostorLayout, updateCloudImpostorShadows } from './cloudImpostorLayout';
 import { cloudImpostorShader } from './cloudImpostorShader';
 import { lunarFaceShader } from './lunarFaceShader';
+import { seaFogShader } from './seaFogShader';
+import { sceneSeaFogUniforms } from './SeaFogMaterial';
 import { applyBloodOceanPalette } from './bloodOceanPalette';
 
 const TRANSITION_SECONDS = 1.5;
@@ -88,6 +90,9 @@ const fragmentShader = `
   uniform float uMoonEventDim;
   uniform float uMoonScale;
   uniform float uStarTime;
+  uniform float uFogTime;
+  uniform float uFogVolume;
+  uniform vec3 uFogColor;
   varying vec3 vSkyDirection;
 
   float hash31(vec3 value) {
@@ -118,6 +123,8 @@ const fragmentShader = `
     float upper = mix(mix(c001, c101, blend.x), mix(c011, c111, blend.x), blend.y);
     return mix(lower, upper, blend.z);
   }
+
+  ${seaFogShader}
 
   ${lunarFaceShader}
 
@@ -298,6 +305,7 @@ const fragmentShader = `
       * moonSample.a
       * uMoonVisibility
       * moonClarity
+      * mix(1.0, 2.2, uFogVolume)
       * (1.0 - cloud.a);
     float moonHalo = exp(
       -moonRadialDistance * moonRadialDistance * 1.65
@@ -343,12 +351,23 @@ const fragmentShader = `
     float atmosphericVariation = mix(0.992, 1.008,
       hash31(direction * 173.0));
     color *= atmosphericVariation;
+    if (uFogVolume > 0.001) {
+      vec3 fogLightDirection = uMoonVisibility > 0.0 ? moonDirection : sunDirection;
+      vec3 fogLightColor = uMoonColor * uMoonVisibility + uSunColor * uSunVisibility;
+      float moonGlow = exp(-moonRadialDistance * moonRadialDistance * 0.08);
+      color += uMoonColor * uMoonVisibility * moonGlow * 0.075 * uFogVolume;
+      vec4 fog = seaFog(cameraPosition, direction, 110.0, uFogTime,
+        uFogColor, fogLightColor, fogLightDirection);
+      color = mix(color, color * fog.a + fog.rgb, uFogVolume);
+    }
     color *= uExposure;
     color = mix(color, uTintColor, clamp(uTintAmount, 0.0, 1.0));
     color *= 1.0 - uMoonEventDim;
     gl_FragColor = vec4(color, 1.0);
     #include <colorspace_fragment>
-    float dither = (hash21(gl_FragCoord.xy) - 0.5) / 255.0;
+    float fogDither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    float dither = (mix(hash21(gl_FragCoord.xy), fogDither, uFogVolume) - 0.5)
+      / mix(255.0, 1024.0, uFogVolume);
     gl_FragColor.rgb += dither;
   }
 `;
@@ -367,6 +386,8 @@ export class Skybox {
   private cloudElapsed = 0;
   private readonly cloudLayout = createCloudImpostorLayout();
   private disposed = false;
+
+  get fogTime(): number { return this.cloudElapsed; }
 
   get palette(): Readonly<SkyPalette> { return this.bloodPalette; }
 
@@ -424,6 +445,9 @@ export class Skybox {
         uMoonEventDim: { value: 0 },
         uMoonScale: { value: 1 },
         uStarTime: { value: 0 },
+        uFogTime: { value: 0 },
+        uFogVolume: { value: this.current.fogVolume },
+        uFogColor: { value: this.current.fogColor.clone() },
         uCloudTime: { value: 0 },
         uCloudCenters: { value: this.cloudLayout.centers },
         uCloudScales: { value: this.cloudLayout.scales },
@@ -432,6 +456,7 @@ export class Skybox {
         uCloudQueryCount: { value: CLOUD_QUERY_COUNT },
       },
     });
+    sceneSeaFogUniforms.set(scene, this.material.uniforms);
     this.mesh = new Mesh(new SphereGeometry(80, 48, 24), this.material);
     this.mesh.name = 'procedural-skybox';
     this.mesh.frustumCulled = false;
@@ -457,6 +482,7 @@ export class Skybox {
     this.material.uniforms.uStarTime!.value = this.starElapsed;
     this.cloudElapsed += safeDelta;
     this.material.uniforms.uCloudTime!.value = this.cloudElapsed;
+    this.material.uniforms.uFogTime!.value = this.cloudElapsed;
     const alpha = smoothstep(this.blendElapsed / TRANSITION_SECONDS);
     lerpSkyPalette(this.current, this.blendFrom, this.target, alpha);
     lerpSkyPalette(this.bloodPalette, this.current, this.current, 0);
@@ -509,6 +535,7 @@ export class Skybox {
     if (this.disposed) return;
     this.resetTransient();
     this.disposed = true;
+    if (sceneSeaFogUniforms.get(this.scene) === this.material.uniforms) sceneSeaFogUniforms.delete(this.scene);
     this.scene.remove(this.mesh);
     this.mesh.geometry.dispose();
     this.material.dispose();
@@ -526,6 +553,8 @@ export class Skybox {
     uniforms.uMoonVisibility!.value = this.bloodPalette.moonVisibility;
     uniforms.uStarVisibility!.value = this.bloodPalette.starVisibility;
     uniforms.uHaze!.value = this.bloodPalette.haze;
+    uniforms.uFogVolume!.value = this.bloodPalette.fogVolume;
+    (uniforms.uFogColor!.value as Color).copy(this.bloodPalette.fogColor);
     uniforms.uCloudCoverage!.value = this.bloodPalette.cloudCoverage;
     uniforms.uCloudContrast!.value = this.bloodPalette.cloudContrast;
     uniforms.uHorizonBandStrength!.value = this.bloodPalette.horizonBandStrength;

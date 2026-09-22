@@ -247,7 +247,9 @@ export class World {
   private readonly oceanExclusions!: readonly WaterExclusionRegion[];
   private readonly oceanAtmosphere = {
     phase: 'day' as 'day' | 'night',
-    denseFog: false,
+    fogVolume: 0,
+    fogTime: 0,
+    fogLightColor: new Color(),
     fogColor: new Color(),
     horizonColor: new Color(),
     skyColor: new Color(),
@@ -728,7 +730,13 @@ export class World {
       cameraPosition,
     );
     const atmosphere = this.environment.atmosphere;
-    this.oceanAtmosphere.denseFog = this.environment.weatherProfile.id === 'fog';
+    this.oceanAtmosphere.fogVolume = atmosphere.fogVolume;
+    this.oceanAtmosphere.fogTime = this.environment.fogTime;
+    const fogLight = this.oceanAtmosphere.fogLightColor;
+    fogLight.copy(atmosphere.moonColor).multiplyScalar(atmosphere.moonVisibility);
+    fogLight.r += atmosphere.sunColor.r * atmosphere.sunVisibility;
+    fogLight.g += atmosphere.sunColor.g * atmosphere.sunVisibility;
+    fogLight.b += atmosphere.sunColor.b * atmosphere.sunVisibility;
     this.oceanAtmosphere.fogColor.copy(atmosphere.fogColor);
     this.oceanAtmosphere.horizonColor.copy(atmosphere.horizonColor);
     this.oceanAtmosphere.skyColor.copy(atmosphere.zenithColor);

@@ -47,6 +47,8 @@ export class Environment {
   private weatherProfileValue = presentationWeatherProfile('calm');
   private disposed = false;
 
+  get fogTime(): number { return this.sky.fogTime; }
+
   get atmosphere(): Readonly<SkyPalette> { return this.sky.palette; }
   get weatherProfile(): Readonly<PresentationWeatherProfile> {
     return this.weatherProfileValue;

@@ -25,5 +25,6 @@ export function applyBloodOceanPalette(palette: SkyPalette, intensity: number): 
   palette.cloudCoverage *= 1 - amount;
   palette.horizonBandStrength *= 1 - amount;
   palette.haze += (0.12 - palette.haze) * amount;
+  palette.fogVolume *= 1 - amount;
   palette.fogDensity += (0.022 - palette.fogDensity) * amount;
 }

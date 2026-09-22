@@ -66,7 +66,9 @@ const finiteOrZero = (value: number): number => Number.isFinite(value) ? value :
 
 export interface OceanAtmosphere {
   phase: 'day' | 'night';
-  denseFog: boolean;
+  fogVolume: number;
+  fogTime: number;
+  fogLightColor: Color;
   fogColor: Color;
   horizonColor: Color;
   skyColor: Color;
@@ -177,35 +179,36 @@ export class OceanRenderer {
     this.applyAtmosphere();
   }
 
+  private applyFogVolume(): number {
+    const atmosphere = this.atmosphere;
+    const amount = atmosphere?.fogVolume ?? 0;
+    this.uniforms.uFogVolume.value = amount;
+    this.uniforms.uFogTime.value = atmosphere?.fogTime ?? 0;
+    if (atmosphere) this.uniforms.uFogLightColor.value.copy(atmosphere.fogLightColor);
+    const horizon = OCEAN_SHADER_QUALITY[this.quality].horizonFog;
+    this.uniforms.uHorizonFog.value.set(horizon[0], horizon[1], horizon[2] + (1 - horizon[2]) * amount);
+    return amount;
+  }
+
   private applyAtmosphere(): void {
     this.uniforms.uLightDirection.value.set(...this.lightDirection).normalize();
-    // Dense fog must fully hide distant water, including reflections and highlights.
-    const horizonFog = OCEAN_SHADER_QUALITY[this.quality].horizonFog;
-    const denseFog = this.atmosphere?.denseFog === true;
-    this.uniforms.uHorizonFog.value.set(horizonFog[0], horizonFog[1], denseFog ? 1 : horizonFog[2]);
+    const fogVolume = this.applyFogVolume();
+    const atmosphere = this.atmosphere;
     if (this.quality === 'high') {
-      applyHighWaterLook(this.uniforms, this.atmosphere?.phase ?? 'day');
-      if (denseFog) {
-        this.uniforms.uFogDensity.value = this.fogDensity;
-        this.uniforms.uFogColor.value.copy(this.atmosphere!.fogColor);
-        this.uniforms.uHorizonColor.value.copy(this.atmosphere!.fogColor);
-        this.uniforms.uDirectLightStrength.value *= 0.15;
-        return;
-      }
-      if (this.atmosphere) {
-        const amount = this.uniforms.uBloodOceanIntensity.value;
-        this.uniforms.uFogColor.value.lerp(this.atmosphere.fogColor, amount);
-        this.uniforms.uHorizonColor.value.lerp(this.atmosphere.horizonColor, amount);
+      applyHighWaterLook(this.uniforms, atmosphere?.phase ?? 'day');
+      if (atmosphere) {
+        const amount = Math.max(fogVolume, this.uniforms.uBloodOceanIntensity.value);
+        this.uniforms.uFogColor.value.lerp(atmosphere.fogColor, amount);
+        this.uniforms.uHorizonColor.value.lerp(atmosphere.horizonColor, amount);
         this.uniforms.uFogDensity.value += (this.fogDensity - this.uniforms.uFogDensity.value) * amount;
+        this.uniforms.uDirectLightStrength.value *= 1 - fogVolume * 0.85;
       }
       return;
     }
     this.uniforms.uFogDensity.value = this.fogDensity;
-    const atmosphere = this.atmosphere;
     if (!atmosphere) return;
     this.uniforms.uFogColor.value.copy(atmosphere.fogColor);
     this.uniforms.uHorizonColor.value.copy(atmosphere.horizonColor);
-    if (denseFog) this.uniforms.uHorizonColor.value.copy(atmosphere.fogColor);
     this.uniforms.uSkyColor.value.copy(atmosphere.skyColor);
     this.uniforms.uSunColor.value.copy(atmosphere.sunColor);
     this.uniforms.uDirectLightStrength.value = Number.isFinite(

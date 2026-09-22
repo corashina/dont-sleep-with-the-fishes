@@ -1,4 +1,5 @@
 import { AnimationMixer, Box3, Group, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera } from 'three';
+import { applySeaFogMaterial } from '../world/SeaFogMaterial';
 import { createWaveSample } from '../ocean/WaveField';
 import { smoothstep } from './animationMath';
 import type { EventModelInstance } from './EventModelLibrary';
@@ -38,6 +39,7 @@ export class FogMonster {
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       for (const material of materials) {
         if (!(material instanceof MeshStandardMaterial) || this.materials.includes(material)) continue;
+        applySeaFogMaterial(material);
         material.transparent = true;
         material.depthWrite = false;
         material.roughness = Math.max(0.8, material.roughness);

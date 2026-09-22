@@ -1,3 +1,4 @@
+import { seaFogShader } from '../world/seaFogShader';
 import {
   Color,
   type IUniform,
@@ -56,6 +57,9 @@ export interface OceanShaderUniforms {
   uSunColor: IUniform<Color>;
   uDirectLightStrength: IUniform<number>;
   uFogDensity: IUniform<number>;
+  uFogVolume: IUniform<number>;
+  uFogTime: IUniform<number>;
+  uFogLightColor: IUniform<Color>;
   uLightDirection: IUniform<Vector3>;
   uExclusionCount: IUniform<number>;
   uExclusionWorldToLocal: IUniform<Matrix4[]>;
@@ -180,6 +184,10 @@ export const OCEAN_FRAGMENT_SHADER = `
   uniform vec3 uSunColor;
   uniform float uDirectLightStrength;
   uniform float uFogDensity;
+  uniform float uFogVolume;
+  uniform float uFogTime;
+  uniform vec3 uFogLightColor;
+  ${seaFogShader}
   uniform vec3 uLightDirection;
   uniform int uExclusionCount;
   uniform mat4 uExclusionWorldToLocal[2];
@@ -417,7 +425,14 @@ export const OCEAN_FRAGMENT_SHADER = `
       uHorizonColor,
       horizonFogProgress
     );
-    color = mix(color, distanceFogColor, clamp(distanceFogFactor, 0.0, 1.0));
+    color = mix(color, distanceFogColor, clamp(distanceFogFactor, 0.0, 1.0) * (1.0 - uFogVolume));
+    if (uFogVolume > 0.001) {
+      vec3 fogRay = vWorldPosition - cameraPosition;
+      float fogDistance = length(fogRay);
+      vec4 fog = seaFog(cameraPosition, fogRay / max(fogDistance, 0.001), fogDistance,
+        uFogTime, uFogColor, uFogLightColor, uLightDirection);
+      color = mix(color, color * fog.a + fog.rgb, uFogVolume);
+    }
     gl_FragColor = vec4(color, 0.98);
     #include <colorspace_fragment>
     gl_FragColor.rgb += orderedDither(gl_FragCoord.xy);
@@ -489,6 +504,9 @@ export function createOceanShaderDefinition(quality: WaterQuality): Readonly<{
     uSunColor: { value: new Color(0xfff1cf) },
     uDirectLightStrength: { value: 1 },
     uFogDensity: { value: 0.018 },
+    uFogVolume: { value: 0 },
+    uFogTime: { value: 0 },
+    uFogLightColor: { value: new Color() },
     uLightDirection: { value: new Vector3() },
     uExclusionCount: { value: 0 },
     uExclusionWorldToLocal: {

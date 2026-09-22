@@ -241,7 +241,7 @@ describe('Ocean of Blood presentation', () => {
       ocean.setBloodOceanIntensity(1);
       ocean.setQuality('high');
       ocean.update(1, 1, 0.025, {
-        phase: 'night', denseFog: false, fogColor: color, horizonColor: color, skyColor: color, sunColor: color, sunVisibility: 0,
+        phase: 'night', fogVolume: 0, fogTime: 0, fogLightColor: color, fogColor: color, horizonColor: color, skyColor: color, sunColor: color, sunVisibility: 0,
       });
       expect(ocean.material.uniforms.uBloodOceanIntensity!.value).toBe(1);
       expect(ocean.material.uniforms.uFogColor!.value).toEqual(color);
