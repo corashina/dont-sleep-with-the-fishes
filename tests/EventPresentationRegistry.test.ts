@@ -3,6 +3,8 @@ import { Group } from 'three';
 import { EventPresentationHost } from '../src/survival/EventPresentationHost';
 import type { DedicatedEventPresentation } from '../src/survival/eventPresentationTypes';
 import { beforeEach,describe,expect,it,vi } from 'vitest';
+import { FOCUSED_EVENT_IDS } from '../src/survival/eventPresentationRoutes';
+import type { EventPresentationReaction } from '../src/survival/EventPresentationAdapter';
 import type { ItemInstanceId } from '../src/game/ItemState';
 import {
   EventPresentationRegistry
@@ -13,10 +15,11 @@ import {
 import type { EventPresentationAdapterDependencies } from '../src/survival/eventPresentationAdapters';
 import type {
   FocusedEventInteractionTarget,
+  FocusedEventPresentation,
 } from '../src/survival/FocusedEventPresentation';
 
 const constructors = vi.hoisted(() => ({
-  layer: vi.fn(),
+  dangerous: vi.fn(),
   featured: vi.fn(),
   weather: vi.fn(),
   supernatural: vi.fn(),
@@ -31,8 +34,8 @@ const constructors = vi.hoisted(() => ({
   wreckage: vi.fn(),
 }));
 
-vi.mock('../src/survival/EventPresentationLayer', () => ({
-  EventPresentationLayer: constructors.layer,
+vi.mock('../src/survival/DangerousWatersPresentation', () => ({
+  DangerousWatersPresentation: constructors.dangerous,
 }));
 vi.mock('../src/survival/FeaturedEventPresentations', () => ({
   FeaturedEventPresentations: constructors.featured,
@@ -72,25 +75,20 @@ function asyncVoid() {
   return vi.fn(async () => undefined);
 }
 
-function createLayer() {
+function createFocusedPresentation() {
+  const target = { id: 'trade', choiceId: 'trade', label: 'Trade', description: '', root: new Group() };
+  const targets: readonly FocusedEventInteractionTarget[] = [target];
   return {
-    root: new Group(),
-    stage: vi.fn(),
-    reveal: asyncVoid(),
-    playChoice: asyncVoid(),
-    playDangerousWatersItemUse: vi.fn(async () => true),
-    itemAimTarget: vi.fn(() => null),
-    interactionTargets: vi.fn((): readonly FocusedEventInteractionTarget[] => []),
-    interactionRoot: vi.fn(() => null),
-    react: asyncVoid(),
-    copyDangerousWatersBoatReaction: vi.fn(() => false),
-    update: vi.fn(),
-    settleForVisibilityChange: vi.fn(),
-    clear: vi.fn(),
-    dispose: vi.fn(),
-  };
+    root: new Group(), stage: vi.fn(), reveal: asyncVoid(), playChoice: asyncVoid(),
+    prepareResult: vi.fn(), react: asyncVoid(), update: vi.fn(),
+    interactionTargets: vi.fn(() => targets), clear: vi.fn(),
+    settleForVisibilityChange: vi.fn(), dispose: vi.fn(),
+  } satisfies FocusedEventPresentation;
 }
-
+function createDangerous() {
+  return { ...createFocusedPresentation(), itemAimTarget: new Group(),
+    playItemUse: vi.fn(async () => true), copyBoatReaction: vi.fn(() => false) };
+}
 
 function createFeatured() {
   return {
@@ -163,7 +161,8 @@ function createDedicatedPresentation() {
   } satisfies DedicatedEventPresentation;
 }
 
-let layer = createLayer();
+let dangerous = createDangerous();
+let focused = createFocusedPresentation();
 let dedicated = createDedicatedPresentation();
 let featured = createFeatured();
 let weather = createWeather();
@@ -197,7 +196,7 @@ function createDependencies() {
         cameraRig: new Group(),
         supplyDisplay: {},
       },
-      focusedFactories: {},
+      focusedFactories: Object.fromEntries(FOCUSED_EVENT_IDS.map((id) => [id, () => focused])),
       featuredModels: {},
       featuredTargets: {
         driftingCargoStern: new Group(),
@@ -214,13 +213,14 @@ function createDependencies() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  layer = createLayer();
+  dangerous = createDangerous();
   dedicated = createDedicatedPresentation();
   featured = createFeatured();
   weather = createWeather();
   supernatural = createSupernatural();
   moon = createMoon();
-  constructors.layer.mockImplementation(() => layer);
+  focused = createFocusedPresentation();
+  constructors.dangerous.mockImplementation(() => dangerous);
   constructors.featured.mockImplementation(() => featured);
   constructors.weather.mockImplementation(() => weather);
   constructors.supernatural.mockImplementation(() => supernatural);
@@ -240,6 +240,52 @@ beforeEach(() => {
 });
 
 describe('EventPresentationRegistry', () => {
+  // Importance: 96/100. A missing authored scene must fail instead of hiding a required event.
+  it('rejects a missing authored focused presenter', () => {
+    const { dependencies } = createDependencies();
+    expect(() => new EventPresentationRegistry().create('handyman', {
+      ...dependencies, focusedFactories: { handyman: () => null },
+    })).toThrow('Missing required focused event presentation: handyman');
+  });
+  it('preserves focused factory errors', () => {
+    const failure = new Error('authored construction');
+    const { dependencies } = createDependencies();
+    expect(() => new EventPresentationRegistry().create('handyman', {
+      ...dependencies, focusedFactories: { handyman: () => { throw failure; } },
+    })).toThrow(failure);
+  });
+  it('caches focused targets and preserves held roots when cleared', async () => {
+    const { dependencies } = createDependencies();
+    const adapter = new EventPresentationRegistry().create('handyman', dependencies);
+    const targets = adapter.interactionTargets();
+    await adapter.reveal();
+    expect(focused.stage).toHaveBeenCalledOnce();
+    expect(adapter.interactionRoot('trade')).toBe(targets[0]!.root);
+    adapter.update(1, 0.1);
+    expect(adapter.interactionTargets()).toBe(targets);
+    expect(focused.interactionTargets).toHaveBeenCalledOnce();
+    focused.root.userData.holdOnClear = true;
+    adapter.clear();
+    expect(focused.root.visible).toBe(true);
+    await adapter.reveal();
+    focused.root.userData.holdOnClear = false;
+    adapter.clear();
+    expect(focused.root.visible).toBe(false);
+    expect(adapter.interactionRoot('trade')).toBeNull();
+    adapter.dispose();
+  });
+  it('requires matching focused results before preparation and reaction', () => {
+    const { dependencies } = createDependencies();
+    const adapter = new EventPresentationRegistry().create('handyman', dependencies);
+    for (const outcome of [{}, { eventResult: { eventId: 'plane' } }]) {
+      const reaction = { outcome } as EventPresentationReaction;
+      expect(() => adapter.prepareReaction?.(reaction)).toThrow('requires a matching event result');
+      expect(() => adapter.react(reaction)).toThrow('requires a matching event result');
+    }
+    expect(focused.react).not.toHaveBeenCalled();
+    adapter.dispose();
+  });
+
   // Importance: 97/100. A cleanup failure must not retain scene roots or dispose borrowed assets.
   it('detaches dedicated roots even when clear fails during disposal', () => {
     const { dependencies } = createDependencies();
@@ -306,8 +352,8 @@ describe('EventPresentationRegistry', () => {
     await adapter.playItemUse(itemChoice.choiceId, itemChoice.instanceId);
     await adapter.playChoice(itemChoice);
 
-    expect(layer.playDangerousWatersItemUse).toHaveBeenCalledOnce();
-    expect(layer.playChoice).not.toHaveBeenCalled();
+    expect(dangerous.playItemUse).toHaveBeenCalledOnce();
+    expect(dangerous.playChoice).not.toHaveBeenCalled();
   });
 
   it('keeps unsupported animator item use on the shared fallback path', async () => {

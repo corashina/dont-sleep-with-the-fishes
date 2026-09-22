@@ -7,27 +7,30 @@ import type {
   EventPresentationReaction,
   EventPresentationRoot,
 } from './EventPresentationAdapter';
-import { EventPresentationLayer } from './EventPresentationLayer';
+import { AUTHORED_EVENT_PRESENTATION_FACTORIES } from './focusedPresentationFactories';
+import type { ActionOutcome } from './survivalTypes';
 import type { EventModelLibrary } from './EventModelLibrary';
 import type { EventModelId } from './eventModelManifest';
 import { FeaturedEventPresentations } from './FeaturedEventPresentations';
 import type {
   EventChoicePresentation,
   FocusedEventInteractionTarget,
+  FocusedEventPresentation,
   FocusedEventPresentationDependencies,
   FocusedEventPresentationFactories,
 } from './FocusedEventPresentation';
 import { SupernaturalEventAnimator } from './SupernaturalEventAnimator';
 import type { SurvivalEventModels } from './SurvivalEventModelLibrary';
 import { WeatherEventAnimator } from './WeatherEventAnimator';
-import type { DangerousWatersBoatReaction } from './DangerousWatersPresentation';
+import { DangerousWatersPresentation, type DangerousWatersBoatReaction } from './DangerousWatersPresentation';
 import type { DriftingWater } from './DriftingWaveMotion';
 import type { SurvivalEventId } from './eventCatalog';
 import {
   isEventPresentationRoute,
   type DedicatedEventId,
   type EventPresentationRoute,
-  type FeaturedEventId,
+  type EventIdForRoute,
+  type FocusedEventId,
 } from './eventPresentationRoutes';
 import type {
   DedicatedEventEnvironment,
@@ -167,11 +170,7 @@ function createAdapter(
 function assertRoute<Route extends EventPresentationRoute>(
   eventId: SurvivalEventId,
   route: Route,
-): asserts eventId is SurvivalEventId & (
-  Route extends 'dedicated' ? DedicatedEventId
-    : Route extends 'featured' ? FeaturedEventId
-      : SurvivalEventId
-) {
+): asserts eventId is SurvivalEventId & EventIdForRoute<Route> {
   if (!isEventPresentationRoute(eventId, route)) {
     throw new Error(`Event presentation route mismatch: ${eventId}/${route}`);
   }
@@ -232,11 +231,11 @@ export const createDangerousWatersAdapter: EventPresentationAdapterFactory = (
   dependencies,
 ) => {
   assertRoute(eventId, 'dangerousWaters');
-  const layer = new EventPresentationLayer(
-    dependencies.focusedDependencies,
-    dependencies.focusedFactories,
-    eventId,
-  );
+  const presentation = new DangerousWatersPresentation();
+  let active = false;
+  const stage = (): void => { presentation.clear(); active = true; presentation.stage(); };
+  const ensureStaged = (): void => { if (!active) stage(); };
+  const clear = (): void => { active = false; presentation.clear(); };
   const reaction: DangerousWatersBoatReaction = {
     driftX: 0,
     pitch: 0,
@@ -249,30 +248,28 @@ export const createDangerousWatersAdapter: EventPresentationAdapterFactory = (
     supplyLift: 0,
   };
   return createAdapter(eventId, [
-    { parent: dependencies.worldParent, root: layer.root },
+    { parent: dependencies.worldParent, root: presentation.root },
   ], {
-    stage: (context) => layer.stage(eventId, context.variantSeed),
-    reveal: () => layer.reveal(eventId),
-    playChoice: (choice) => choice.instanceId === null
-      ? layer.playChoice(eventId, choice.choiceId)
-      : Promise.resolve(),
-    playItemUse: (choiceId, instanceId) => (
-      layer.playDangerousWatersItemUse(choiceId, instanceId)
-    ),
-    itemAimTarget: () => layer.itemAimTarget(eventId),
+    stage,
+    reveal: () => { ensureStaged(); return presentation.reveal(); },
+    playChoice: (choice) => {
+      if (choice.instanceId !== null) return noChoice();
+      ensureStaged();
+      return presentation.playChoice(choice.choiceId);
+    },
+    playItemUse: (choiceId, instanceId) => { ensureStaged(); return presentation.playItemUse(choiceId, instanceId); },
+    itemAimTarget: () => active ? presentation.itemAimTarget : null,
     interactionTargets: noInteractionTargets,
     interactionRoot: noRoot,
     resultRoot: noRoot,
-    react: ({ outcome }) => layer.react(eventId, outcome),
+    react: ({ outcome }) => { ensureStaged(); return presentation.react(outcome); },
     update: (time, delta) => {
-      layer.update(time, delta);
-      if (layer.copyDangerousWatersBoatReaction(reaction)) {
-        dependencies.applyDangerousWatersReaction(reaction);
-      }
+      presentation.update(time, delta);
+      if (presentation.copyBoatReaction(reaction)) dependencies.applyDangerousWatersReaction(reaction);
     },
-    settleForVisibilityChange: () => layer.settleForVisibilityChange(),
-    clear: () => layer.clear(),
-  }, [() => layer.dispose()]);
+    settleForVisibilityChange: () => presentation.settleForVisibilityChange(),
+    clear,
+  }, [clear, () => presentation.dispose(), () => presentation.root.removeFromParent()]);
 };
 
 export const createDedicatedAdapter: EventPresentationAdapterFactory = (
@@ -326,34 +323,65 @@ export const createDedicatedAdapter: EventPresentationAdapterFactory = (
   }
 };
 
-export const createFocusedAdapter: EventPresentationAdapterFactory = (
-  eventId,
-  dependencies,
-) => {
+function createFocusedPresentation(
+  eventId: FocusedEventId,
+  dependencies: EventPresentationAdapterDependencies,
+): FocusedEventPresentation {
+  const factory = dependencies.focusedFactories[eventId] ?? AUTHORED_EVENT_PRESENTATION_FACTORIES[eventId];
+  const presentation = factory?.(dependencies.focusedDependencies);
+  if (presentation == null) throw new Error('Missing required focused event presentation: ' + eventId);
+  return presentation;
+}
+
+export const createFocusedAdapter: EventPresentationAdapterFactory = (eventId, dependencies) => {
   assertRoute(eventId, 'focused');
-  const layer = new EventPresentationLayer(
-    dependencies.focusedDependencies,
-    dependencies.focusedFactories,
-    eventId,
-  );
-  return createAdapter(eventId, [
-    { parent: dependencies.worldParent, root: layer.root },
-  ], {
-    stage: (context) => layer.stage(eventId, context.variantSeed),
-    reveal: () => layer.reveal(eventId),
-    playChoice: (choice) => layer.playChoice(eventId, choice),
-    playItemUse: noItemUse,
-    itemAimTarget: () => layer.itemAimTarget(eventId),
-    hasPassed: () => layer.hasPassed(),
-    interactionTargets: () => layer.interactionTargets(eventId),
-    interactionRoot: (id) => layer.interactionRoot(id),
-    resultRoot: noRoot,
-    prepareReaction: ({ outcome }) => layer.prepareResult(eventId, outcome),
-    react: ({ outcome }) => layer.react(eventId, outcome),
-    update: (time, delta) => layer.update(time, delta),
-    settleForVisibilityChange: () => layer.settleForVisibilityChange(),
-    clear: () => layer.clear(),
-  }, [() => layer.dispose()]);
+  const presentation = createFocusedPresentation(eventId, dependencies);
+  let active = false;
+  const clear = (): void => {
+    if (!active) return;
+    active = false;
+    presentation.clear();
+    if (presentation.root.userData.holdOnClear !== true) presentation.root.visible = false;
+  };
+  const cleanupSteps = [clear, () => presentation.dispose(), () => presentation.root.removeFromParent()];
+  try {
+    presentation.root.visible = false;
+    const targets = presentation.interactionTargets?.() ?? EMPTY_INTERACTION_TARGETS;
+    const stage = (seed?: number): void => {
+      clear();
+      active = true;
+      presentation.root.visible = true;
+      if (seed === undefined) presentation.stage();
+      else presentation.stage(seed);
+    };
+    const ensureStaged = (): void => { if (!active) stage(); };
+    const matchingResult = (outcome: ActionOutcome) => {
+      ensureStaged();
+      const result = outcome.eventResult;
+      if (result === undefined || result.eventId !== eventId) {
+        throw new Error('Focused event ' + eventId + ' requires a matching event result.');
+      }
+      return result;
+    };
+    return createAdapter(eventId, [{ parent: dependencies.worldParent, root: presentation.root }], {
+      stage: (context) => stage(context.variantSeed),
+      reveal: () => { ensureStaged(); return presentation.reveal(); },
+      playChoice: (choice) => { ensureStaged(); return presentation.playChoice(choice); },
+      playItemUse: noItemUse,
+      itemAimTarget: () => active ? presentation.itemAimTarget?.() ?? presentation.root : null,
+      hasPassed: () => active && (presentation.hasPassed?.() ?? false),
+      interactionTargets: () => targets,
+      interactionRoot: (id) => active ? targets.find((target) => target.id === id)?.root ?? null : null,
+      resultRoot: noRoot,
+      prepareReaction: ({ outcome }) => { const result = matchingResult(outcome); presentation.prepareResult?.(result, outcome); },
+      react: ({ outcome }) => presentation.react(matchingResult(outcome), outcome),
+      update: (time, delta) => { if (active && delta >= 0) presentation.update(time, delta); },
+      settleForVisibilityChange: () => { if (active) presentation.settleForVisibilityChange(); },
+      clear,
+    }, cleanupSteps);
+  } catch (error) {
+    return preserveConstructionError(error, cleanupSteps);
+  }
 };
 
 export const createFeaturedAdapter: EventPresentationAdapterFactory = (
