@@ -1,3 +1,4 @@
+import { eventChoiceDecision, type EventChoiceDecision } from './eventChoiceRules';
 import { cloneActionOutcome, domainMessageId, domainText, resolveOutcomeText, withOutcomeText, type OutcomeText } from './outcomeText';
 import { domainMessage as t } from '../i18n/domainMessages';
 import { presentationWeatherForEvent } from '../weather/presentationWeather';
@@ -17,14 +18,13 @@ import {
 } from './eventCatalog';
 import { drawWeightedEvent } from './eventSelection';
 import { prepareTradeEvent } from './tradeEvents';
-import { selectHandymanReward, eligibleHandymanRewards } from './tradeRules';
+import { selectHandymanReward } from './tradeRules';
 import { drawMidnightGraveLoot } from './midnightGraveLoot';
 import { drawDiveItem } from './diveRewards';
 import { resolveWeightedOutcome } from './eventResolver';
 import { drawMidnightCampItems } from './midnightCampLoot';
 import { drawDriftingLoot, driftingLootEffects } from './driftingLoot';
 import {
-  driftingSupplyChoiceForVariant,
   driftingSupplyHistoryId,
   driftingSupplyKindFromSeed,
   isDriftingSupplyKindOnCooldown,
@@ -966,17 +966,11 @@ export class SurvivalSession {
     if (catalogChoice === undefined) {
       return this.reject('choice-unavailable', t('unavailableResponse'));
     }
-    if (event.id === 'night-trader' && ownsNightTraderReward(choiceId, this.inventory.snapshot())) {
-      return this.reject('choice-unavailable', t('unavailableResponse'));
-    }
-    const choice = event.id === 'drifting-supplies'
-      ? driftingSupplyChoiceForVariant(
-          catalogChoice,
-          deriveEventVariantSeed(this.seed, this.day, event.id),
-        )
-      : catalogChoice;
-    const rejection = this.eventChoiceRejection(choice);
+    const decision = eventChoiceDecision(event, catalogChoice, this.snapshot());
+    const choice = decision.choice;
+    const rejection = this.eventChoiceRejection(event, decision);
     if (rejection !== null) return this.reject(rejection.code, rejection.message);
+    if (choice.companionAction !== undefined) useCarlitosHelp(this.carlitos!, choice.companionAction.id);
     const mutationExclusions = new Set<ItemInstanceId>();
     const before = this.resourceValues();
     const resolved = this.resolveChoiceOutcome(event, choice, resultId);
@@ -1016,50 +1010,20 @@ export class SurvivalSession {
     return this.cloneOutcome(outcome);
   }
 
-  private eventChoiceRejection(choice: EventChoiceDefinition): Rejection | null {
-    const tradeRejection = this.tradeChoiceRejection(choice);
-    if (tradeRejection !== null) return tradeRejection;
-    const companionRejection = this.unavailableCompanionEventAction(choice.companionAction);
-    if (companionRejection !== null) return companionRejection;
-    if (!this.meetsChoiceRequirements(choice.requirements)) {
-      return { code: 'requirements-unmet', message: t('requirements') };
+  private eventChoiceRejection(event: SurvivalEventDefinition, decision: EventChoiceDecision): Rejection | null {
+    const { choice, failures } = decision;
+    if (failures.some(({ kind }) => kind === 'trade')) {
+      return event.id === 'night-trader'
+        ? { code: 'choice-unavailable', message: t('unavailableResponse') }
+        : { code: 'trade-unavailable', message: t('tradeUnavailable') };
     }
-    if (choice.requiredChestState !== undefined && choice.requiredChestState !== this.chestState) {
-      return {
-        code: 'chest-state-unavailable',
-        message: { kind: 'chestRequired', state: choice.requiredChestState },
-      };
+    if (failures.some(({ kind }) => kind === 'companion')) {
+      return this.unavailableCompanionEventAction(choice.companionAction);
     }
-    if (choice.companionAction !== undefined
-      && !useCarlitosHelp(this.carlitos!, choice.companionAction.id)) {
-      return {
-        code: 'companion-action-unavailable',
-        message: t(carlitosHelpUnavailableMessage(this.carlitos!)!),
-      };
-    }
+    if (failures.some(({ kind }) => kind === 'resource')) return { code: 'requirements-unmet', message: t('requirements') };
+    const chest = failures.find((failure) => failure.kind === 'chest');
+    if (chest !== undefined) return { code: 'chest-state-unavailable', message: { kind: 'chestRequired', state: chest.state } };
     return null;
-  }
-
-  private tradeChoiceRejection(choice: EventChoiceDefinition): Rejection | null {
-    if (this.pendingEvent?.id === 'handyman' && choice.itemId !== undefined
-      && eligibleHandymanRewards(this.presentItemIds(), choice.itemId).length === 0) {
-      return { code: 'trade-unavailable', message: t('tradeUnavailable') };
-    }
-    if (this.pendingEvent?.id === 'night-trader' && choice.id !== 'sleep'
-      && choice.outcomes.some((outcome) => outcome.effects.items?.some((mutation) =>
-        mutation.kind === 'gain' && this.inventory.hasOwned(mutation.itemId)))) {
-      return { code: 'trade-unavailable', message: t('tradeUnavailable') };
-    }
-    return this.nightTraderResourceChoiceRejection(choice);
-  }
-
-  private nightTraderResourceChoiceRejection(choice: EventChoiceDefinition): Rejection | null {
-    if (this.pendingEvent?.id !== 'night-trader') return null;
-    const unavailable = choice.itemId === 'cannedFood' ? this.food < 1
-      : choice.itemId === 'baitTin' ? this.bait < 1 : false;
-    return unavailable
-      ? { code: 'requirements-unmet', message: t('requirements') }
-      : null;
   }
 
   private resolveChoiceOutcome(
@@ -1876,11 +1840,6 @@ export class SurvivalSession {
     ));
   }
 
-  private meetsChoiceRequirements(
-    requirements: SurvivalEventDefinition['choices'][number]['requirements'],
-  ): boolean {
-    return requirements?.every(({ resource, minimum }) => this.resourceValues()[resource] >= minimum) ?? true;
-  }
 
   private usableEventItemInstanceId(id: ItemId): ItemInstanceId | null {
     return Object.values(this.inventory.snapshot())

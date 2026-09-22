@@ -1,3 +1,5 @@
+import { eventChoiceDecision } from '../src/survival/eventChoiceRules';
+import { survivalEventById } from '../src/survival/eventCatalog';
 import { fishingRoll } from './helpers/fishing';
 // Importance: 10/10 (scaled from 5/5). Protects core survival rules and state.
 import { describe,expect,it,vi } from 'vitest';
@@ -1232,4 +1234,29 @@ describe('SurvivalSession daytime actions', () => {
       'cannedFood-2': { condition: 'lost' },
     });
   });
+});
+
+// Importance: 96/100. Choice previews must preserve inventory, companion rest, and deterministic continuation.
+it('does not mutate the run or random state while previewing choices', () => {
+  const session = new SurvivalSession(saved('carlitos', 'cannedFood'), { seed: 41, initialEventId: 'drifting-supplies' });
+  const before = session.exportCheckpoint();
+  const event = survivalEventById('drifting-supplies')!;
+  for (let repeat = 0; repeat < 5; repeat++) {
+    for (const choice of event.choices) eventChoiceDecision(event, choice, session.snapshot());
+  }
+  expect(session.exportCheckpoint()).toEqual(before);
+});
+
+it('rejects a previewed item after it breaks without consuming state', () => {
+  const session = new SurvivalSession(saved('carlitos', 'bucket'), { seed: 41, initialEventId: 'shower-night' });
+  const event = survivalEventById('shower-night')!;
+  const choice = event.choices.find(({ itemId }) => itemId === 'bucket')!;
+  const decision = eventChoiceDecision(event, choice, session.snapshot());
+  expect(decision.failures).toEqual([]);
+  expect(decision.instanceId).toBe('bucket-1');
+  session.setItemConditionForLab('bucket-1', 'broken');
+  const before = session.exportCheckpoint();
+  expect(session.resolveEvent({ kind: 'item', choiceId: choice.id, instanceId: decision.instanceId! }))
+    .toMatchObject({ accepted: false, code: 'item-unavailable' });
+  expect(session.exportCheckpoint()).toEqual(before);
 });

@@ -1,3 +1,4 @@
+import { eventChoiceDecision } from '../src/survival/eventChoiceRules';
 import { describe, expect, it } from 'vitest';
 import { type ItemInstance, type ItemInstanceId } from '../src/game/ItemState';
 import { survivalEventById } from '../src/survival/eventCatalog';
@@ -104,4 +105,26 @@ describe('Night Trader offers', () => {
     expect(session.snapshot().inventory).toEqual(before.inventory);
     expect(session.snapshot().food).toBe(before.food);
   });
+});
+
+// Importance: 96/100. Resource trades must use stock instead of physical inventory instances.
+it.each([['food', 'food'], ['bait', 'bait']] as const)('previews the %s trade from aggregate stock', (choiceId, resource) => {
+  const session = new SurvivalSession([], { seed: seedFor(choiceId), initial: { day: 10, [resource]: 1 }, initialEventId: 'night-trader' });
+  const event = survivalEventById('night-trader', variant(session.snapshot().seed))!;
+  const choice = event.choices.find(({ id }) => id === choiceId)!;
+  const decision = eventChoiceDecision(event, choice, session.snapshot());
+  expect(decision.instanceId).toBeNull();
+  expect(decision.failures).toEqual([]);
+  expect(eventChoiceDecision(event, choice, { ...session.snapshot(), [resource]: 0 }).failures)
+    .toContainEqual({ kind: 'resource', resource, minimum: 1 });
+});
+
+it('previews an owned trader reward as unavailable without mutation', () => {
+  const session = new SurvivalSession([{ type: 'map', instanceId: 'map-1' }, { type: 'compass', instanceId: 'compass-1' }],
+    { seed: seedFor('map'), initial: { day: 10 }, initialEventId: 'night-trader' });
+  const event = survivalEventById('night-trader', variant(session.snapshot().seed))!;
+  const choice = event.choices.find(({ id }) => id === 'map')!;
+  const before = session.exportCheckpoint();
+  expect(eventChoiceDecision(event, choice, session.snapshot()).failures).toContainEqual({ kind: 'trade' });
+  expect(session.exportCheckpoint()).toEqual(before);
 });

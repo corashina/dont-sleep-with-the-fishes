@@ -1,3 +1,4 @@
+import { eventChoiceDecision, type EventChoiceFailure } from './eventChoiceRules';
 import { carlitosHelpUnavailableMessage } from './CarlitosState';
 import { domainMessage } from '../i18n/domainMessages';
 import { flowText } from '../i18n/flowMessages';
@@ -29,8 +30,6 @@ import {
   deriveEventOutcomePresentation,
   deriveEventVariantSeed,
 } from './eventPresentationOutcome';
-import { driftingSupplyChoiceForVariant } from './driftingSupplies';
-import { ownsNightTraderReward } from './nightTraderTrades';
 import { prepareTradeEvent } from './tradeEvents';
 import { isEventPresentationRoute } from './eventPresentationRoutes';
 import type { EventOutcomePresentation } from './eventPresentationTypes';
@@ -170,10 +169,6 @@ const MIDNIGHT_ATTACK_BLACKOUT_MS = 3_000;
 type SurvivalEventDefinition = NonNullable<ReturnType<typeof survivalEventById>>;
 type SurvivalEventChoice = SurvivalEventDefinition['choices'][number];
 
-type CompanionChoiceAvailability = ReturnType<typeof carlitosChoiceAvailability>;
-type SessionCompanionAvailability = ReturnType<
-  NonNullable<EventSessionPort['companionEventActionAvailability']>
->;
 
 const EVENT_ITEM_CUE_TYPES: ReadonlySet<ItemId> = new Set([
   'radio',
@@ -261,37 +256,6 @@ function focusedChoiceAnchorId(eventId: string, choiceId: string): string | null
   return FIXED_CHOICE_ANCHORS[`${eventId}:${choiceId}`] ?? null;
 }
 
-function carlitosChoiceAvailability(snapshot: SurvivalSnapshot): {
-  readonly visible: boolean;
-  readonly unavailableReason: string | null;
-} {
-  const carlitos = snapshot.carlitos;
-  if (carlitos === null) {
-    return { visible: false, get unavailableReason() { return flowText('noCarlitos'); } };
-  }
-  const message = carlitosHelpUnavailableMessage(carlitos);
-  if (message !== null) {
-    return {
-      visible: true,
-      get unavailableReason() { return domainMessage(message); },
-    };
-  }
-  return { visible: true, unavailableReason: null };
-}
-
-function usableChoiceItemInstanceId(
-  choice: SurvivalEventChoice,
-  snapshot: SurvivalSnapshot,
-): ItemInstanceId | null {
-  if (choice.itemId === undefined) return null;
-  return Object.values(snapshot.inventory)
-    .filter((item) => (
-      item !== undefined && item.type === choice.itemId && item.condition === 'usable'
-    ))
-    .map((item) => item!.instanceId)
-    .sort()[0] ?? null;
-}
-
 function requirementUnavailableReason(
   requirement: EventChoiceRequirement,
   snapshot: SurvivalSnapshot,
@@ -301,30 +265,18 @@ function requirementUnavailableReason(
   return flowText('requires', minimum, resourceLabel, snapshot[resource]);
 }
 
-function focusedChoiceUnavailableReasons(
-  choice: SurvivalEventChoice,
-  snapshot: SurvivalSnapshot,
-  instanceId: ItemInstanceId | null,
-  companionAvailability: CompanionChoiceAvailability,
-): string[] {
-  const reasons = (choice.requirements ?? [])
-    .filter(({ resource, minimum }) => snapshot[resource] < minimum)
-    .map((requirement) => requirementUnavailableReason(requirement, snapshot));
-  if (choice.itemId !== undefined && instanceId === null) {
-    const itemLabel = getLanguage() === 'en' ? (choice.itemId === 'scubaSet' ? 'scuba gear' : choice.itemId) : ITEM_LABELS[choice.itemId];
-    reasons.push(flowText('requiresItem', itemLabel));
+function choiceFailureReason(failure: EventChoiceFailure, snapshot: SurvivalSnapshot): string {
+  switch (failure.kind) {
+    case 'resource': return requirementUnavailableReason(failure, snapshot);
+    case 'item': {
+      const label = getLanguage() === 'en' ? (failure.itemId === 'scubaSet' ? 'scuba gear' : failure.itemId) : ITEM_LABELS[failure.itemId];
+      return flowText('requiresItem', label);
+    }
+    case 'chest': return flowText('requiresChest', flowText(failure.state), flowText(snapshot.chest.state));
+    case 'companion': return snapshot.carlitos === null ? flowText('noCarlitos')
+      : domainMessage(carlitosHelpUnavailableMessage(snapshot.carlitos)!);
+    case 'trade': return domainMessage('tradeUnavailable');
   }
-  if (choice.requiredChestState !== undefined
-    && choice.requiredChestState !== snapshot.chest.state) {
-    reasons.push(
-      flowText('requiresChest', flowText(choice.requiredChestState), flowText(snapshot.chest.state)),
-    );
-  }
-  if (choice.companionAction !== undefined
-    && companionAvailability.unavailableReason !== null) {
-    reasons.push(companionAvailability.unavailableReason);
-  }
-  return reasons;
 }
 
 function focusedChoiceEnergy(
@@ -345,18 +297,11 @@ function focusedChoiceFor(
   choice: SurvivalEventChoice,
   snapshot: SurvivalSnapshot,
 ): FocusedEventChoiceView | null {
-  const companionAvailability: CompanionChoiceAvailability = choice.companionAction === undefined
-    ? { visible: true, unavailableReason: null }
-    : carlitosChoiceAvailability(snapshot);
-  if (choice.companionAction !== undefined
-    && !companionAvailability.visible) return null;
-  const instanceId = usableChoiceItemInstanceId(choice, snapshot);
-  const currentReasons = () => focusedChoiceUnavailableReasons(
-    choice,
-    snapshot,
-    instanceId,
-    choice.companionAction === undefined ? companionAvailability : carlitosChoiceAvailability(snapshot),
-  );
+  const decision = eventChoiceDecision(event, choice, snapshot);
+  if (!decision.visible) return null;
+  choice = decision.choice;
+  const instanceId = decision.instanceId;
+  const currentReasons = () => decision.failures.map((failure) => choiceFailureReason(failure, snapshot));
   const anchorId = focusedChoiceAnchorId(event.id, choice.id);
   return {
     id: choice.id,
@@ -373,13 +318,7 @@ export function focusedChoicesFor(
   snapshot: SurvivalSnapshot,
 ): readonly FocusedEventChoiceView[] {
   const choices = event.choices.flatMap((catalogChoice) => {
-    const choice = event.id === 'drifting-supplies'
-      ? driftingSupplyChoiceForVariant(
-          catalogChoice,
-          deriveEventVariantSeed(snapshot.seed, snapshot.day, event.id),
-        )
-      : catalogChoice;
-    const view = focusedChoiceFor(event, choice, snapshot);
+    const view = focusedChoiceFor(event, catalogChoice, snapshot);
     return view === null ? [] : [view];
   });
   return choices;
@@ -1294,7 +1233,7 @@ export class SurvivalEventFlow {
       const choice = event?.choices.find((candidate) => candidate.id === choiceId);
       const instanceId = choice === undefined
         ? null
-        : usableChoiceItemInstanceId(choice, snapshot);
+        : eventChoiceDecision(event!, choice, snapshot).instanceId;
       if (instanceId !== null) {
         return {
           kind: 'item',
@@ -2483,10 +2422,7 @@ export class SurvivalEventFlow {
     const choiceByItem = new Map(
       event.choices
         .filter((choice) => choice.itemId !== undefined
-          && this.meetsRequirements(choice.requirements, snapshot)
-          && this.nightTraderChoiceUnavailableReasons(event, choice, snapshot).length === 0
-          && (choice.requiredChestState === undefined
-            || choice.requiredChestState === snapshot.chest.state))
+          && eventChoiceDecision(event, choice, snapshot).failures.length === 0)
         .map((choice) => [choice.itemId!, choice.id] as const),
     );
     const eligibility = new Map<ItemInstanceId, EventResponseId>();
@@ -2516,100 +2452,17 @@ export class SurvivalEventFlow {
     snapshot: SurvivalSnapshot,
   ): EventContextChoice | null {
     if (event.id === 'flying-saucer') return null;
-    const companionAvailability = choice.companionAction === undefined
-      ? undefined
-      : this.dependencies.session.companionEventActionAvailability?.(
-          choice.companionAction,
-        );
-    if (this.hideContextualChoice(choice, companionAvailability)) return null;
-    const currentReasons = () => this.contextualChoiceUnavailableReasons(
-      event,
-      choice,
-      snapshot,
-      choice.companionAction === undefined ? companionAvailability : this.dependencies.session.companionEventActionAvailability?.(choice.companionAction),
-    );
+    const decision = eventChoiceDecision(event, choice, snapshot);
+    if (!decision.visible) return null;
+    const currentReasons = () => decision.failures.map((failure) => choiceFailureReason(failure, snapshot));
     const anchorId = this.contextualEventAnchorId(event.id, choice.id);
     return {
       id: choice.id,
       get label() { return choice.label; },
       get unavailableReason() { const reasons = currentReasons(); return reasons.length === 0 ? null : reasons.join(' '); },
       ...(anchorId === null ? {} : { anchorId }),
-      ...this.contextualChoiceEnergy(choice, companionAvailability),
+      ...focusedChoiceEnergy(choice),
     };
-  }
-
-  private hideContextualChoice(
-    choice: SurvivalEventChoice,
-    companionAvailability: SessionCompanionAvailability | undefined,
-  ): boolean {
-    if (choice.companionAction === undefined) return false;
-    if (companionAvailability === undefined) return false;
-    return companionAvailability.visible !== true;
-  }
-
-  private contextualChoiceUnavailableReasons(
-    event: SurvivalEventDefinition,
-    choice: SurvivalEventChoice,
-    snapshot: SurvivalSnapshot,
-    companionAvailability: SessionCompanionAvailability | undefined,
-  ): string[] {
-    const reasons = (choice.requirements ?? [])
-      .filter(({ resource, minimum }) => snapshot[resource] < minimum)
-      .map((requirement) => requirementUnavailableReason(requirement, snapshot));
-    reasons.push(...this.nightTraderChoiceUnavailableReasons(event, choice, snapshot));
-    if (choice.requiredChestState !== undefined
-      && choice.requiredChestState !== snapshot.chest.state) {
-      reasons.push(
-        flowText('requiresChest', flowText(choice.requiredChestState), flowText(snapshot.chest.state)),
-      );
-    }
-    const companionReason = companionAvailability?.unavailableReason;
-    if (companionReason !== null && companionReason !== undefined) reasons.push(companionReason);
-    return reasons;
-  }
-
-  private nightTraderChoiceUnavailableReasons(
-    event: SurvivalEventDefinition,
-    choice: SurvivalEventChoice,
-    snapshot: SurvivalSnapshot,
-  ): string[] {
-    if (event.id !== 'night-trader' || choice.itemId === undefined) return [];
-    const reasons: string[] = [];
-    const resource = choice.itemId === 'cannedFood' ? 'food'
-      : choice.itemId === 'baitTin' ? 'bait' : null;
-    if (resource !== null && snapshot[resource] < 1) {
-      reasons.push(requirementUnavailableReason({ resource, minimum: 1 }, snapshot));
-    } else if (resource === null && usableChoiceItemInstanceId(choice, snapshot) === null) {
-      reasons.push(flowText('requiresItem', ITEM_LABELS[choice.itemId]));
-    }
-    if (ownsNightTraderReward(choice.id, snapshot.inventory)) {
-      reasons.push(domainMessage('tradeUnavailable'));
-    }
-    return reasons;
-  }
-
-
-  private contextualChoiceEnergy(
-    choice: SurvivalEventChoice,
-    companionAvailability: SessionCompanionAvailability | undefined,
-  ): Partial<Pick<EventContextChoice, 'energyCost' | 'usesCarlitos'>> {
-    if (choice.companionAction !== undefined && companionAvailability !== undefined) {
-      return { usesCarlitos: true };
-    }
-    const playerEnergyCost = choice.requirements?.find(
-      ({ resource }) => resource === 'energy',
-    )?.minimum;
-    if (playerEnergyCost === undefined) return {};
-    return { energyCost: playerEnergyCost };
-  }
-
-  private meetsRequirements(
-    requirements: readonly EventChoiceRequirement[] | undefined,
-    snapshot: SurvivalSnapshot,
-  ): boolean {
-    return requirements?.every(
-      ({ resource, minimum }) => snapshot[resource] >= minimum,
-    ) ?? true;
   }
 
   private contextualEventAnchorId(eventId: string, choiceId: string): string | null {
