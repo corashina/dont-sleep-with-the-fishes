@@ -1,6 +1,7 @@
+import { WebGlInitializationError } from '../src/app/createBrowserGame';
+import { createRuntimeTestGame } from './helpers/gameRuntime';
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Game, WebGlInitializationError } from '../src/Game';
 import { launchGame, type LaunchDependencies } from '../src/app/launchGame';
 import type { GamePhase } from '../src/app/GamePhase';
 import { AudioSystem } from '../src/audio/AudioSystem';
@@ -32,7 +33,7 @@ function dependencies(overrides: Partial<LaunchDependencies> = {}): LaunchDepend
   return {
     ...loads,
     loadAudio: async () => AudioSystem.silent(),
-    createGame: (element, resources, onFatalError, browserPlaytest) => Game.forTest({
+    createGame: (element, resources, onFatalError, browserPlaytest) => createRuntimeTestGame({
       createMenu: () => phase(), createScavenge: () => phase(), createSurvival: () => phase(),
     }, { mount: element, resources, onFatalError, browserPlaytest }),
     ...overrides,
@@ -207,7 +208,7 @@ describe('phase-based launch', () => {
     const ownedPhase = { ...phase(), start: () => { throw new Error('phase start'); } };
     const handle = launchGame(mount(), dependencies({
       loadMenuModels: async () => menu,
-      createGame: (element, resources, onFatalError) => Game.forTest({
+      createGame: (element, resources, onFatalError) => createRuntimeTestGame({
         createMenu: () => ownedPhase, createScavenge: () => phase(), createSurvival: () => phase(),
       }, { mount: element, resources, onFatalError }),
     }));

@@ -1,6 +1,7 @@
+import { createRuntimeTestGame, type GameRuntimeTestOptions } from './helpers/gameRuntime';
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Game, type GameFactories, type GameTestOptions } from '../src/Game';
+import type { GameFactories } from '../src/Game';
 import { PhaseResources, type PhaseResourceLoaders } from '../src/app/PhaseResources';
 import type { GamePhase } from '../src/app/GamePhase';
 import { AudioSystem } from '../src/audio/AudioSystem';
@@ -20,7 +21,7 @@ function deferred<T>() {
 }
 function asset() { return { dispose: vi.fn(), configure: vi.fn() }; }
 function phase(): GamePhase { return { start: vi.fn(), update: vi.fn(), resize: vi.fn(), render: vi.fn(), dispose: vi.fn() }; }
-function rig(overrides: Partial<GameFactories> = {}, options: Pick<GameTestOptions, 'saveStorage'> = {}) {
+function rig(overrides: Partial<GameFactories> = {}, options: Pick<GameRuntimeTestOptions, 'saveStorage' | 'initialWaterQuality'> = {}) {
   const loaders = Object.fromEntries([
     'loadMenuFont','loadMenuModels','loadMenuSandAssets','loadGameplayModels','loadSurvivalContent','loadShipFurniture',
     'loadSkyAssets','loadLifeboatAssets','loadShipAssets','loadPhysicsRuntime',
@@ -30,7 +31,7 @@ function rig(overrides: Partial<GameFactories> = {}, options: Pick<GameTestOptio
   const onFatalError = vi.fn();
   const mount = document.createElement('main');
   document.body.append(mount);
-  const game = Game.forTest(factories, { ...options, mount, resources, onFatalError });
+  const game = createRuntimeTestGame(factories, { ...options, mount, resources, onFatalError });
   game.start();
   return { game, factories, loaders, onFatalError, mount };
 }
@@ -237,4 +238,23 @@ describe('asynchronous phase activation', () => {
     r.game.dispose();
   });
 
+});
+
+// Importance: 94/100. The runtime-owned preference must update only the active phase.
+it('applies water preference changes after phase handoff', async () => {
+  let next!: () => void;
+  let preference!: import('../src/rendering/waterQuality').WaterQualityPreference;
+  const menu = { ...phase(), setWaterQuality: vi.fn() };
+  const ship = { ...phase(), setWaterQuality: vi.fn() };
+  const r = rig({ createMenu: (context, complete) => {
+    preference = context.waterQuality; next = complete; return menu;
+  }, createScavenge: () => ship }, { initialWaterQuality: 'low' });
+  await r.game.ready;
+  expect(preference.get()).toBe('low');
+  next(); await flushPhases();
+  menu.setWaterQuality.mockClear(); ship.setWaterQuality.mockClear();
+  preference.set('high');
+  expect(ship.setWaterQuality).toHaveBeenCalledExactlyOnceWith('high');
+  expect(menu.setWaterQuality).not.toHaveBeenCalled();
+  r.game.dispose();
 });

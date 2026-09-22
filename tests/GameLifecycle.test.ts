@@ -1817,7 +1817,7 @@ describe('ScavengePhase lifecycle integration', () => {
 
       scavengeWeather = 'wind';
 
-      (game as unknown as { handleAnimationFrame(): void; }).handleAnimationFrame();
+      requestFrame.mock.calls.at(-1)![0](0);
 
       expect(weather.value).toBe('wind');
       expect(source.value).toBe('EVENT');

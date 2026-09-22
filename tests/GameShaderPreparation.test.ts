@@ -1,6 +1,6 @@
+import { createRuntimeTestGame } from './helpers/gameRuntime';
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Game } from '../src/Game';
 import type { GamePhase, MenuAssets, ShipPhaseAssets, SurvivalAssets } from '../src/app/GamePhase';
 import { AudioSystem } from '../src/audio/AudioSystem';
 import { flushPhases } from './helpers/game';
@@ -28,7 +28,7 @@ function fixture(menu: GamePhase, ship = phase()) {
   let enterShip!: () => void;
   const createShip = vi.fn(() => ship);
   const configure = vi.fn();
-  const game = Game.forTest({
+  const game = createRuntimeTestGame({
     createMenu: (_context, complete) => { enterShip = complete; return menu; },
     createScavenge: createShip,
     createSurvival: () => phase(),

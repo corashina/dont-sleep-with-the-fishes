@@ -1,46 +1,18 @@
-import {
-  Clock,
-  PerspectiveCamera,
-  SRGBColorSpace,
-  WebGLRenderer,
-} from 'three';
+import type { Clock, PerspectiveCamera, WebGLRenderer } from 'three';
+import type { GameRuntimeDependencies } from './app/GameRuntimeDependencies';
 import type { GamePhase, PhaseContext, MenuPhaseContext, ShipPhaseContext, SurvivalPhaseContext } from './app/GamePhase';
 import {
   EVENT_TEST_OPTIONS,
   createEventTestResult,
 } from './app/EventTest';
 import type { ScavengeResult } from './game/ScavengeSession';
-import { ScavengePhase, type ScavengePhaseStart } from './phases/ScavengePhase';
-import {
-  DirectSceneRenderer,
-  type SceneRenderer,
-} from './rendering/SceneRenderer';
-import { createSceneRenderer } from './rendering/PostProcessingPipeline';
-import {
-  createAntiAliasingQualityPreference,
-  type AntiAliasingQualityPreference,
-} from './rendering/antiAliasingQuality';
-import {
-  createShadowQualityPreference,
-  type ShadowQualityPreference,
-} from './rendering/shadowQuality';
-import {
-  createVisualQualityPreference,
-  type VisualQualityPreference,
-} from './rendering/visualQuality';
-import {
-  createWaterQualityPreference,
-  type WaterQualityPreference,
-} from './rendering/waterQuality';
-import { SurvivalPhase } from './survival/SurvivalPhase';
+import type { ScavengePhaseStart } from './phases/ScavengePhase';
+import type { SceneRenderer } from './rendering/SceneRenderer';
 import { PerformanceStats } from './ui/PerformanceStats';
 import { PostProcessingConsole } from './ui/PostProcessingConsole';
 import { SettingsMenu } from './ui/SettingsMenu';
 import { createSystemScreen, observeSystemScreenDownloads, updateSystemScreenProgress } from './ui/SystemScreen';
-import {
-  createSystemTuningPreference,
-  type SystemTuningPreference,
-} from './ui/systemTuningPreference';
+import type { SystemTuningPreference } from './ui/systemTuningPreference';
 import {
   clampPostProcessingSetting,
   type PostProcessingControls,
@@ -54,18 +26,12 @@ import {
   setScavengePhysicsEnabled,
 } from './physics/PhysicsOptions';
 import type { PresentationWeatherId } from './weather/presentationWeather';
-import { MainMenuPhase } from './phases/MainMenuPhase';
 import type { SkyPhase } from './world/skyPalette';
-import { browserStorage } from './browser/storage';
-import {
-  SurvivalSaveStore,
-  type SurvivalSaveStorage,
-} from './browser/SurvivalSaveStore';
+import { SurvivalSaveStore } from './browser/SurvivalSaveStore';
 import type {
   SurvivalCheckpointChange,
   SurvivalPhaseStart,
 } from './survival/SurvivalPhase';
-import type { BrowserPlaytestStartup } from './app/BrowserPlaytest';
 import type { PhaseResourceSource, ResourceLease, ResourceProgress } from './app/PhaseResources';
 
 export interface GameFactories {
@@ -89,143 +55,18 @@ export interface GameFactories {
   ): GamePhase;
 }
 
-const PRODUCTION_FACTORIES: GameFactories = {
-  createMenu: (context, onComplete) => (
-    new MainMenuPhase(context, onComplete)
-  ),
-  createScavenge: (context, onComplete, onRestart, onReturnToMenu, start) => (
-    new ScavengePhase(context, onComplete, onRestart, onReturnToMenu, start)
-  ),
-  createSurvival: (
-    context,
-    start,
-    onRestart,
-    onCheckpointChange,
-    onReturnToMenu,
-  ) => (
-    new SurvivalPhase(
-      context,
-      start,
-      onRestart,
-      onCheckpointChange,
-      onReturnToMenu,
-    )
-  ),
-};
-
 type GameClock = Pick<Clock, 'start' | 'getDelta'>;
 
-interface TestGameBase {
-  readonly mount: HTMLElement;
-  readonly renderer: WebGLRenderer;
-  readonly clock: GameClock;
-  readonly sceneRenderer: SceneRenderer;
-  readonly antiAliasingQuality: AntiAliasingQualityPreference;
-  readonly shadowQuality: ShadowQualityPreference;
-}
-
-export const GAME_CAMERA = Object.freeze({
-  fov: 80,
-  near: 0.08,
-  far: 1000,
-});
-
-export interface GameTestOptions {
-  resources: PhaseResourceSource;
-  clock?: GameClock;
-  createSeed?: () => number;
-  mount?: HTMLElement;
-  renderer?: WebGLRenderer;
-  sceneRenderer?: SceneRenderer;
-  antiAliasingQuality?: AntiAliasingQualityPreference;
-  shadowQuality?: ShadowQualityPreference;
-  visualQuality?: VisualQualityPreference;
-  waterQuality?: WaterQualityPreference;
-  systemTuning?: SystemTuningPreference;
-  onFatalError?: (error: unknown) => void;
-  saveStorage?: SurvivalSaveStorage | null;
-  browserPlaytest?: BrowserPlaytestStartup | null;
-}
-
-function rethrowFatalError(error: unknown): never {
-  throw error;
-}
-
-function createRandomSeed(): number {
-  try {
-    const values = new Uint32Array(1);
-    globalThis.crypto.getRandomValues(values);
-    return values[0]!;
-  } catch {
-    return Date.now() >>> 0;
-  }
-}
-
-export class WebGlInitializationError extends Error {
-  constructor(cause: unknown) {
-    const message = cause instanceof Error ? cause.message : String(cause);
-    super(message, { cause });
-    this.name = 'WebGlInitializationError';
-  }
-}
-
-function createTestGameBase(options: GameTestOptions): TestGameBase {
-  const mount = options.mount ?? document.createElement('main');
-  const renderer = options.renderer ?? createTestRenderer();
-  mount.prepend(renderer.domElement);
-  const sceneRenderer = options.sceneRenderer ?? new DirectSceneRenderer(renderer);
-  return {
-    mount,
-    renderer,
-    clock: options.clock ?? createTestClock(),
-    sceneRenderer,
-    antiAliasingQuality: options.antiAliasingQuality
-      ?? createAntiAliasingQualityPreference(
-        (quality) => sceneRenderer.setAntiAliasingQuality?.(quality),
-        null,
-      ),
-    shadowQuality: options.shadowQuality ?? createShadowQualityPreference(
-      (quality) => sceneRenderer.setShadowQuality?.(quality),
-      null,
-    ),
-  };
-}
-
-function createTestRenderer(): WebGLRenderer {
-  return {
-    domElement: document.createElement('canvas'),
-    setPixelRatio: () => undefined,
-    setSize: () => undefined,
-    render: () => undefined,
-    initTexture: () => undefined,
-    compileAsync: async () => undefined,
-    dispose: () => undefined,
-    shadowMap: { enabled: true, type: 0 },
-    capabilities: { getMaxAnisotropy: () => 1 },
-  } as unknown as WebGLRenderer;
-}
-
-function createTestClock(): GameClock {
-  return {
-    start: () => undefined,
-    getDelta: () => 0.016,
-  };
-}
-
-function valueOrCreate<T>(value: T | undefined, create: () => T): T {
-  return value ?? create();
-}
-
 export class Game {
-  ready!: Promise<void>;
-  private renderer!: WebGLRenderer;
-  private sceneRenderer!: SceneRenderer;
-  private camera!: PerspectiveCamera;
-  private clock!: GameClock;
-  private resources!: PhaseResourceSource;
-  private systemTuning!: SystemTuningPreference;
-  private context!: PhaseContext;
-  private factories!: GameFactories;
+  ready: Promise<void>;
+  private renderer: WebGLRenderer;
+  private sceneRenderer: SceneRenderer;
+  private camera: PerspectiveCamera;
+  private clock: GameClock;
+  private resources: PhaseResourceSource;
+  private systemTuning: SystemTuningPreference;
+  private context: PhaseContext;
+  private factories: GameFactories;
   private activePhase: GamePhase | null = null;
   private activeLease: ResourceLease<unknown> | null = null;
   private pendingPreparation: Promise<void> | null = null;
@@ -235,7 +76,7 @@ export class Game {
   private performanceStats: PerformanceStats | null = null;
   private settingsMenu: SettingsMenu | null = null;
   private postProcessingConsole: PostProcessingConsole | null = null;
-  private saveStore!: SurvivalSaveStore;
+  private saveStore: SurvivalSaveStore;
   private weatherOverride: PresentationWeatherId | null = null;
   private timeOfDayOverride: SkyPhase | null = null;
   private animationFrame = 0;
@@ -244,155 +85,11 @@ export class Game {
   private elapsed = 0;
   private seed = 0;
   private phaseGeneration = 0;
-  private createSeed!: () => number;
-  private onFatalError!: (error: unknown) => void;
+  private createSeed: () => number;
+  private onFatalError: (error: unknown) => void;
   private fatalErrorReported = false;
-  private onResize!: () => void;
-  private animate!: () => void;
-
-  constructor(
-    mount: HTMLElement,
-    resources: PhaseResourceSource,
-    onFatalError: (error: unknown) => void = rethrowFatalError,
-    browserPlaytest: BrowserPlaytestStartup | null = null,
-  ) {
-    let renderer: WebGLRenderer;
-    try {
-      renderer = new WebGLRenderer({
-        antialias: true,
-        powerPreference: 'high-performance',
-      });
-    } catch (error) {
-      throw new WebGlInitializationError(error);
-    }
-    let sceneRenderer: SceneRenderer | null = null;
-    const visualQuality = createVisualQualityPreference((quality) => {
-      sceneRenderer?.setVisualQuality?.(quality);
-    });
-    const antiAliasingQuality = createAntiAliasingQualityPreference((quality) => {
-      sceneRenderer?.setAntiAliasingQuality?.(quality);
-    });
-    const shadowQuality = createShadowQualityPreference((quality) => {
-      sceneRenderer?.setShadowQuality?.(quality);
-    });
-    const waterQuality = createWaterQualityPreference((quality) => {
-      this.activePhase?.setWaterQuality?.(quality);
-    });
-    const systemTuning = createSystemTuningPreference();
-    const tuningState = systemTuning.get();
-    let initializationStarted = false;
-    try {
-      renderer.outputColorSpace = SRGBColorSpace;
-      renderer.shadowMap.enabled = true;
-      mount.prepend(renderer.domElement);
-      sceneRenderer = createSceneRenderer(
-        renderer,
-        visualQuality.get(),
-        antiAliasingQuality.get(),
-        shadowQuality.get(),
-      );
-      const camera = new PerspectiveCamera(
-        tuningState.cameraFieldOfView,
-        1,
-        GAME_CAMERA.near,
-        GAME_CAMERA.far,
-      );
-      const clock = new Clock();
-      initializationStarted = true;
-      this.initialize(
-        mount,
-        renderer,
-        sceneRenderer,
-        antiAliasingQuality,
-        shadowQuality,
-        visualQuality,
-        waterQuality,
-        systemTuning,
-        camera,
-        clock,
-        resources,
-        browserPlaytest === null
-          ? browserStorage() as SurvivalSaveStorage | null
-          : null,
-        PRODUCTION_FACTORIES,
-        createRandomSeed,
-        onFatalError,
-        browserPlaytest,
-      );
-    } catch (error) {
-      if (!initializationStarted) {
-        try {
-          runCleanupSteps([
-            () => sceneRenderer?.dispose(),
-            () => renderer.dispose(),
-            () => renderer.domElement.remove(),
-          ]);
-        } finally {
-          throw error;
-        }
-      }
-      throw error;
-    }
-  }
-
-  static forTest(factories: GameFactories, options: GameTestOptions): Game {
-    const game = Object.create(Game.prototype) as Game;
-    game.initializeForTest(factories, options, createTestGameBase(options));
-    return game;
-  }
-
-  private initializeForTest(
-    factories: GameFactories,
-    options: GameTestOptions,
-    base: TestGameBase,
-  ): void {
-    const waterQuality = valueOrCreate(
-      options.waterQuality,
-      () => createWaterQualityPreference(
-        (quality) => this.activePhase?.setWaterQuality?.(quality),
-        null,
-      ),
-    );
-    const systemTuning = valueOrCreate(
-      options.systemTuning,
-      () => createSystemTuningPreference(null),
-    );
-    const tuningState = systemTuning.get();
-    const visualQuality = valueOrCreate(
-      options.visualQuality,
-      () => createVisualQualityPreference(
-        (quality) => {
-          base.sceneRenderer.setVisualQuality?.(quality);
-        },
-        null,
-      ),
-    );
-    const browserPlaytest = options.browserPlaytest ?? null;
-    const saveStorage = browserPlaytest === null ? options.saveStorage ?? null : null;
-    this.initialize(
-      base.mount,
-      base.renderer,
-      base.sceneRenderer,
-      base.antiAliasingQuality,
-      base.shadowQuality,
-      visualQuality,
-      waterQuality,
-      systemTuning,
-      new PerspectiveCamera(
-        tuningState.cameraFieldOfView,
-        1,
-        GAME_CAMERA.near,
-        GAME_CAMERA.far,
-      ),
-      base.clock,
-      options.resources,
-      saveStorage,
-      factories,
-      valueOrCreate(options.createSeed, () => createRandomSeed),
-      valueOrCreate(options.onFatalError, () => rethrowFatalError),
-      browserPlaytest,
-    );
-  }
+  private onResize: () => void;
+  private animate: () => void;
 
   start(): void {
     if (this.disposed || this.started) return;
@@ -432,39 +129,27 @@ export class Game {
     ]);
   }
 
-  private initialize(
-    mount: HTMLElement,
-    renderer: WebGLRenderer,
-    sceneRenderer: SceneRenderer,
-    antiAliasingQuality: AntiAliasingQualityPreference,
-    shadowQuality: ShadowQualityPreference,
-    visualQuality: VisualQualityPreference,
-    waterQuality: WaterQualityPreference,
-    systemTuning: SystemTuningPreference,
-    camera: PerspectiveCamera,
-    clock: GameClock,
-    resources: PhaseResourceSource,
-    saveStorage: SurvivalSaveStorage | null,
-    factories: GameFactories,
-    createSeed: () => number,
-    onFatalError: (error: unknown) => void,
-    browserPlaytest: BrowserPlaytestStartup | null,
-  ): void {
+  constructor(dependencies: GameRuntimeDependencies) {
+    const { mount, renderer, sceneRenderer, antiAliasingQuality, shadowQuality, visualQuality,
+      systemTuning, camera, clock, resources, saveStorage, factories, createSeed, onFatalError, browserPlaytest } = dependencies;
     this.renderer = renderer;
     this.sceneRenderer = sceneRenderer;
     this.camera = camera;
     this.clock = clock;
     this.resources = resources;
-    const audioSystem = resources.audio;
-    const physicsMode = resources.physicsMode;
-    this.saveStore = new SurvivalSaveStore(saveStorage);
     this.systemTuning = systemTuning;
     this.factories = factories;
     this.createSeed = createSeed;
     this.onFatalError = onFatalError;
-    let maxTextureAnisotropy = 1;
+    this.onResize = () => this.handleResize();
+    this.animate = () => this.handleAnimationFrame();
     let resizeListenerRegistered = false;
     try {
+      const audioSystem = resources.audio;
+      const physicsMode = resources.physicsMode;
+      this.saveStore = new SurvivalSaveStore(saveStorage);
+      const waterQuality = dependencies.createWaterQuality((quality) => this.activePhase?.setWaterQuality?.(quality));
+      let maxTextureAnisotropy = 1;
       maxTextureAnisotropy = Math.max(
         1,
         renderer.capabilities.getMaxAnisotropy(),
@@ -480,21 +165,9 @@ export class Game {
         audio: audioSystem,
         onFatalError: (error) => this.reportFatalError(error),
       };
-      this.activePhase = null;
-      this.activeLease = null;
-      this.pendingPreparation = null;
-      this.transitionScreen = null;
-      this.performanceStats = null;
-      this.postProcessingConsole = null;
       const tuningState = systemTuning.get();
       this.weatherOverride = tuningState.weatherOverride;
       this.timeOfDayOverride = tuningState.phaseOverride;
-      this.animationFrame = 0;
-      this.started = false;
-      this.disposed = false;
-      this.elapsed = 0;
-      this.phaseGeneration = 0;
-      this.fatalErrorReported = false;
       this.performanceStats = new PerformanceStats(
         mount,
         tuningState.performanceStatsVisible,
@@ -593,8 +266,6 @@ export class Game {
           continueSavedRun: () => this.continueSavedRun(),
         },
       });
-      this.onResize = () => this.handleResize();
-      this.animate = () => this.handleAnimationFrame();
       window.addEventListener('resize', this.onResize);
       resizeListenerRegistered = true;
       if (browserPlaytest === null) {

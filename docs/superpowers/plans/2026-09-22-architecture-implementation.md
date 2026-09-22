@@ -10,7 +10,7 @@
 
 **Spec:** [Architecture review](../specs/2026-09-22-architecture-review-design.md).
 
-**Status:** Planning complete; implementation has not started. All task checkboxes remain open.
+**Status:** Tasks 1–6 implemented. Final review is in progress.
 
 **Baseline:** `af3b1ce6d77c7f0a3ce35752709c3da0b04eeb58`.
 
@@ -60,7 +60,7 @@ These checks are execution steps, not claims about the current planning session.
 The planning worktree has no node_modules. Bun was not found on PATH during planning.
 Do not install packages or run game tests merely to edit this document.
 
-- [ ] Confirm the current worktree and check for incoming changes.
+- [x] Confirm the current worktree and check for incoming changes.
 
 ```powershell
 git status --short
@@ -68,8 +68,8 @@ git rev-parse HEAD
 git branch --show-current
 ```
 
-- [ ] Before code changes, select a branch with the app's branch controls if HEAD remains detached.
-- [ ] Make the project's Bun runtime available, then install the locked dependencies.
+- [x] Before code changes, select a branch with the app's branch controls if HEAD remains detached.
+- [x] Make the project's Bun runtime available, then install the locked dependencies.
 
 ```powershell
 Get-Command bun
@@ -117,7 +117,7 @@ Do not move whole directories or rename unrelated files.
 - Preserve: createAdapter(eventId, roots, operations, cleanupSteps), the current private helper.
 - Add no public production interface.
 
-- [ ] Expand the registry test's dedicated fixture to satisfy DedicatedEventPresentation.
+- [x] Expand the registry test's dedicated fixture to satisfy DedicatedEventPresentation.
 
 ```ts
 function createDedicatedPresentation() {
@@ -142,7 +142,7 @@ function createDedicatedPresentation() {
 Import the existing DedicatedEventPresentation type. Keep a fixture reference named dedicated in this test file.
 Use it as the LeakPresentation constructor result. Keep other event fixtures matched to their actual event IDs.
 
-- [ ] Add disposal coverage through the registry and host. Importance: 97/100.
+- [x] Add disposal coverage through the registry and host. Importance: 97/100.
 
 ```ts
 it('detaches dedicated roots when clear fails during disposal', () => {
@@ -166,7 +166,7 @@ it('detaches dedicated roots when clear fails during disposal', () => {
 Import EventPresentationHost. Also cover restaging, neutral calls after clear, and borrowed event models surviving disposal, at 95/100.
 Keep the current host rollback tests. Those tests protect real ownership behavior.
 
-- [ ] Run the affected tests before refactoring.
+- [x] Run the affected tests before refactoring.
 
 ```powershell
 bun run test tests/EventPresentationRegistry.test.ts tests/EventPresentationHost.test.ts tests/EventPresentationCoordinator.test.ts
@@ -175,7 +175,7 @@ bun run test tests/EventPresentationRegistry.test.ts tests/EventPresentationHost
 This is a behavior-preserving refactor. Existing behavior tests may pass before changes; do not invent a failure requirement.
 New tests must fail when the corresponding guard or cleanup is deliberately removed during later verification.
 
-- [ ] Replace createDedicatedCoordinator with direct presentation construction.
+- [x] Replace createDedicatedCoordinator with direct presentation construction.
 
 Keep createBorrowedDedicatedEnvironment. Remove the coordinator import and multi-presentation array.
 Use the existing createDedicatedPresentation switch once per adapter.
@@ -237,7 +237,7 @@ const cleanupSteps = [
 Pass all four steps separately to createAdapter. Its runCleanupSteps must continue after a clear or dispose error.
 If adapter construction fails after presentation construction, run these steps through preserveConstructionError.
 
-- [ ] Remove obsolete mocks and update scene assertions.
+- [x] Remove obsolete mocks and update scene assertions.
 
 Delete coordinator constructor mocks and createCoordinator from EventPresentationRegistry.test.ts.
 In BoatWorld.test.ts, change the Leak action root from dedicated-event-boat to leak-boat.
@@ -245,7 +245,7 @@ Replace the dedicated-root visibility loop with explicit authored roots for the 
 Assert the root exists before asserting visibility. Optional lookup must not let missing roots pass silently.
 Delete the coordinator source and its two-presentation fixture test after replacement coverage passes.
 
-- [ ] Verify and commit this complete slice.
+- [x] Verify and commit this complete slice.
 
 ```powershell
 rg -n 'EventPresentationCoordinator|dedicated-event-world|dedicated-event-boat' src tests
@@ -264,7 +264,7 @@ Expected search result: no coordinator references or removed group names. The di
 **Interfaces:** Preserve createWeatherAdapter and createSupernaturalAdapter as EventPresentationAdapterFactory values.
 Keep WeatherEventAnimator and SupernaturalEventAnimator interfaces unchanged.
 
-- [ ] Retain the registry's animator item-use test and BoatWorld's weather/supernatural action tests. Importance: 95/100.
+- [x] Retain the registry's animator item-use test and BoatWorld's weather/supernatural action tests. Importance: 95/100.
 
 Run them before refactoring. They must pass on the baseline.
 Do not add a constructor-count test; that would test the implementation instead of player behavior.
@@ -278,7 +278,7 @@ expect(() => new EventPresentationRegistry().create('shower-night', dependencies
   .toThrow(failure);
 ```
 
-- [ ] Remove only layer construction and calls from both factories.
+- [x] Remove only layer construction and calls from both factories.
 
 ```ts
 // Weather operations now call only the existing animator.
@@ -296,7 +296,7 @@ Retain preserveConstructionError for resources created before a later failure.
 Replace the existing weather-construction test's layer-cleanup expectation; no layer exists after this change.
 Retain host cleanup coverage for attached roots. A throwing constructor must preserve its original error.
 
-- [ ] Verify both families and commit.
+- [x] Verify both families and commit.
 
 ```powershell
 bun run test tests/EventPresentationRegistry.test.ts tests/BoatWorld.test.ts tests/EerieMelodyPresentation.test.ts
@@ -338,7 +338,7 @@ function createFocusedPresentation(
 This deliberately removes generic tableau fallback behavior. All routed focused events must have an authored presenter.
 Factory failures propagate. Do not suppress them into invisible events.
 
-- [ ] Add adapter behavior tests. Importance: 96/100.
+- [x] Add adapter behavior tests. Importance: 96/100.
 
 Cover matching result validation, cached interaction targets, holdOnClear, factory null/error, and Dangerous Waters item motion.
 Use focusedFactories injection with a complete FocusedEventPresentation fake; no new public factory hook is needed.
@@ -356,8 +356,8 @@ it('rejects a missing authored focused presenter', () => {
 });
 ```
 
-- [ ] Move the authored factory table and its imports without changing factory construction arguments.
-- [ ] Bind one focused presenter and cache interactionTargets once during adapter construction.
+- [x] Move the authored factory table and its imports without changing factory construction arguments.
+- [x] Bind one focused presenter and cache interactionTargets once during adapter construction.
 
 ```ts
 const targets = presentation.interactionTargets?.() ?? EMPTY_INTERACTION_TARGETS;
@@ -377,7 +377,7 @@ Bind DangerousWatersPresentation directly in createDangerousWatersAdapter.
 Retain its reused reaction object and applyDangerousWatersReaction call after each update.
 Keep the rule that an item choice is not replayed after item motion.
 
-- [ ] Search all callers before deleting the layer.
+- [x] Search all callers before deleting the layer.
 
 ```powershell
 rg -n 'EventPresentationLayer|AUTHORED_EVENT_PRESENTATION_FACTORIES|registerFocusedFactory' src tests
@@ -386,7 +386,7 @@ rg -n 'EventPresentationLayer|AUTHORED_EVENT_PRESENTATION_FACTORIES|registerFocu
 Remove obsolete generic tableau tests only after their authored event behavior remains covered.
 Do not delete BoatWorld's featured model dependency: the rescue ending uses it.
 
-- [ ] Run focused event, registry, world, and bundle suites, then build and commit.
+- [x] Run focused event, registry, world, and bundle suites, then build and commit.
 
 ```powershell
 bun run test tests/EventPresentationRegistry.test.ts tests/EventPresentationHost.test.ts tests/BoatWorld.test.ts tests/FocusedEventExit.test.ts tests/GhostShipPresentation.test.ts tests/EventBundleManager.test.ts
@@ -432,7 +432,7 @@ Move FocusedEventWorldPort and FocusedEventUiPort to the new file, narrowing the
 Camera entry/exit promises, busy state, operation generations, and session calls belong to SurvivalEventFlow.
 The view retains only displayed event/choices and viewport dimensions.
 
-- [ ] Move all four existing FocusedEventFlow behavioral tests to SurvivalEventFlow tests. Importance: 98/100.
+- [x] Move all four existing FocusedEventFlow behavioral tests to SurvivalEventFlow tests. Importance: 98/100.
 
 Preserve invalid ID/instance rejection, stale entry, visibility wait, and stale camera return assertions.
 Update createRig to use the real event flow with complete focus world/UI methods instead of a fake focused flow.
@@ -460,7 +460,7 @@ it('does not restore old controls after disposal during camera return', async ()
 This uses the existing createRig and snapshot helpers in that file, extended with the named focus methods.
 Also test event replacement within the same phase; phase-generation checks alone are insufficient.
 
-- [ ] Move focus operation ordering into SurvivalEventFlow; keep view work in FocusedEventView.
+- [x] Move focus operation ordering into SurvivalEventFlow; keep view work in FocusedEventView.
 
 Use this ownership table during the move:
 
@@ -500,7 +500,7 @@ Do not use the compact snippet as permission to omit those existing checks.
 Preserve separate before-animation and after-animation commit paths for different event choices.
 Remove FocusedEventChoiceResolution and callback factories after their consumers move.
 
-- [ ] Rewire the phase and dispose the focus view through event flow ownership only.
+- [x] Rewire the phase and dispose the focus view through event flow ownership only.
 
 ```ts
 this.ui.onFocusedEventChoice = (choice) => {
@@ -514,7 +514,7 @@ this.ui.onFocusedEventBack = () => {
 Replace the phase's focus resize, direct choice, and disposal calls with the event flow commands.
 Remove setFocusedResolutionActive from the external protocol. State transitions become private owner operations.
 
-- [ ] Verify all event lifecycle paths and commit.
+- [x] Verify all event lifecycle paths and commit.
 
 ```powershell
 bun run test tests/SurvivalEventFlow.test.ts tests/SurvivalPhase.test.ts tests/FocusedEventExit.test.ts tests/EventBundleManager.test.ts tests/SurvivalSaveStore.test.ts
@@ -559,7 +559,7 @@ export function eventChoiceDecision(
 Import all referenced types from existing files. Do not import UI, Three.js, storage, or translated text.
 Keep selected-instance authentication in resolveItemResponse. The pure decision's default instance is for choice display only.
 
-- [ ] Add repeat-preview and stale-choice tests. Importance: 96/100.
+- [x] Add repeat-preview and stale-choice tests. Importance: 96/100.
 
 ```ts
 it('does not mutate the run or random state while previewing choices', () => {
@@ -583,7 +583,7 @@ For stale state, preview a valid item choice, change that instance to broken thr
 Assert rejection, unchanged companion energy, unchanged inventory after the broken-state baseline, and no random draw.
 Include zero Food/Bait trades and an already-owned Night Trader reward.
 
-- [ ] Move overlapping read-only checks into the decision implementation.
+- [x] Move overlapping read-only checks into the decision implementation.
 
 Use existing helpers: driftingSupplyChoiceForVariant, deriveEventVariantSeed, eligibleHandymanRewards, ownsNightTraderReward, and carlitosHelpUnavailableMessage.
 Apply Drifting Supplies variant selection once inside eventChoiceDecision.
@@ -606,7 +606,7 @@ Translate failures in the flow with the current label functions. Keep existing r
 Map failures in the current priority: trade, companion, resources, chest. Item response authentication stays earlier.
 Preserve multiple display reasons and language-reactive getters.
 
-- [ ] Recheck the decision at commit, then perform mutations exactly once.
+- [x] Recheck the decision at commit, then perform mutations exactly once.
 
 ```ts
 const decision = eventChoiceDecision(event, catalogChoice, this.snapshot());
@@ -618,7 +618,7 @@ Do not call eventChoiceRejection as a preview: it currently consumes companion e
 Remove duplicated variant and requirement logic only after both callers use the pure decision.
 Keep global state checks, response shape checks, forced result handling, and inventory mutation in SurvivalSession.
 
-- [ ] Verify domain behavior, translations, and deterministic continuation, then commit.
+- [x] Verify domain behavior, translations, and deterministic continuation, then commit.
 
 ```powershell
 bun run test tests/SurvivalSession.test.ts tests/SurvivalEventFlow.test.ts tests/NightTraderTrades.test.ts tests/DriftingSupplies.test.ts tests/CarlitosSurvival.test.ts tests/domainLanguage.test.ts tests/OptionalLootUI.test.ts tests/SurvivalUI.test.ts
@@ -679,7 +679,7 @@ export function createBrowserGame(
 Move GAME_CAMERA, WebGlInitializationError, renderer creation, camera creation, browser preferences, and random seed setup into createBrowserGame.ts.
 Keep runtime-only types in GameRuntimeDependencies.ts. Keep GameFactories with Game unless import cycles require a type-only move.
 
-- [ ] Adapt construction tests to call createBrowserGame. Importance: 94/100.
+- [x] Adapt construction tests to call createBrowserGame. Importance: 94/100.
 
 Preserve existing renderer failure and cleanup order assertions.
 Add a failure after runtime initialization starts and assert browser setup does not repeat runtime cleanup.
@@ -701,7 +701,7 @@ export function createRuntimeTestGame(
 The builder fills every required dependency using the existing test defaults. No partial runtime dependencies reach Game.
 Adapt the existing tests to this fixture, then run them before removing old setup code.
 
-- [ ] Move browser allocation code and ownership transfer into createBrowserGame.
+- [x] Move browser allocation code and ownership transfer into createBrowserGame.
 
 Before calling new Game, the browser factory owns renderer, sceneRenderer, and canvas cleanup.
 On entry to new Game, Game owns runtime setup cleanup, matching the existing initializationStarted rule.
@@ -722,7 +722,7 @@ Replace the old optional test waterQuality object with initialWaterQuality in Ga
 When that value exists, the test factory creates the preference, sets the value, and returns it.
 No preference observer or second phase owner is needed. Keep preference initialization inside constructor rollback coverage.
 
-- [ ] Replace launch construction and test entry points atomically.
+- [x] Replace launch construction and test entry points atomically.
 
 ```ts
 // src/app/launchGame.ts, PRODUCTION_DEPENDENCIES:
@@ -733,7 +733,7 @@ Delete Game.forTest, initializeForTest, TestGameBase, createTestRenderer, and cr
 Initialize runtime fields once through the normal constructor. Remove redundant resets only after constructor parity tests pass.
 Drive frames through a captured requestAnimationFrame callback in tests instead of casting into handleAnimationFrame.
 
-- [ ] Verify every caller, run the full suite and build, then commit.
+- [x] Verify every caller, run the full suite and build, then commit.
 
 ```powershell
 rg -n 'Game.forTest|GameTestOptions|initializeForTest|Object.create\(Game.prototype\)' src tests

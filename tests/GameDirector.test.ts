@@ -112,14 +112,14 @@ describe('Game director', () => {
       createMenu: createImmediateMenu,
       createScavenge: () => active,
       createSurvival: () => phase(),
-    }, testOptions());
+    }, testOptions({ clock: { start: vi.fn(), getDelta: () => 1 } }));
     await flushPhases();
-    Object.assign(game, { clock: { start: vi.fn(), getDelta: () => 1 } });
-
-    (game as unknown as { handleAnimationFrame: () => void; }).handleAnimationFrame();
+    game.start();
+    requestAnimationFrame.mock.calls.at(-1)![0](0);
 
     expect(active.update).toHaveBeenCalledWith(0.05, 0.05);
     expect(active.render).toHaveBeenCalledOnce();
+    game.dispose();
     requestAnimationFrame.mockRestore();
 
   });

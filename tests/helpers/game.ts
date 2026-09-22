@@ -1,7 +1,8 @@
+import { createRuntimeTestGame, type GameRuntimeTestOptions } from './gameRuntime';
 import { runCleanupSteps } from '../../src/world/SceneResources';
 import { Texture } from 'three';
 import { vi } from 'vitest';
-import { Game, type GameFactories, type GameTestOptions } from '../../src/Game';
+import { Game, type GameFactories } from '../../src/Game';
 import type { PropModelLibrary } from '../../src/world/PropModelLibrary';
 import type { MenuModelLibrary } from '../../src/menu/MenuModelLibrary';
 import { MenuSandAssets } from '../../src/menu/MenuSandAssets';
@@ -14,7 +15,7 @@ import type { PhysicsMode } from '../../src/physics/PhysicsOptions';
 import { AudioSystem } from '../../src/audio/AudioSystem';
 import type { PhaseResourceSource } from '../../src/app/PhaseResources';
 import type { SurvivalContent } from '../../src/survival/SurvivalContent';
-export interface GameFixtureOptions extends Omit<GameTestOptions, 'resources'> {
+export interface GameFixtureOptions extends Omit<GameRuntimeTestOptions, 'resources'> {
   propModels: PropModelLibrary;
   menuModels: MenuModelLibrary;
   menuSandAssets?: MenuSandAssets;
@@ -54,7 +55,7 @@ export function fixtureResources(options: GameFixtureOptions): PhaseResourceSour
   };
 }
 export function createTestGame(factories: GameFactories, options: GameFixtureOptions): Game {
-  return Game.forTest(factories, { ...options, resources: fixtureResources(options) });
+  return createRuntimeTestGame(factories, { ...options, resources: fixtureResources(options) });
 }
 export async function flushPhases(): Promise<void> {
   for (let turn = 0; turn < 3; turn += 1) {

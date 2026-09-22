@@ -34,11 +34,12 @@ describe('Game construction rollback', () => {
   it('classifies renderer construction errors as WebGL initialization failures', async () => {
     const cause = new Error('WebGL context failed');
     constructionMocks.WebGLRenderer.mockImplementation(() => { throw cause; });
-    const { Game, WebGlInitializationError } = await import('../src/Game');
+    const { createBrowserGame, WebGlInitializationError } = await import('../src/app/createBrowserGame');
 
-    expect(() => new Game(
+    expect(() => createBrowserGame(
       document.createElement('main'),
       {} as PhaseResourceSource,
+      () => undefined, null,
     )).toThrow(WebGlInitializationError);
   }, 10_000);
 
@@ -59,13 +60,14 @@ describe('Game construction rollback', () => {
       dispose: vi.fn(() => calls.push('sceneRenderer')),
     };
     constructionMocks.createSceneRenderer.mockReturnValue(sceneRenderer);
-    const { Game } = await import('../src/Game');
+    const { createBrowserGame } = await import('../src/app/createBrowserGame');
 
     let thrown: unknown;
     try {
-      new Game(
+      createBrowserGame(
         document.createElement('main'),
         { audio: AudioSystem.silent(), physicsMode: 'enabled' } as PhaseResourceSource,
+        () => undefined, null,
       );
     } catch (error) {
       thrown = error;
@@ -87,4 +89,23 @@ describe('Game construction rollback', () => {
     expect(sceneRenderer.dispose).toHaveBeenCalledOnce();
     expect(renderer.dispose).toHaveBeenCalledOnce();
   }, 30_000);
+});
+
+// Importance: 94/100. Runtime construction must retain the primary error and release each owner once.
+it('preserves the runtime failure when cleanup also fails after ownership transfers', async () => {
+  const failure = new Error('runtime capability failed');
+  const canvas = document.createElement('canvas');
+  const remove = vi.spyOn(canvas, 'remove');
+  const renderer = { domElement: canvas, shadowMap: { enabled: false },
+    capabilities: { getMaxAnisotropy: () => { throw failure; } }, dispose: vi.fn() };
+  const sceneRenderer = { dispose: vi.fn(() => { throw new Error('cleanup failed'); }) };
+  constructionMocks.WebGLRenderer.mockReturnValue(renderer);
+  constructionMocks.createSceneRenderer.mockReturnValue(sceneRenderer);
+  const { createBrowserGame } = await import('../src/app/createBrowserGame');
+  expect(() => createBrowserGame(document.createElement('main'),
+    { audio: AudioSystem.silent(), physicsMode: 'enabled' } as PhaseResourceSource,
+    () => undefined, null)).toThrow(failure);
+  expect(sceneRenderer.dispose).toHaveBeenCalledOnce();
+  expect(renderer.dispose).toHaveBeenCalledOnce();
+  expect(remove).toHaveBeenCalledOnce();
 });

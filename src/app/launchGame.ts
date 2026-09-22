@@ -1,8 +1,6 @@
 import { systemText } from '../i18n/systemMessages';
-import {
-  Game,
-  WebGlInitializationError,
-} from '../Game';
+import type { Game } from '../Game';
+import { createBrowserGame, WebGlInitializationError } from './createBrowserGame';
 import { ITEM_DEFINITIONS } from '../game/ItemState';
 import {
   createSystemScreen,
@@ -69,9 +67,7 @@ export interface LaunchDependencies extends PhaseResourceLoaders {
 const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   ...PHASE_RESOURCE_LOADERS,
   loadAudio: () => AudioSystem.load(),
-  createGame: (mount, resources, onFatalError, browserPlaytest) => (
-    new Game(mount, resources, onFatalError, browserPlaytest)
-  ),
+  createGame: createBrowserGame,
 };
 
 function renderSystemScreen(
