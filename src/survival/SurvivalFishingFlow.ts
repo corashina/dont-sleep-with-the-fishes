@@ -26,6 +26,7 @@ export type FishingWorldPort = Pick<
   | 'playFishingCast'
   | 'showFishingWaiting'
   | 'showFishingBite'
+  | 'updateFishingFight'
   | 'projectFishingBite'
   | 'playFishingReel'
   | 'playFishingNetHaul'
@@ -47,7 +48,7 @@ export type FishingUiPort = Pick<
 
 export type FishingAudioPort = Pick<
   SurvivalAudio,
-  'deny' | 'fishingCast' | 'fishingBite' | 'fishingReel' | 'fishingNet' | 'fishingNetSplash' | 'fishingResult'
+  'deny' | 'fishingCast' | 'fishingBite' | 'setFishingReeling' | 'fishingNet' | 'fishingNetSplash' | 'fishingResult'
 >;
 
 export interface SurvivalFishingFlowDependencies {
@@ -72,6 +73,7 @@ type FishingPresentationState =
   | 'casting'
   | 'waiting'
   | 'bite'
+  | 'fighting'
   | 'settling'
   | 'result'
   | 'returning';
@@ -91,7 +93,7 @@ export function formatFishingResult(result: FishingTerminalResult, outcome: Acti
   return {
     items,
     get message() {
-      if (result.kind === 'miss') return flowText('nothing');
+      if (result.kind === 'miss') return outcome.message;
       if (result.catch.id === 'backpack' || result.catch.kind === 'fish') return '';
       return result.catch.reward.kind === 'none'
         ? flowText('junk') : result.catch.label;
@@ -107,6 +109,7 @@ export class SurvivalFishingFlow {
   private viewportWidth = 1;
   private viewportHeight = 1;
   private disposed = false;
+  private controlActive = false;
 
   constructor(private readonly dependencies: SurvivalFishingFlowDependencies) {}
 
@@ -186,17 +189,25 @@ export class SurvivalFishingFlow {
     const attempt = this.activeFishing;
     const generation = this.dependencies.captureLifecycleGeneration();
     if (!this.canReel(attempt, generation)) return false;
-    const current = attempt.snapshot();
-    if (current.state === 'resolved' && current.result !== null) {
-      return this.settle(attempt, current.result, generation);
-    }
-    const reel = attempt.reel();
-    if (!reel.accepted || reel.result === undefined) return false;
-    if (!attempt.completeReel().accepted) return false;
-    const result = attempt.snapshot().result;
-    if (result === null || result !== reel.result) return false;
-    this.dependencies.audio.fishingReel?.();
-    return this.settle(attempt, result, generation);
+    if (!attempt.reel().accepted) return false;
+    this.presentation = 'fighting';
+    this.dependencies.ui.setFishingState({
+      mode: 'fighting',
+      get message() { return flowText('counterPull'); },
+      biteTarget: null,
+    });
+    this.dependencies.world.updateFishingFight?.(attempt.view());
+    return true;
+  }
+
+  setControlActive(active: boolean): void {
+    this.controlActive = active && this.isActive() && this.presentation === 'fighting';
+    this.dependencies.audio.setFishingReeling?.(this.controlActive);
+  }
+
+  counterPull(movementX: number): void {
+    if (!this.controlActive || !this.canUpdate(this.activeFishing, 0)) return;
+    this.activeFishing.counterPull(movementX);
   }
 
   continueResult(): void {
@@ -229,13 +240,20 @@ export class SurvivalFishingFlow {
 
     const current = attempt.view();
     const previousState = current.state;
+    if (current.state === 'fighting' && !this.controlActive) return;
     attempt.advance(deltaSeconds);
     if (current.castPoint === null) return;
     if (current.state === 'bite') {
       this.updateBite(current.castPoint);
+      this.dependencies.world.updateFishingFight?.(current);
+      this.syncBiteTarget();
       return;
     }
-    if (current.state !== 'missed' || current.result === null) return;
+    if (current.state === 'fighting') {
+      this.dependencies.world.updateFishingFight?.(current);
+      return;
+    }
+    if (current.result === null) return;
     if (previousState === 'waiting' && this.presentation !== 'bite') {
       this.enterBite(current.castPoint);
     }
@@ -264,10 +282,12 @@ export class SurvivalFishingFlow {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.setControlActive(false);
     this.activeFishing = null;
     this.presentation = 'idle';
     this.settlementInProgress = false;
     runCleanupSteps([
+      () => this.dependencies.ui.setFishingState?.({ mode: 'hidden', message: '', biteTarget: null }),
       () => this.dependencies.ui.hideFishingResult?.(),
       () => this.dependencies.ui.setFishingViewExitVisible?.(false),
     ]);
@@ -336,12 +356,12 @@ export class SurvivalFishingFlow {
     if (!this.isCurrentFishing(attempt, generation) || this.settlementInProgress) return false;
     this.settlementInProgress = true;
     this.presentation = 'settling';
+    this.setControlActive(false);
     const outcome = this.dependencies.session.finishFishing?.(attempt.snapshot().id, result);
     if (outcome === undefined || !outcome.accepted) {
       this.dependencies.audio.deny?.();
       this.settlementInProgress = false;
-      this.presentation = 'bite';
-      this.syncBiteTarget();
+      this.presentation = 'fighting';
       return false;
     }
     this.dependencies.renderSnapshot();
@@ -428,7 +448,7 @@ export class SurvivalFishingFlow {
   private canUpdate(attempt: FishingSession | null, deltaSeconds: number): attempt is FishingSession {
     return attempt !== null
       && !this.settlementInProgress
-      && (this.presentation === 'waiting' || this.presentation === 'bite')
+      && (this.presentation === 'waiting' || this.presentation === 'bite' || this.presentation === 'fighting')
       && !this.dependencies.isPaused()
       && !this.dependencies.isHidden()
       && this.isActive()

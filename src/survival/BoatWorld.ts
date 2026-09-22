@@ -1491,6 +1491,10 @@ export class BoatWorld {
     this.fishingPresentation.showBite(point);
   }
 
+  updateFishingFight(view: import('./FishingSession').FishingAttemptView): void {
+    this.fishingPresentation.updateFight(view);
+  }
+
   projectFishingBite(width: number, height: number): ProjectedBoatBounds {
     return this.fishingPresentation.projectBite(width, height);
   }

@@ -1,6 +1,8 @@
 import { defineMessages } from './messages';
 
 export const flowText = defineMessages({
+  counterPull: { en: 'PULL AGAINST THE FISH — KEEP IT CENTERED', pl: 'CIĄGNIJ PRZECIWNIE DO RYBY — UTRZYMAJ JĄ NA ŚRODKU', 'es-AR': 'TIRÁ CONTRA EL PEZ — MANTENELO EN EL CENTRO' },
+  resumeFishing: { en: 'CLICK TO CONTINUE REELING', pl: 'KLIKNIJ, ABY KONTYNUOWAĆ ZWIJANIE', 'es-AR': 'HACÉ CLIC PARA SEGUIR RECOGIENDO' },
   netCast: { en: 'CLICK THE WATER TO SCOOP', pl: 'KLIKNIJ WODĘ, ABY ZACZERPNĄĆ SIECIĄ', 'es-AR': 'HACÉ CLIC EN EL AGUA PARA PESCAR CON LA RED' },
   junk: { en: 'Junk', pl: 'Śmieci', 'es-AR': 'Basura' },
   netHaul: { en: 'HAULING THE NET', pl: 'WCIĄGANIE SIECI', 'es-AR': 'RECOGIENDO LA RED' },

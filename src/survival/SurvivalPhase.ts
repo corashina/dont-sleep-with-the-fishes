@@ -857,6 +857,8 @@ export class SurvivalPhase implements GamePhase {
       this.viewportHeight,
     );
     this.ui.onFishingReel = () => this.fishingFlow.reel();
+    this.ui.onFishingCounterPull = (movementX) => this.fishingFlow.counterPull(movementX);
+    this.ui.onFishingControlActive = (active) => this.fishingFlow.setControlActive(active);
     this.ui.onFishingResultContinue = () => this.fishingFlow.continueResult();
     this.ui.onFishingViewExit = () => this.fishingFlow.exitView();
     this.ui.onFocusedEventSelect = (eventId) => { void this.eventFlow.focusEvent(eventId); };

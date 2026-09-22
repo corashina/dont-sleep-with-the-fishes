@@ -24,7 +24,7 @@ export interface FishingCastPoint {
 }
 
 export type FishingAttemptState =
-  | 'aiming' | 'casting' | 'waiting' | 'bite' | 'reeling' | 'resolved' | 'missed';
+  | 'aiming' | 'casting' | 'waiting' | 'bite' | 'fighting' | 'resolved' | 'missed';
 
 export type FishingTerminalResult =
   | { readonly kind: 'catch'; readonly catch: FishingCatchDefinition }
@@ -46,6 +46,9 @@ export interface FishingAttemptView {
   readonly state: FishingAttemptState;
   readonly castPoint: FishingCastPoint | null;
   readonly result: FishingTerminalResult | null;
+  readonly fishOffset: number;
+  readonly rodPull: number;
+  readonly fightSeconds: number;
 }
 
 export interface FishingCommandResult {
@@ -82,6 +85,10 @@ export class FishingSession {
   private waitingSeconds = 0;
   private biteSeconds = 0;
   private result: FishingTerminalResult | null = null;
+  private fishOffset = 0;
+  private rodPull = 0;
+  private fightSeconds = 0;
+  private readonly movementSeed: number;
   private readonly liveView: FishingAttemptView;
 
   constructor(options: FishingSessionOptions) {
@@ -90,6 +97,7 @@ export class FishingSession {
     this.capturedBait = this.gear === 'rod' && options.capturedBait;
     const biteDelayRoll = options.random.next();
     const catchRoll = options.random.next();
+    this.movementSeed = biteDelayRoll * Math.PI * 2;
     this.biteDelaySeconds = SURVIVAL_BALANCE.fishing.minimumBiteDelaySeconds
       + biteDelayRoll * SURVIVAL_BALANCE.fishing.biteDelayRangeSeconds;
     this.hiddenCatch = selectFishingCatch(
@@ -106,6 +114,9 @@ export class FishingSession {
       get state(): FishingAttemptState { return session.state; },
       get castPoint(): FishingCastPoint | null { return session.castPoint; },
       get result(): FishingTerminalResult | null { return session.result; },
+      get fishOffset(): number { return session.fishOffset; },
+      get rodPull(): number { return session.rodPull; },
+      get fightSeconds(): number { return session.fightSeconds; },
     });
   }
 
@@ -158,25 +169,54 @@ export class FishingSession {
       return;
     }
     if (this.state === 'bite') this.advanceBite(deltaSeconds);
+    else if (this.state === 'fighting') this.advanceFight(deltaSeconds);
   }
 
-  reel(): FishingCommandResult & { readonly result?: FishingTerminalResult } {
+  reel(): FishingCommandResult {
     if (this.state !== 'bite') return rejected('not-biting');
-    this.result = Object.freeze({ kind: 'catch', catch: this.hiddenCatch });
-    this.state = 'reeling';
-    return Object.freeze({ accepted: true, code: 'reel-started', result: this.result });
+    this.state = 'fighting';
+    this.fishOffset = 0;
+    return accepted('fight-started');
   }
 
-  completeReel(): FishingCommandResult {
-    if (this.state !== 'reeling') return rejected('not-reeling');
-    this.state = 'resolved';
-    return accepted('reel-completed');
+  counterPull(movementX: number): void {
+    if (this.state !== 'fighting' || !Number.isFinite(movementX)) return;
+    // Limit a single event so a browser mouse spike cannot instantly lose a catch.
+    const pull = Math.max(-45, Math.min(45, movementX)) * SURVIVAL_BALANCE.fishing.mousePullPerPixel;
+    this.fishOffset += pull;
+    this.rodPull = Math.max(-1, Math.min(1, this.rodPull + pull * 3));
+    if (Math.abs(this.fishOffset) >= 1) this.loseFish();
+  }
+
+  private advanceFight(deltaSeconds: number): void {
+    // Fixed small slices preserve escape checks through a slow frame.
+    let remaining = Math.min(deltaSeconds, SURVIVAL_BALANCE.fishing.fightSeconds - this.fightSeconds);
+    while (remaining > 1e-9 && this.state === 'fighting') {
+      const step = Math.min(1 / 120, remaining);
+      const direction = Math.sin(this.fightSeconds * (1.7 + this.movementSeed * 0.015) + 0.25)
+        * (this.movementSeed < Math.PI ? 1 : -1);
+      this.fishOffset += Math.tanh(direction * 5) * 0.95 * step;
+      this.rodPull *= Math.exp(-step * 3);
+      this.fightSeconds += step;
+      remaining -= step;
+      if (Math.abs(this.fishOffset) >= 1) this.loseFish();
+    }
+    if (this.state === 'fighting' && this.fightSeconds >= SURVIVAL_BALANCE.fishing.fightSeconds - 1e-9) {
+      this.fightSeconds = SURVIVAL_BALANCE.fishing.fightSeconds;
+      this.result = Object.freeze({ kind: 'catch', catch: this.hiddenCatch });
+      this.state = 'resolved';
+    }
+  }
+
+  private loseFish(): void {
+    this.result = Object.freeze({ kind: 'miss' });
+    this.state = 'missed';
   }
 
   private advanceBite(deltaSeconds: number): void {
     this.biteSeconds += deltaSeconds;
+    this.fishOffset = Math.sin(this.biteSeconds * 2.1 + this.movementSeed) * 0.28;
     if (this.biteSeconds < SURVIVAL_BALANCE.fishing.reactionSeconds) return;
-    this.result = Object.freeze({ kind: 'miss' });
-    this.state = 'missed';
+    this.loseFish();
   }
 }

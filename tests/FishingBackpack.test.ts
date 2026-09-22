@@ -1,4 +1,5 @@
 import { describe,expect,it } from 'vitest';
+import { landFishingCatch } from './helpers/fishing';
 import { ITEM_IDS,type ItemId } from '../src/game/ItemState';
 import { eligibleFishingCatches,selectFishingCatch } from '../src/survival/fishingCatalog';
 import { fishingSettlement } from '../src/survival/fishingSettlementRules';
@@ -22,8 +23,9 @@ describe('fishing backpack', () => {
     attempt.cast({ x: 4, z: -2 });
     attempt.completeCast();
     attempt.advance(attempt.snapshot().biteDelaySeconds);
-    const result = attempt.reel().result!;
-    attempt.completeReel();
+    attempt.reel();
+    landFishingCatch(attempt);
+    const result = attempt.view().result!;
     const outcome = session.finishFishing(attempt.snapshot().id, result);
     expect(result).toMatchObject({ catch: { id: 'backpack', reward: { itemId: missing } } });
     expect(session.snapshot().inventory[`${missing}-1`]?.condition).toBe('usable');

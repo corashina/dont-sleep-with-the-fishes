@@ -3,6 +3,7 @@ import { describe,expect,it } from 'vitest';
 import { FishingSession } from '../src/survival/FishingSession';
 import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 import { sequenceRandom } from './helpers/random';
+import { landFishingCatch } from './helpers/fishing';
 
 function createSession(draws: readonly number[] = [0, 0]) {
   return new FishingSession({
@@ -64,7 +65,9 @@ describe('FishingSession', () => {
     successful.advance(
       successful.snapshot().biteDelaySeconds + SURVIVAL_BALANCE.fishing.reactionSeconds - 0.000001,
     );
-    expect(successful.reel()).toMatchObject({ accepted: true, result: { kind: 'catch' } });
+    expect(successful.reel()).toMatchObject({ accepted: true });
+    expect(successful.view().result).toBeNull();
+    expect(successful.view().state).toBe('fighting');
 
     const missed = createSession();
     castToWaiting(missed);
@@ -73,15 +76,69 @@ describe('FishingSession', () => {
     expect(missed.reel().accepted).toBe(false);
   });
 
-  it('resolves only a reeling attempt and keeps terminal results stable', () => {
+  // Importance: 95/100. Catch timing, escape, and immutable rewards protect player resources.
+  it('requires four controlled seconds and keeps terminal results stable', () => {
     const session = createSession();
-    expect(session.completeReel().accepted).toBe(false);
+    expect(session.reel().accepted).toBe(false);
     castToWaiting(session);
     session.advance(3);
-    const result = session.reel().result;
-    expect(session.completeReel().accepted).toBe(true);
-    expect(session.completeReel().accepted).toBe(false);
+    session.reel();
+    session.advance(0.5);
+    expect(session.view().result).toBeNull();
+    landFishingCatch(session);
+    const result = session.view().result;
+    expect(result?.kind).toBe('catch');
+    expect(session.view().fightSeconds).toBe(4);
+    session.advance(10);
+    session.counterPull(100);
+    expect(session.reel().accepted).toBe(false);
     expect(session.snapshot().result).toBe(result);
+  });
+
+  it('loses an uncontrolled fish, including through a long frame', () => {
+    for (const step of [1 / 60, 4]) {
+      const session = createSession();
+      castToWaiting(session);
+      session.advance(3);
+      session.reel();
+      for (let i = 0; i < 250 && session.view().state === 'fighting'; i++) session.advance(step);
+      expect(session.view().result).toEqual({ kind: 'miss' });
+      expect(session.view().fightSeconds).toBeLessThan(4);
+    }
+  });
+
+  it('moves the bite and rejects non-finite counter input', () => {
+    const session = createSession();
+    castToWaiting(session);
+    session.advance(2);
+    const before = session.view().fishOffset;
+    session.advance(0.2);
+    expect(session.view().fishOffset).not.toBe(before);
+    session.reel();
+    session.counterPull(Number.NaN);
+    session.counterPull(Infinity);
+    expect(session.view().fishOffset).toBe(0);
+    session.advance(0.4);
+    const offset = session.view().fishOffset;
+    session.counterPull(-20);
+    expect(session.view().fishOffset).toBeLessThan(offset);
+  });
+
+  it('requires counter-pulling across the movement variants', () => {
+    for (let variant = 0; variant < 20; variant++) {
+      const idle = createSession([variant / 20, 0]);
+      castToWaiting(idle);
+      idle.advance(idle.snapshot().biteDelaySeconds);
+      idle.reel();
+      idle.advance(4);
+      expect(idle.view().result?.kind).toBe('miss');
+      const controlled = createSession([variant / 20, 0]);
+      castToWaiting(controlled);
+      controlled.advance(controlled.snapshot().biteDelaySeconds);
+      controlled.reel();
+      landFishingCatch(controlled);
+      expect(controlled.view().result?.kind).toBe('catch');
+    }
   });
 
   it('reuses a frozen live view for allocation-free state reads', () => {

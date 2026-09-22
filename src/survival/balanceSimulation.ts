@@ -207,10 +207,15 @@ function fishOnceWhenPossible(
     begun.attempt.snapshot().biteDelaySeconds
       + (catches ? 0 : SURVIVAL_BALANCE.fishing.reactionSeconds),
   );
-  const terminal = catches
-    ? begun.attempt.reel().result!
-    : begun.attempt.snapshot().result!;
-  if (catches) begun.attempt.completeReel();
+  if (catches) {
+    begun.attempt.reel();
+    // Model a successful player; the policy's success rate includes the struggle.
+    for (let frame = 0; frame < 250 && begun.attempt.view().state === 'fighting'; frame++) {
+      begun.attempt.counterPull(-begun.attempt.view().fishOffset / SURVIVAL_BALANCE.fishing.mousePullPerPixel);
+      begun.attempt.advance(1 / 60);
+    }
+  }
+  const terminal = begun.attempt.view().result!;
   session.finishFishing(begun.attempt.snapshot().id, terminal);
 }
 

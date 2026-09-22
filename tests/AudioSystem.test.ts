@@ -191,7 +191,8 @@ describe('AudioSystem', () => {
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
     expect(SURVIVAL_SOUND_IDS).toContain('fishingNet');
     audio.fishingCast();
-    audio.fishingReel();
+    audio.setFishingReeling(true);
+    audio.setFishingReeling(true);
     audio.fishingNet();
     audio.fishingNetSplash();
     expect(backend.voices.map(({ id }) => id)).toEqual(['fishingCast', 'fishingReel', 'fishingNet', 'anchorSplash']);
@@ -200,6 +201,10 @@ describe('AudioSystem', () => {
     expect(net.setPaused).toHaveBeenLastCalledWith(true);
     audio.setPaused(false);
     expect(net.setPaused).toHaveBeenLastCalledWith(false);
+    const reel = backend.voices[1]!;
+    expect(reel.setPaused).toHaveBeenLastCalledWith(false);
+    audio.setFishingReeling(false);
+    expect(reel.stop).toHaveBeenCalledWith(0.08);
     audio.dispose();
     expect(net.stop).toHaveBeenCalled();
   });

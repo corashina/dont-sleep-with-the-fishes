@@ -1,3 +1,4 @@
+import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 // Importance: 10/10 (scaled from 5/5). Protects survival orchestration and lifecycle.
 import { Scene } from 'three';
 import { afterEach,describe,expect,it,vi } from 'vitest';
@@ -477,6 +478,16 @@ function fishingReelCallback(rig: FishingRig) {
   return callback;
 }
 
+function completeFishingFight(rig: FishingRig): void {
+  const begun = rig.session.beginFishing.mock.results.at(-1)!.value;
+  if (!begun.accepted) throw new Error('Fishing unavailable');
+  rig.ui.onFishingControlActive?.(true);
+  for (let frame = 0; frame < 250 && begun.attempt.view().state === 'fighting'; frame++) {
+    rig.ui.onFishingCounterPull?.(-begun.attempt.view().fishOffset / SURVIVAL_BALANCE.fishing.mousePullPerPixel);
+    rig.phase.update(3 + frame / 60, 1 / 60);
+  }
+}
+
 async function settleFishingEntry(rig: FishingRig): Promise<void> {
   expect(rig.animations.enter).toHaveLength(1);
   rig.animations.enter.at(-1)!.resolve();
@@ -792,7 +803,7 @@ describe('SurvivalPhase orchestration', () => {
     const reel = fishingReelCallback(rig);
     expect(reel()).toBe(true);
     expect(reel()).toBe(false);
-    rig.phase.update(3.1, 0.1);
+    completeFishingFight(rig);
 
     expect(rig.session.finishFishing).toHaveBeenCalledOnce();
     expect(rig.world.playFishingReel).toHaveBeenCalledOnce();
@@ -857,6 +868,7 @@ describe('SurvivalPhase orchestration', () => {
     await completeFishingCast(rig);
     rig.phase.update(3, 3);
     expect(fishingReelCallback(rig)()).toBe(true);
+    completeFishingFight(rig);
     rig.animations.reel[0]!.resolve();
     await flushPromises();
     rig.ui.onFishingResultContinue?.();

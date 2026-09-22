@@ -140,6 +140,11 @@ Carlitos improves fishing luck and can help during events while he has energy.
 
 ### Fishing
 
+Click the moving bite to hook the catch. The cursor hides during the struggle.
+Move the mouse against the fish's pull. Keep control for four seconds to land it.
+The fish escapes if it pulls too far sideways. Rod bending and line tension show the strain.
+Pause releases the cursor and freezes the struggle. Click to resume reeling after pause or mouse capture loss.
+
 Fishing can reel in Fish Bones as a rare junk catch. It gives no food.
 
 Fishing can also recover utility salvage at the wiki-documented weights: Bait,
