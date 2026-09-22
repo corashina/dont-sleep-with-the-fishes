@@ -44,6 +44,8 @@ export const systemText = defineMessages({
   lantern: {"en":"lifeboat lantern","pl":"latarnia szalupy", 'es-AR': "farol del bote salvavidas"},
   shipLight: {"en":"ship lighting","pl":"oświetlenie statku", 'es-AR': "iluminación del barco"},
   loading: {"en":"Loading game","pl":"Wczytywanie gry", 'es-AR': "Cargando el juego"},
+  preparingScene: { en: 'Preparing scene', pl: 'Przygotowywanie sceny', 'es-AR': 'Preparando la escena' },
+  downloadedMegabytes: { en: (amount: string) => `Downloaded ${amount} MB`, pl: (amount: string) => `Pobrano ${amount} MB`, 'es-AR': (amount: string) => `Se descargaron ${amount} MB` },
   fpsWait: {"en":"Rendering performance: waiting for FPS data","pl":"Wydajność renderowania: oczekiwanie na pomiar klatek", 'es-AR': "Rendimiento gráfico: esperando datos de FPS"},
   furnitureTitle: { en: 'Unable to prepare the ship furniture', pl: 'Nie można przygotować wyposażenia statku', 'es-AR': "No se pudo preparar el mobiliario del barco" },
   menuTitle: { en: 'Unable to prepare the underwater menu', pl: 'Nie można przygotować podwodnego menu', 'es-AR': "No se pudo preparar el menú submarino" },

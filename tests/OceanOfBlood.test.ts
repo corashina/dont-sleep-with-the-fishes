@@ -11,6 +11,7 @@ import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { HIGH_WATER_LOOK } from '../src/ocean/highWaterLook';
 import { EMPTY_SURVIVAL_EVENT_MODELS } from '../src/survival/SurvivalEventModelLibrary';
 import type { ItemId,ItemInstanceId } from '../src/game/ItemState';
+import { resolveEventItemUseContext } from '../src/survival/eventItemUseChoreography';
 
 function session(hunger = 0, item?: ItemId): SurvivalSession {
   return new SurvivalSession(item ? [{ type: item, instanceId: `${item}-1` as ItemInstanceId }] : [], {
@@ -20,8 +21,8 @@ function session(hunger = 0, item?: ItemId): SurvivalSession {
 }
 
 describe('Ocean of Blood rules', () => {
-  it('offers only scuba gear and wait, and retrieves only the heart without damaging the gear', () => {
-    expect(survivalEventById('ocean-of-blood')!.choices.map(choice => choice.id)).toEqual(['scubaSet', 'sleep']);
+  it('offers salvage, scuba gear and wait, and retrieves only the heart with scuba gear', () => {
+    expect(survivalEventById('ocean-of-blood')!.choices.map(choice => choice.id)).toEqual(['fishingNet', 'bucket', 'scubaSet', 'sleep']);
     const run = session(0, 'scubaSet');
     const before = run.snapshot();
     expect(run.resolveEvent({ kind: 'item', choiceId: 'scubaSet', instanceId: 'scubaSet-1' })).toMatchObject({
@@ -46,8 +47,22 @@ describe('Ocean of Blood rules', () => {
     expect(restored.exportCheckpoint().nextDawnEnergyOverride).toBeNull();
   });
 
-  it.each(['scubaSet', 'fishingNet', 'flareGun', 'flashlight'] as const)('rejects an unavailable choice: %s', (item) => {
-    const run = session(0, item === 'scubaSet' ? undefined : item);
+  // Importance: 95/100. Salvage must not award the heart or permit a second reward.
+  it.each(['fishingNet', 'bucket'] as const)('salvages normal food with %s and consumes the encounter', (item) => {
+    const run = session(0, item);
+    const before = run.snapshot();
+    const response = { kind: 'item', choiceId: item, instanceId: `${item}-1` } as const;
+    expect(run.resolveEvent(response)).toMatchObject({ accepted: true, deltas: { food: 1, pressure: 1 } });
+    expect(run.snapshot().food).toBe(before.food + 1);
+    expect(run.snapshot().heartPieces).toEqual(before.heartPieces);
+    expect(run.snapshot().inventory).toEqual(before.inventory);
+    expect(run.exportCheckpoint().appearanceCounts['ocean-of-blood']).toBe(1);
+    expect(run.resolveEvent(response).accepted).toBe(false);
+    expect(resolveEventItemUseContext('ocean-of-blood', item, item)).toBe(item === 'bucket' ? 'bucket-scoop' : 'net-scoop');
+  });
+
+  it.each(['scubaSet', 'fishingNet', 'bucket', 'flareGun', 'flashlight'] as const)('rejects an unavailable choice: %s', (item) => {
+    const run = session(0, item === 'flareGun' || item === 'flashlight' ? item : undefined);
     const before = run.snapshot();
     expect(run.resolveEvent({ kind: 'item', choiceId: item, instanceId: `${item}-1` }).accepted).toBe(false);
     expect(run.snapshot()).toEqual(before);
@@ -79,7 +94,7 @@ function presentation() {
     sampleWorldWaveInto: sample, readWorldWaveAmplitudeScale: () => 1,
   } as unknown as DedicatedEventEnvironment);
   event.stage({ eventId: 'ocean-of-blood', targetInstanceId: null, variantSeed: 31 });
-  return { event, intensity, sample, camera, dive };
+  return { event, intensity, sample, camera, dive, finishDive: () => finishDive() };
 }
 
 describe('Ocean of Blood presentation', () => {
@@ -118,7 +133,7 @@ describe('Ocean of Blood presentation', () => {
   });
 
   it('reveals twelve bodies and recovers only the heart through a scuba dive', async () => {
-    const { event, intensity, sample, dive } = presentation();
+    const { event, intensity, sample, dive, finishDive } = presentation();
     const reveal = event.reveal();
     event.update(9, BLOOD_OCEAN_REVEAL_SECONDS);
     await reveal;
@@ -126,18 +141,14 @@ describe('Ocean of Blood presentation', () => {
     expect(event.worldRoot.visible).toBe(true);
     expect(event.worldRoot.children.filter(child => child.name.startsWith('blood-ocean-body-'))).toHaveLength(12);
     expect(sample).toHaveBeenCalledTimes(24);
-    const tin = event.worldRoot.getObjectByName('blood-ocean-recovered-loot')!;
-    expect(tin.getObjectByName('blood-heart-piece')).toBeDefined();
-    expect(tin.children).toHaveLength(1);
-    expect(tin.getObjectByName('blood-ocean-sealed-tin')).toBeUndefined();
-    expect(event.itemAimTarget.position.distanceTo(tin.getWorldPosition(new Vector3()))).toBeLessThan(0.001);
     expect(await event.playItemUse('fishingNet', 'fishingNet-1')).toBe(false);
     expect(dive.play).not.toHaveBeenCalled();
     const use = event.playItemUse('scubaSet', 'scubaSet-1');
     expect(dive.play).toHaveBeenCalledWith('scubaSet-1', expect.objectContaining({ waterAppearance: 'blood' }));
-    expect(tin.visible).toBe(false);
-    event.settleForVisibilityChange();
+    finishDive();
     expect(await use).toBe(true);
+    expect(dive.clear).not.toHaveBeenCalled();
+    event.clear();
     expect(dive.clear).toHaveBeenCalledOnce();
     event.dispose();
     expect(intensity).toHaveBeenLastCalledWith(0);

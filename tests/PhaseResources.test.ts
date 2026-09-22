@@ -205,13 +205,11 @@ describe('phase resource ownership', () => {
     const ship = deferred<Awaited<ReturnType<PhaseResourceLoaders['loadShipAssets']>>>();
     const asset = await dependencies.loadShipAssets();
     vi.mocked(dependencies.loadShipAssets).mockReturnValue(ship.promise);
-    const progress = vi.fn();
     const resources = new PhaseResources(dependencies, AudioSystem.silent(), 'enabled');
-    const pending = resources.acquireShip(progress);
+    const pending = resources.acquireShip();
     const rejected = expect(pending).rejects.toThrow('disposed');
     await flushPromises();
     resources.dispose();
-    const progressCalls = progress.mock.calls.length;
     expect(asset.dispose).not.toHaveBeenCalled();
     ship.resolve(asset);
     await rejected;
@@ -221,7 +219,6 @@ describe('phase resource ownership', () => {
     const content = await vi.mocked(dependencies.loadSurvivalContent).mock.results[0]!.value;
     expect(models.dispose).toHaveBeenCalledOnce();
     expect(content.dispose).toHaveBeenCalledOnce();
-    expect(progress).toHaveBeenCalledTimes(progressCalls);
   });
 
   it('waits for the display font before returning menu assets', async () => {

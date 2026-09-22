@@ -41,7 +41,7 @@ function dependencies(overrides: Partial<LaunchDependencies> = {}): LaunchDepend
 }
 afterEach(() => { vi.restoreAllMocks(); document.body.replaceChildren(); initializeLanguage(null); });
 describe('phase-based launch', () => {
-  it('advances loading progress as resources finish and waits for game readiness', async () => {
+  it('shows preparation until cached resources and game readiness finish', async () => {
     const font = deferred<void>();
     const models = deferred<MenuModelLibrary>();
     const sand = deferred<MenuSandAssets>();
@@ -58,27 +58,24 @@ describe('phase-based launch', () => {
       }),
     }));
     const progress = element.querySelector('progress')!;
-    expect(progress.value).toBe(0);
+    expect(progress.position).toBe(-1);
     await flushPhases();
-    expect(progress.max).toBe(6);
-    expect(progress.value).toBe(2);
-    expect(progress.getAttribute('aria-valuetext')).toBe('33%, 0.0 / 0.0 MB');
+    expect(progress.position).toBe(-1);
+    expect(progress.getAttribute('aria-valuetext')).toBe('Preparing scene');
 
     font.resolve();
     await flushPhases();
-    expect(progress.value).toBe(3);
+    expect(progress.position).toBe(-1);
     models.resolve({ dispose: vi.fn() } as unknown as MenuModelLibrary);
     await flushPhases();
-    expect(progress.value).toBe(4);
+    expect(progress.position).toBe(-1);
     sand.resolve({ dispose: vi.fn() } as unknown as MenuSandAssets);
     await flushPhases();
-    expect(progress.value).toBe(5);
+    expect(progress.position).toBe(-1);
     expect(progress.isConnected).toBe(true);
 
     ready.resolve();
     await handle.completion;
-    expect(progress.position).toBe(1);
-    expect(progress.getAttribute('aria-valuetext')).toBe('100%, 0.0 / 0.0 MB');
     expect(progress.isConnected).toBe(false);
     handle.cancel();
   });
@@ -94,12 +91,10 @@ describe('phase-based launch', () => {
     expect(loading).not.toBeNull();
     await flushPhases();
     expect(element.querySelector('.system-screen--loading')).toBe(loading);
-    expect(progress.value).toBe(60);
-    expect(progress.max).toBe(100);
+    expect(progress.position).toBe(-1);
     menu.resolve({ dispose: vi.fn(), configure: vi.fn() } as unknown as MenuModelLibrary);
     const game = await handle.completion;
     expect(game).not.toBeNull();
-    expect(progress.position).toBe(1);
     expect(element.querySelector('.system-screen--loading')).toBeNull();
     expect(deps.loadMenuModels).toHaveBeenCalledOnce();
     expect(deps.loadShipAssets).not.toHaveBeenCalled();
@@ -165,10 +160,9 @@ describe('phase-based launch', () => {
     const handle = launchGame(element, deps, 'enabled', {
       search: '?playtest=survival&seed=42&missing=map-1&missing=knife-1', playtestEnabled: true,
     });
-    const progress = element.querySelector('progress')!;
     const game = await handle.completion;
     expect(game).not.toBeNull();
-    expect(progress.position).toBe(1);
+    expect(element.querySelector('.system-screen--loading')).toBeNull();
     expect(deps.loadSurvivalContent).toHaveBeenCalledOnce();
     expect(deps.loadMenuModels).not.toHaveBeenCalled();
     expect(deps.loadShipAssets).not.toHaveBeenCalled();

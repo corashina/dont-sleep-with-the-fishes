@@ -11,6 +11,7 @@ import {
 import type { FishingCastPoint } from '../src/survival/FishingSession';
 import { formatDiveResult } from '../src/survival/SurvivalDayActionFlow';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
+import { SurvivalAudio } from '../src/audio/SurvivalAudio';
 import { createTestSurvivalPhase } from './helpers/survivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type {
@@ -49,6 +50,20 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 }
 
 describe('survival checkpoints', () => {
+  // Importance: 98/100. All survival ending bells must use the popup visibility callback.
+  it.each(['rescue', 'kraken', 'death', 'sinking'] as const)('rings when the %s popup reports visibility', (id) => {
+    const bell = vi.spyOn(SurvivalAudio.prototype, 'endingPopup');
+    const ui: Partial<SurvivalUI> = {};
+    const phase = SurvivalPhase.forTestStart({ world: {}, ui }, {
+      kind: 'fresh', savedItems: [], seed: 41, scavengeElapsedSeconds: 0,
+    });
+    try {
+      expect(bell).not.toHaveBeenCalled();
+      ui.onEndingShown?.(id);
+      expect(bell).toHaveBeenCalledOnce();
+    } finally { phase.dispose(); bell.mockRestore(); }
+  });
+
   // Importance: 95/100. Lab-only quest ownership must not leak into regular runs or trigger an ending.
   it.each([true, false])('loads all heart models only in the item lab: lab=%s', (lab) => {
     const render = vi.fn();
@@ -76,9 +91,14 @@ describe('survival checkpoints', () => {
     const showEnding = vi.fn();
     const playRescueEnding = vi.fn();
     const setPhase = vi.fn();
+    // Importance: 98/100. The phase must wait for the visible popup before playing its bell.
+    const bell = vi.spyOn(SurvivalAudio.prototype, 'endingPopup');
+    const ui: Partial<SurvivalUI> = {
+      showEnding, setSleepCovered: vi.fn(async () => undefined), showEventReveal: vi.fn(async () => undefined),
+    };
     const phase = SurvivalPhase.forTestStart({
       world: { setPhase, stageEvent: vi.fn(), revealEvent: vi.fn(() => reveal.promise), reactToEventOutcome, playRescueEnding },
-      ui: { showEnding, setSleepCovered: vi.fn(async () => undefined), showEventReveal: vi.fn(async () => undefined) },
+      ui,
     }, endingPreview
       ? { kind: 'ending-preview', savedItems: [], seed: 41, scavengeElapsedSeconds: 0, endingId: 'kraken' }
       : { kind: 'fresh', savedItems: [], seed: 41, scavengeElapsedSeconds: 0, initialEventId: 'kraken' });
@@ -97,7 +117,10 @@ describe('survival checkpoints', () => {
       expect(setPhase).not.toHaveBeenCalledWith('day');
       expect(showEnding).toHaveBeenCalledTimes(1);
       expect(playRescueEnding).not.toHaveBeenCalled();
-    } finally { phase.dispose(); }
+      expect(bell).not.toHaveBeenCalled();
+      ui.onEndingShown?.('kraken');
+      expect(bell).toHaveBeenCalledOnce();
+    } finally { phase.dispose(); bell.mockRestore(); }
   });
 
   it.each(['drifting-supplies', 'drifting-chest'] as const)(

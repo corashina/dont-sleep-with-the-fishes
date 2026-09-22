@@ -23,6 +23,7 @@ export const SOUND_IDS = [
   'lightWaveImpact',
   'hardWaveImpact',
   'confirm',
+  'eventComplete',
   'denied',
   'pause',
   'resume',
@@ -124,7 +125,7 @@ export const INTERFACE_SOUND_IDS = ['confirm', 'denied', 'pause', 'resume', 'jou
 export const MENU_SOUND_IDS = ['menuAmbient', ...INTERFACE_SOUND_IDS] as const;
 export const SHIP_SOUND_IDS = [
   ...INTERFACE_SOUND_IDS, 'roomTone', 'shipAlarm', 'scavengeChase',
-  'scavengeCountdown', 'woodStep', 'jump', 'itemHandling', 'sinkingEnding', 'shipCrash',
+  'scavengeCountdown', 'woodStep', 'jump', 'itemHandling', 'sinkingEnding', 'shipCrash', 'eventComplete',
 ] as const satisfies readonly SoundId[];
 const shipOnlySounds = new Set<SoundId>([
   'menuAmbient', 'roomTone', 'shipAlarm', 'scavengeChase', 'scavengeCountdown',
@@ -201,6 +202,7 @@ export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
     lightWaveImpact: asset('lightWaveImpact', 'effects', 0.28, false, 2),
     hardWaveImpact: asset('hardWaveImpact', 'effects', 0.46, false, 2),
     confirm: asset('confirm', 'interface', 0.34, false, 2),
+    eventComplete: asset('eventComplete', 'effects', 0.38, false, 1),
     denied: asset('denied', 'interface', 0.34, false, 2),
     pause: asset('pause', 'interface', 0.32, false, 1),
     resume: asset('resume', 'interface', 0.32, false, 1),

@@ -11,7 +11,7 @@ import type { SceneRenderer } from './rendering/SceneRenderer';
 import { PerformanceStats } from './ui/PerformanceStats';
 import { PostProcessingConsole } from './ui/PostProcessingConsole';
 import { SettingsMenu } from './ui/SettingsMenu';
-import { createSystemScreen, observeSystemScreenDownloads, updateSystemScreenProgress } from './ui/SystemScreen';
+import { createSystemScreen, observeSystemScreenDownloads } from './ui/SystemScreen';
 import type { SystemTuningPreference } from './ui/systemTuningPreference';
 import {
   clampPostProcessingSetting,
@@ -32,7 +32,7 @@ import type {
   SurvivalCheckpointChange,
   SurvivalPhaseStart,
 } from './survival/SurvivalPhase';
-import type { PhaseResourceSource, ResourceLease, ResourceProgress } from './app/PhaseResources';
+import type { PhaseResourceSource, ResourceLease } from './app/PhaseResources';
 
 export interface GameFactories {
   createMenu(
@@ -311,7 +311,7 @@ export class Game {
   }
 
   private activateScavenge(phaseStart: ScavengePhaseStart = 'intro'): Promise<void> {
-    return this.acquirePhase(progress => this.resources.acquireShip(progress), (assets, generation) => {
+    return this.acquirePhase(() => this.resources.acquireShip(), (assets, generation) => {
       assets.shipAssets.configure(this.context.maxTextureAnisotropy);
       assets.lifeboatAssets.configure(this.context.maxTextureAnisotropy);
       return this.factories.createScavenge(
@@ -325,7 +325,7 @@ export class Game {
   }
 
   private activateMenu(): Promise<void> {
-    return this.acquirePhase(progress => this.resources.acquireMenu(progress), (assets, generation) => {
+    return this.acquirePhase(() => this.resources.acquireMenu(), (assets, generation) => {
       assets.menuSandAssets.configure(this.context.maxTextureAnisotropy);
       return this.factories.createMenu(
         { ...this.context, ...assets },
@@ -342,20 +342,17 @@ export class Game {
   }
 
   private acquirePhase<T>(
-    acquire: (onProgress: ResourceProgress) => Promise<ResourceLease<T>>,
+    acquire: () => Promise<ResourceLease<T>>,
     create: (assets: T, generation: number) => GamePhase,
   ): Promise<void> {
     const generation = ++this.phaseGeneration;
     this.preparing = true;
     this.showTransitionScreen();
-    const progress: ResourceProgress = (completed, total) => {
-      if (this.ownsGeneration(generation)) this.updatePreparationProgress(Math.round(completed / Math.max(1, total) * 80));
-    };
     return Promise.resolve().then(() => {
       if (!this.ownsGeneration(generation)) return null;
       this.settingsMenu?.close();
       this.activePhase?.setOverlayActive?.(true);
-      return acquire(progress);
+      return acquire();
     }).then(lease => {
       if (lease === null) return;
       if (!this.ownsGeneration(generation)) { lease.dispose(); return; }
@@ -395,13 +392,11 @@ export class Game {
       outgoing?.dispose();
       this.resetCamera();
       phase = create(lease.assets, generation);
-      this.updatePreparationProgress(85);
       await this.preparePhasePresentation(phase, generation);
       if (!this.ownsGeneration(generation)) { const stale = phase; phase = null; stale.dispose(); return; }
       this.activePhase = phase;
       this.activeLease = lease;
       transferred = true;
-      this.updatePreparationProgress(100);
       this.synchronizePresentationControls();
       if (this.started && this.ownsGeneration(generation)) phase.start();
     } catch (error) {
@@ -432,10 +427,6 @@ export class Game {
     if (existing === null) this.stopDownloadProgress = observeSystemScreenDownloads(screen);
     this.context.mount.append(screen);
     this.transitionScreen = screen;
-  }
-
-  private updatePreparationProgress(completed: number): void {
-    if (this.transitionScreen !== null) updateSystemScreenProgress(this.transitionScreen, completed, 100);
   }
 
   private clearTransitionScreen(): void {
@@ -480,7 +471,7 @@ export class Game {
   }
 
   private activateSurvival(start: SurvivalPhaseStart): Promise<void> {
-    return this.acquirePhase(progress => this.resources.acquireSurvival(progress), (assets, generation) => {
+    return this.acquirePhase(() => this.resources.acquireSurvival(), (assets, generation) => {
       assets.lifeboatAssets.configure(this.context.maxTextureAnisotropy);
       const onCheckpointChange: SurvivalCheckpointChange = checkpoint => {
         if (!this.ownsGeneration(generation)) return;

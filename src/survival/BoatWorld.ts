@@ -649,6 +649,7 @@ export class BoatWorld {
       // Place the handle at the pivot before leaning the 1.8 m rod over the bow.
       this.rod.position.set(0, 0.9, 0);
       this.rod.rotation.x = -Math.PI / 2;
+      this.rod.scale.set(0.6, 0.6, 1);
       this.rodPivot.add(this.rod);
       this.boat.add(this.rodPivot);
       collectMeshResources(this.rodPivot, this.ownedGeometries, this.ownedMaterials);

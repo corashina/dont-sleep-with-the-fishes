@@ -50,7 +50,8 @@ describe('asynchronous phase activation', () => {
     await flushPhases();
     expect(ship.prepare).toHaveBeenCalledOnce();
     expect(ship.start).not.toHaveBeenCalled();
-    expect(r.mount.querySelector('progress')?.value).toBe(85);
+    expect(r.mount.querySelector('progress')?.position).toBe(-1);
+    expect(r.mount.querySelector('.system-loading-status')?.textContent).toBe('Preparing scene');
     pending.resolve();
     await flushPhases();
     expect(ship.start).toHaveBeenCalledOnce();

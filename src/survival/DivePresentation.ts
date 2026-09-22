@@ -206,7 +206,11 @@ export class DivePresentation {
 
   update(deltaSeconds: number, waterHeight: number): void {
     const active = this.active;
-    if (this.disposed || active === null) return;
+    if (this.disposed) return;
+    if (active === null) {
+      if (this.cameraCaptured && !this.holdStarted) this.applyPose(waterHeight);
+      return;
+    }
     if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) return;
 
     let remainingDelta = deltaSeconds;

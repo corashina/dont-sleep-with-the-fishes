@@ -22,6 +22,10 @@ const requireElement = createElementRequirement('UI');
 
 export type ScavengePresentation = 'intro' | 'playing';
 
+function isEndingPopupVisible(stage: ScavengeEndingStage): boolean {
+  return stage === 'endingHold' || stage === 'menuReady';
+}
+
 export interface ScavengeItemTooltip {
   readonly text: string;
   readonly x: number;
@@ -32,6 +36,7 @@ export interface ScavengeItemTooltip {
 export class GameUI {
   onResume: () => void = () => undefined;
   onRestart: () => void = () => undefined;
+  onEndingShown: () => void = () => undefined;
   onReturnToMenu: () => void = () => undefined;
   private readonly root: HTMLDivElement;
   private readonly introFade: HTMLElement;
@@ -261,7 +266,9 @@ export class GameUI {
     blackout: number,
     record: Extract<EndingRecord, { id: 'dorothy' }> | null,
   ): void {
-    const visible = stage === 'endingHold' || stage === 'menuReady';
+    if (this.disposed) return;
+    const wasVisible = isEndingPopupVisible(this.endingStage);
+    const visible = isEndingPopupVisible(stage);
     if (visible && record === null) {
       throw new Error('Dorothy ending record is missing.');
     }
@@ -280,6 +287,7 @@ export class GameUI {
     this.statisticsView.button.hidden = !revealAction;
     if (revealAction && this.endingStage !== 'menuReady') this.endingAction.focus();
     this.endingStage = stage;
+    if (visible && !wasVisible) this.onEndingShown();
   }
 
   dispose(): void {
@@ -295,6 +303,7 @@ export class GameUI {
     this.statisticsView.dispose();
     this.onResume = () => undefined;
     this.onRestart = () => undefined;
+    this.onEndingShown = () => undefined;
     this.onReturnToMenu = () => undefined;
     this.root.remove();
   }

@@ -297,9 +297,12 @@ describe('event selection contracts', () => {
     expect(rig.session.resolveEvent).toHaveBeenCalledOnce();
     expect(rig.ui.setEventSelection).not.toHaveBeenCalled();
     expect(rig.presentTerminal).not.toHaveBeenCalled();
+    // Importance: 95/100. The completion bell must wait for the Kraken handover.
+    expect(rig.audio.finishEventReaction).not.toHaveBeenCalled();
     reaction.resolve();
     await finished;
     await vi.waitFor(() => expect(rig.presentTerminal).toHaveBeenCalledOnce());
+    expect(rig.audio.finishEventReaction).toHaveBeenCalledOnce();
     expect(rig.world.clearEvent).not.toHaveBeenCalled();
     expect(rig.session.beginDawn).not.toHaveBeenCalled();
     rig.flow.clear();
@@ -321,20 +324,43 @@ describe('event selection contracts', () => {
     expect(rig.presentTerminal).not.toHaveBeenCalled();
   });
 
-  // Importance: 95/100. A reward must remain visible until the player accepts it.
-  it('waits for the blood heart reward before dawn', async () => {
+  // Importance: 98/100. Keep the dive underwater until covered and show its reward only after dawn fades in.
+  it('covers the blood dive before clearing it and waits for the reward after dawn fades in', async () => {
     const rig = createSessionRig(new SurvivalSession([{ type: 'scubaSet', instanceId: 'scubaSet-1' }], {
-      seed: 41, initialEventId: 'ocean-of-blood', initialHeartPieces: { chest: true, flowers: true, blood: false },
+      seed: 41, initial: { day: 19 }, initialEventId: 'ocean-of-blood', initialHeartPieces: { chest: true, flowers: true, blood: false },
     }));
+    const dive = deferred();
+    const fadeOut = deferred();
+    const fadeIn = deferred();
     const reward = deferred();
     rig.ui.showRewardResult.mockImplementation(() => reward.promise);
     await rig.flow.revealPending(rig.realSession.snapshot());
+    rig.world.playEventItemUse.mockImplementation(() => dive.promise);
+    rig.world.clearEvent.mockClear();
+    rig.ui.setSleepCovered.mockClear();
+    rig.ui.setSleepCovered.mockImplementation((covered) => covered ? fadeOut.promise : fadeIn.promise);
     rig.flow.resolveItem('scubaSet', 'scubaSet-1');
+    await vi.waitFor(() => expect(rig.world.playEventItemUse).toHaveBeenCalledOnce());
+    expect(rig.ui.setSleepCovered).not.toHaveBeenCalled();
+    dive.resolve();
+    await vi.waitFor(() => expect(rig.ui.setSleepCovered).toHaveBeenCalledWith(true));
+    expect(rig.world.clearEvent).not.toHaveBeenCalled();
+    expect(rig.session.beginDawn).not.toHaveBeenCalled();
+    expect(rig.ui.showRewardResult).not.toHaveBeenCalled();
+    fadeOut.resolve();
+    await vi.waitFor(() => expect(rig.ui.setSleepCovered).toHaveBeenCalledWith(false));
+    expect(rig.world.clearEvent).toHaveBeenCalledOnce();
+    expect(rig.session.beginDawn).toHaveBeenCalledOnce();
+    expect(rig.realSession.snapshot().day).toBe(20);
+    expect(rig.world.reactToEventOutcome).not.toHaveBeenCalled();
+    expect(rig.ui.showRewardResult).not.toHaveBeenCalled();
+    fadeIn.resolve();
     await vi.waitFor(() => expect(rig.ui.showRewardResult).toHaveBeenCalledOnce());
     expect(rig.ui.showRewardResult).toHaveBeenCalledWith(expect.objectContaining({ heartCompleted: true }));
-    expect(rig.session.beginDawn).not.toHaveBeenCalled();
+    expect(rig.setBusy).toHaveBeenLastCalledWith(true);
     reward.resolve();
-    await vi.waitFor(() => expect(rig.session.beginDawn).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(rig.setBusy).toHaveBeenLastCalledWith(false));
+    expect(rig.onFatalError).not.toHaveBeenCalled();
     rig.flow.clear();
   });
   it('resolves seagull theft at contact, keeps the flock, and releases it at night', async () => {
@@ -356,6 +382,8 @@ describe('event selection contracts', () => {
     expect(rig.setBusy).toHaveBeenLastCalledWith(true);
     flight.resolve();
     await reveal;
+    // Importance: 95/100. Automatic seagull events must reach completion audio.
+    expect(rig.audio.finishEventReaction).toHaveBeenCalledOnce();
     expect(rig.onFatalError).not.toHaveBeenCalled();
     expect(rig.ui.holdEventOutcome).not.toHaveBeenCalled();
     expect(rig.ui.showEventReveal).not.toHaveBeenCalled();
@@ -800,6 +828,8 @@ describe('event selection contracts', () => {
     await revealing;
     await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
     rig.flow.resolveContextual('attack');
+    // Importance: 95/100. Automatic chest attacks must reach completion audio.
+    expect(rig.audio.finishEventReaction).toHaveBeenCalledOnce();
     expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'choice', choiceId: 'attack' });
     expect(rig.session.resolveEvent.mock.results[0]!.value).toMatchObject({
       accepted: true, deltas: { health: -25 },
@@ -1140,11 +1170,22 @@ describe('SurvivalEventFlow', () => {
     await rig.flow.backFocused();
     expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce();
     expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    // Importance: 95/100. Leaving the view must not ring the completion bell.
+    expect(rig.audio.finishEventReaction).not.toHaveBeenCalled();
     expect(rig.world.clearEvent).not.toHaveBeenCalled();
     expect(rig.setBusy).toHaveBeenLastCalledWith(false);
     expect(rig.ui.restoreCommandFocus).toHaveBeenCalled();
     await rig.flow.focusEvent(eventId);
     expect(rig.ui.showFocusedEvent).toHaveBeenCalledTimes(2);
+  });
+
+  // Importance: 95/100. Both drifting event routes must reach completion audio exactly once.
+  it.each(['drifting-supplies', 'drifting-chest'] as const)('completes audio when leaving %s behind', async (eventId) => {
+    const rig = createRig(snapshot({ state: 'dayEvent', pendingEventId: eventId }));
+    await rig.flow.revealPending(rig.session.snapshot());
+    await rig.flow.focusEvent(eventId);
+    await rig.flow.chooseFocused({ id: 'sleep', instanceId: null });
+    expect(rig.audio.finishEventReaction).toHaveBeenCalledOnce();
   });
 
   it('rejects an ID and instance pair that was not rendered', async () => {

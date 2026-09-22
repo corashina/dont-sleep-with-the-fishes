@@ -244,6 +244,7 @@ export class ScavengePhase implements GamePhase {
       void this.requestPointerLock();
     };
     this.ui.onRestart = this.onRestart;
+    this.ui.onEndingShown = () => this.audio.endingPopup();
     this.ui.onReturnToMenu = this.onReturnToMenu;
     this.ui.setPresentation('intro');
     this.ui.setIntroFadeProgress(1);

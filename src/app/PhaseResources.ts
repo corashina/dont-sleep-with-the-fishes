@@ -19,13 +19,12 @@ export interface ResourceLease<T> {
   readonly assets: T;
   dispose(): void;
 }
-export type ResourceProgress = (completed: number, total: number) => void;
 export interface PhaseResourceSource {
   readonly audio: AudioSystem;
   readonly physicsMode: PhysicsMode;
-  acquireMenu(onProgress?: ResourceProgress): Promise<ResourceLease<MenuAssets>>;
-  acquireShip(onProgress?: ResourceProgress): Promise<ResourceLease<ShipPhaseAssets>>;
-  acquireSurvival(onProgress?: ResourceProgress): Promise<ResourceLease<SurvivalAssets>>;
+  acquireMenu(): Promise<ResourceLease<MenuAssets>>;
+  acquireShip(): Promise<ResourceLease<ShipPhaseAssets>>;
+  acquireSurvival(): Promise<ResourceLease<SurvivalAssets>>;
   dispose(): void;
 }
 export interface PhaseResourceLoaders {
@@ -117,7 +116,6 @@ export class PhaseResources implements PhaseResourceSource {
     loaders: PhaseResourceLoaders,
     readonly audio: AudioSystem,
     readonly physicsMode: PhysicsMode,
-    private readonly onProgress?: (completed: number, total: number) => void,
   ) {
     this.menuFont = new AssetSlot(() => loaders.loadMenuFont(), () => undefined);
     this.menuModels = disposableSlot(() => loaders.loadMenuModels());
@@ -133,15 +131,15 @@ export class PhaseResources implements PhaseResourceSource {
     this.ship = disposableSlot(() => loaders.loadShipAssets());
     this.physics = new AssetSlot(() => physicsMode === 'off' ? Promise.resolve(null) : loaders.loadPhysicsRuntime(), () => undefined);
   }
-  acquireMenu(onProgress?: ResourceProgress): Promise<ResourceLease<MenuAssets>> {
+  acquireMenu(): Promise<ResourceLease<MenuAssets>> {
     return this.acquire(async own => {
       const [menuModels, menuSandAssets] = await Promise.all([
         own(this.menuModels.acquire()), own(this.menuSand.acquire()), own(this.menuFont.acquire()),
       ]);
       return { menuModels, menuSandAssets };
-    }, this.menuAudio, onProgress);
+    }, this.menuAudio);
   }
-  acquireShip(onProgress?: ResourceProgress): Promise<ResourceLease<ShipPhaseAssets>> {
+  acquireShip(): Promise<ResourceLease<ShipPhaseAssets>> {
     return this.acquire(async own => {
       const [propModels, shipFurniture, skyAssets, shipAssets, physicsRuntime, lifeboatAssets, survivalContent] = await Promise.all([
         own(this.gameplayModels.acquire()), own(this.furniture.acquire()), own(this.sky.acquire()),
@@ -149,34 +147,27 @@ export class PhaseResources implements PhaseResourceSource {
         own(this.survivalContent.acquire()), own(this.survivalAudio.acquire()),
       ]);
       return { propModels, shipFurniture, skyAssets, shipAssets, physicsRuntime, lifeboatAssets, survivalContent, physicsMode: this.physicsMode };
-    }, this.shipAudio, onProgress);
+    }, this.shipAudio);
   }
-  acquireSurvival(onProgress?: ResourceProgress): Promise<ResourceLease<SurvivalAssets>> {
+  acquireSurvival(): Promise<ResourceLease<SurvivalAssets>> {
     return this.acquire(async own => {
       const [propModels, skyAssets, lifeboatAssets, survivalContent] = await Promise.all([
         own(this.gameplayModels.acquire()), own(this.sky.acquire()), own(this.lifeboat.acquire()),
         own(this.survivalContent.acquire()),
       ]);
       return { propModels, skyAssets, lifeboatAssets, survivalContent };
-    }, this.survivalAudio, onProgress);
+    }, this.survivalAudio);
   }
   private async acquire<T>(
     load: (own: <A>(pending: Promise<ResourceLease<A>>) => Promise<A>) => Promise<T>,
     audioSlot: AssetSlot<Awaited<ReturnType<AudioSystem['acquirePhaseAudio']>>>,
-    onProgress: ResourceProgress = this.onProgress ?? (() => undefined),
   ): Promise<ResourceLease<T>> {
     if (this.disposed) throw new Error('Phase resources are disposed.');
     const acquired: { dispose(): void }[] = [];
     const pending: Promise<unknown>[] = [];
-    let completed = 0;
-    const finishResource = (): void => {
-      completed += 1;
-      if (!this.disposed) onProgress(completed, pending.length);
-    };
     const own = <A>(promise: Promise<ResourceLease<A>>): Promise<A> => {
       const tracked = promise.then(lease => {
         acquired.push(lease);
-        finishResource();
         return lease.assets;
       });
       pending.push(tracked);
@@ -186,11 +177,9 @@ export class PhaseResources implements PhaseResourceSource {
     try {
       const audio = audioSlot.acquire().then(lease => {
         acquired.push(lease);
-        finishResource();
       });
       pending.push(audio);
       const assetLoad = load(own);
-      onProgress(0, pending.length);
       [assets] = await Promise.all([assetLoad, audio]);
       if (this.disposed) throw new Error('Phase resources were disposed during loading.');
     } catch (error) {

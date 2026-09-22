@@ -1,4 +1,4 @@
-// Importance: 9/10. Protects dive item, wave, camera, promise, and cleanup ownership.
+// Importance: 95/100. Protects dive item, wave, camera, promise, and cleanup ownership.
 import {
   BoxGeometry,
   Group,
@@ -112,6 +112,14 @@ describe('DivePresentationController', () => {
       MeshBasicMaterial
     >;
     expect(veil.material.opacity).toBeCloseTo(1);
+
+    const underwaterPosition = camera.position.clone();
+    const underwaterQuaternion = camera.quaternion.clone();
+    camera.position.copy(initialPosition);
+    camera.quaternion.copy(initialQuaternion);
+    controller.update(86, 0.2);
+    expect(camera.position.toArray()).toEqual(underwaterPosition.toArray());
+    expect(camera.quaternion.toArray()).toEqual(underwaterQuaternion.toArray());
 
     controller.clear();
     expect(supplies.setPresentationItemHidden).toHaveBeenLastCalledWith(

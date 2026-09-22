@@ -110,10 +110,12 @@ export class SurvivalFishingView {
         </button>
       </section>
       <div class="fishing-fade" data-fishing-fade aria-hidden="true"></div>
-      <section class="dive-result" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="fishingResult" aria-label="${uiText('fishingResult')}" inert>
+      <section class="dive-result fishing-result" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="fishingResult" aria-label="${uiText('fishingResult')}" inert>
         <div class="dive-result__paper fishing-result-card scuba-popup-paper">
-          <button type="button" class="dive-result__close ui-role-context" data-fishing-result-close data-ui-aria="closeFishing" aria-label="${uiText('closeFishing')}">&times;</button>
-          <h2 class="dive-result__title scuba-popup-title ui-role-display" data-ui-text="fishingResult">${uiText('fishingResult')}</h2>
+          <header class="fishing-result-header">
+            <button type="button" class="dive-result__close" data-fishing-result-close data-ui-aria="closeFishing" aria-label="${uiText('closeFishing')}"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="m3 3 10 10M13 3 3 13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></button>
+            <h2 class="dive-result__title scuba-popup-title ui-role-display" data-ui-text="fishingResult">${uiText('fishingResult')}</h2>
+          </header>
           <div class="dive-result__rewards fishing-result-items" data-fishing-result-items></div>
           <p class="dive-result__lines ui-role-numeral" data-fishing-result-message hidden></p>
         </div>

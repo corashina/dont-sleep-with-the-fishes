@@ -1,4 +1,4 @@
-import { Group, Mesh, MeshBasicMaterial, Object3D, PointLight, TorusGeometry } from 'three';
+import { Group, Object3D, PointLight } from 'three';
 import { createWaveSample } from '../../ocean/WaveField';
 import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import type { DedicatedEventEnvironment, DedicatedEventPresentation, EventOutcomePresentation, EventSceneContext } from '../eventPresentationTypes';
@@ -17,9 +17,6 @@ export class KrakenPresentation implements DedicatedEventPresentation {
   private readonly geometry = new KrakenGeometry();
   private readonly collection: KrakenCollection;
   private readonly light = new PointLight(0x9fb4ad, 0, 45, 1.3);
-  private readonly wakeGeometry = new TorusGeometry(1, 0.006, 3, 80);
-  private readonly wakeMaterial = new MeshBasicMaterial({ color: 0x78938f, transparent: true, opacity: 0, depthWrite: false });
-  private readonly wakes: Mesh[] = [];
   private readonly wave = createWaveSample();
   private readonly animation = new TimedPresentationAnimation<'reveal' | 'release'>((beat, _time, progress) => {
     if (beat === 'reveal') this.revealProgress = progress;
@@ -39,13 +36,6 @@ export class KrakenPresentation implements DedicatedEventPresentation {
     this.boatRoot.name = 'kraken-boat';
     this.light.position.set(-3, 6, -9);
     this.worldRoot.add(this.geometry.root, this.collection.carrier, this.light, this.itemAimTarget);
-    for (let index = 0; index < 3; index++) {
-      const wake = new Mesh(this.wakeGeometry, this.wakeMaterial);
-      wake.rotation.x = -Math.PI / 2;
-      wake.name = 'kraken-surface-wake';
-      this.wakes.push(wake);
-      this.worldRoot.add(wake);
-    }
     this.worldRoot.visible = false;
   }
 
@@ -93,28 +83,15 @@ export class KrakenPresentation implements DedicatedEventPresentation {
     const descentTime = Math.max(0, releaseTime - KRAKEN_COLLECTION_SECONDS);
     const retreat = krakenEase(descentTime / 5);
     this.environment.sampleWorldWaveInto(this.wave, this.elapsed, 0, -17, this.environment.readWorldWaveAmplitudeScale());
-    this.geometry.root.position.set(0, this.wave.height * 0.22 - 11 + rise * 11.6 - retreat * 13.5, -17 - retreat * 2);
+    this.geometry.root.position.set(0, this.wave.height * 0.22 - 18 + rise * 18.6 - retreat * 13.5, -17 - retreat * 2);
     this.geometry.update(this.elapsed, rise, retreat);
     this.collection.update(this.releaseStarted ? releaseTime : -1);
     this.light.intensity = rise * (1 - retreat * 0.9) * 22;
     this.itemAimTarget.position.copy(this.collection.carrier.position);
-    this.updateWake(rise, descentTime);
     if (this.releaseProgress === 1) {
       this.collection.end(true);
       this.geometry.root.visible = false;
       this.light.intensity = 0;
-    }
-  }
-
-  private updateWake(rise: number, descentTime: number): void {
-    const activity = Math.sin(rise * Math.PI) * 0.12
-      + (descentTime > 0 ? Math.sin(Math.min(1, descentTime / 6) * Math.PI) * 0.12 : 0.025 * rise);
-    this.wakeMaterial.opacity = activity;
-    for (let index = 0; index < this.wakes.length; index++) {
-      const wake = this.wakes[index]!;
-      const radius = 7.5 + index * 2 + (this.elapsed * 0.3 % 2);
-      wake.position.set(0, this.wave.height + 0.035, -17);
-      wake.scale.set(radius, radius * 0.62, 1);
     }
   }
 
@@ -136,8 +113,6 @@ export class KrakenPresentation implements DedicatedEventPresentation {
     this.clear();
     this.disposed = true;
     this.geometry.dispose();
-    this.wakeGeometry.dispose();
-    this.wakeMaterial.dispose();
     this.light.dispose();
     this.worldRoot.clear();
     this.boatRoot.clear();

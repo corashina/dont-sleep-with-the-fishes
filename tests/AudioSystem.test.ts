@@ -10,6 +10,8 @@ import type {
 import { AudioSystem } from '../src/audio/AudioSystem';
 import { WebAudioBackend } from '../src/audio/WebAudioBackend';
 import { SurvivalAudio } from '../src/audio/SurvivalAudio';
+import { ScavengeAudio } from '../src/audio/ScavengeAudio';
+import { SURVIVAL_EVENT_IDS } from '../src/survival/eventCatalog';
 import { EVENT_BUNDLE_SPECS } from '../src/survival/eventBundleManifest';
 import {
   AUDIO_MANIFEST,
@@ -85,6 +87,131 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
+  // Importance: 98/100. All ending popups must ring and leave gameplay sounds stopped.
+  it.each(['rescue', 'kraken', 'death', 'sinking'] as const)('rings at the %s popup and stays quiet afterward', (id) => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.start();
+    audio.update(8);
+    audio.ending(id);
+    expect(backend.voices.some(voice => voice.id === 'eventComplete')).toBe(false);
+    const previous = [...backend.voices];
+    audio.endingPopup();
+    for (const voice of previous) expect(voice.stop).toHaveBeenCalled();
+    const bell = backend.voices.find(voice => voice.id === 'eventComplete')!;
+    expect(bell).toBeDefined();
+    bell.finish();
+    const count = backend.voices.length;
+    audio.update(60);
+    audio.setWeather('thunderstorm');
+    audio.thunder();
+    audio.start();
+    expect(backend.voices).toHaveLength(count);
+    audio.dispose();
+  });
+
+  // Importance: 98/100. Dorothy must ring once at its popup and stop sinking sounds.
+  it('rings once at the Dorothy popup and keeps the ship sounds stopped', () => {
+    expect(SHIP_SOUND_IDS).toContain('eventComplete');
+    const backend = new FakeAudioBackend();
+    const audio = new ScavengeAudio(AudioSystem.forTest(backend).createScope(), []);
+    audio.start();
+    audio.beginRun();
+    audio.sink();
+    audio.crash();
+    expect(backend.voices.some(voice => voice.id === 'eventComplete')).toBe(false);
+    const previous = [...backend.voices];
+    audio.endingPopup();
+    for (const voice of previous) expect(voice.stop).toHaveBeenCalled();
+    audio.endingPopup();
+    audio.update(null, false, 60);
+    expect(backend.voices.filter(voice => voice.id === 'eventComplete')).toHaveLength(1);
+    expect(backend.voices.at(-1)?.id).toBe('eventComplete');
+    audio.dispose();
+  });
+
+  // Importance: 98/100. Animation completion must not play the popup bell early.
+  it.each(SURVIVAL_EVENT_IDS)('waits for a popup after %s completes', (eventId) => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.beginEvent(eventId);
+    expect(backend.voices.some(({ id }) => id === 'eventComplete')).toBe(false);
+    audio.finishEventReaction();
+    audio.finishEventReaction();
+    if (eventId === 'kraken') audio.ending('kraken');
+    expect(backend.voices.filter(({ id }) => id === 'eventComplete')).toHaveLength(0);
+    audio.dispose();
+  });
+
+  // Importance: 98/100. Reproduces water continuing and restarting after the Kraken ending.
+  it('stops all existing game sounds at the Kraken ending and prevents new waves', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.start();
+    audio.setWeather('thunderstorm');
+    audio.update(4);
+    audio.beginEvent('kraken');
+    audio.beginEventReaction('kraken', { accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'none' });
+    const existing = [...backend.voices];
+    audio.finishEventReaction();
+    audio.ending('kraken');
+    for (const voice of existing) expect(voice.stop).toHaveBeenCalledOnce();
+    audio.completionPopup();
+    const bell = backend.voices.find(({ id }) => id === 'eventComplete')!;
+    expect(bell).toBeDefined();
+    bell.finish();
+    const count = backend.voices.length;
+    audio.setWeather('calm');
+    audio.start();
+    audio.update(60);
+    audio.thunder();
+    audio.ending('kraken');
+    expect(backend.voices).toHaveLength(count);
+    audio.dispose();
+  });
+
+  // Importance: 95/100. Cancellation must never sound like completion.
+  it('does not ring when an event is cancelled', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.beginEvent('kraken');
+    audio.clearEvent();
+    audio.finishEventReaction();
+    expect(backend.voices.some(({ id }) => id === 'eventComplete')).toBe(false);
+    audio.dispose();
+  });
+
+  // Importance: 95/100. Completion must silence water, then restore the current gameplay weather.
+  it('keeps the bell clear of weather and dawn sounds until it finishes', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.start();
+    audio.update(8);
+    const wave = backend.voices.find(({ id }) => id === 'lightWaveImpact')!;
+    const ocean = backend.voices.find(({ id }) => id === 'calmOcean')!;
+    audio.beginEvent('flowers');
+    audio.finishEventReaction();
+    audio.completionPopup();
+    expect(wave.stop).toHaveBeenCalledOnce();
+    expect(ocean.setGain).toHaveBeenLastCalledWith(0, 0.15);
+    const bell = backend.voices.find(({ id }) => id === 'eventComplete')!;
+    const count = backend.voices.length;
+    audio.setWeather('rain');
+    audio.update(60);
+    audio.thunder();
+    audio.dawn();
+    expect(backend.voices).toHaveLength(count);
+    expect(ocean.setGain).toHaveBeenLastCalledWith(0, 0.15);
+    audio.setPaused(true);
+    expect(bell.setPaused).toHaveBeenLastCalledWith(true);
+    audio.setPaused(false);
+    bell.finish();
+    expect(ocean.setGain).toHaveBeenLastCalledWith(0.35, 1.5);
+    audio.update(8);
+    expect(backend.voices.at(-1)?.id).toBe('lightWaveImpact');
+    audio.dispose();
+  });
+
   // Importance: 95/100. Storm ambience must cover choices and reactions, then stop with its event.
   it('keeps heavy thunder playing throughout the event and owns pause and cleanup', () => {
     expect(EVENT_BUNDLE_SPECS.thunderstorm.sounds).toContain('stormRumble');
@@ -426,18 +553,23 @@ describe('AudioSystem', () => {
     audio.dispose();
   });
 
-  // Importance: 96/100. A looping handover sound must stop with its event.
+  // Importance: 96/100. Kraken water and handover loops must stop on every exit.
   it.each(['reaction', 'ending', 'clear'] as const)('stops the Kraken handover loop on %s', (exit) => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
     audio.beginEvent('kraken');
+    const water = backend.voices.find(({ id }) => id === 'underwaterMovement')!;
+    expect(water).toBeDefined();
+    expect(water.setGain).toHaveBeenLastCalledWith(0.65, 3);
     audio.beginEventReaction('kraken', { accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'none' });
+    expect(water.setGain).toHaveBeenLastCalledWith(0, 11);
     const tentacle = backend.voices.find(({ id }) => id === 'tentacleMovement')!;
     expect(tentacle).toBeDefined();
     if (exit === 'reaction') audio.finishEventReaction();
     else if (exit === 'ending') audio.ending('kraken');
     else audio.clearEvent();
     expect(tentacle.stop).toHaveBeenCalledOnce();
+    expect(water.stop).toHaveBeenCalledOnce();
     audio.dispose();
   });
 

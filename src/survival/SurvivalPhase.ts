@@ -849,6 +849,8 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onJournalOpen = () => this.handleJournalOpen();
     this.ui.onJournalClose = () => this.handleJournalClose();
     this.ui.onJournalPage = () => this.audio.journal();
+    this.ui.onRewardShown = () => this.audio.completionPopup();
+    this.ui.onEndingShown = () => this.audio.endingPopup();
     this.ui.onRadioPauseChange = (paused) => this.audio.setRadioSignalPaused(paused);
     this.ui.onFishingCast = (point) => this.fishingFlow.cast(
       point?.x ?? null,

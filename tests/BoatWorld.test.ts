@@ -331,8 +331,7 @@ describe('BoatWorld helpers', () => {
       world.syncInventory(snapshot([], { heartPieces: { flowers: true, blood: true, chest: true } }));
       expect(display.getObjectByName('blood-heart-piece')!.visible).toBe(true);
       world.syncInventory(snapshot([], { ending: { id: 'kraken', day: 1, savedPickupCount: 0 } }));
-      expect(display.visible).toBe(true);
-      expect(display.getObjectByName('heart-basket')!.visible).toBe(true);
+      expect(display.visible).toBe(false);
       for (const id of ['flowers', 'blood', 'chest']) {
         expect(display.getObjectByName(id + '-heart-piece')!.visible).toBe(false);
       }

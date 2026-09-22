@@ -19,9 +19,8 @@ export class BoatHeartDisplay {
   private ownedPieces: HeartPieces = EMPTY_HEART;
   private collecting = false;
   private returned = false;
-  private readonly restTransforms: Record<HeartPieceId, Matrix4> = {
-    flowers: new Matrix4(), blood: new Matrix4(), chest: new Matrix4(),
-  };
+  private restParent: Object3D | null = null;
+  private readonly restTransform = new Matrix4();
 
   get tooltip(): string {
     const { flowers, blood, chest } = this.models.pieces;
@@ -68,8 +67,6 @@ export class BoatHeartDisplay {
         piece.position.set(x - center.x, 0.028 - bounds.min.y, z - center.z);
       }
       piece.visible = false;
-      piece.updateMatrix();
-      this.restTransforms[id].copy(piece.matrix);
     });
     this.basket = new HeartBasket(0.37, 0.25);
     this.root.add(this.basket.root);
@@ -80,27 +77,34 @@ export class BoatHeartDisplay {
     this.ownedPieces = snapshot.heartPieces;
     if (this.collecting) return;
     this.returned = snapshot.ending?.id === 'kraken';
+    this.root.visible = !this.returned;
     for (const id of HEART_PIECE_IDS) this.models.pieces[id].visible = this.ownedPieces[id] && !this.returned;
   }
 
   beginCollection(): void {
+    this.restParent = this.root.parent;
+    this.root.updateMatrix();
+    this.restTransform.copy(this.root.matrix);
     this.collecting = true;
   }
 
   piece(id: HeartPieceId): Object3D { return this.models.pieces[id]; }
 
-  takePiece(id: HeartPieceId, carrier: Object3D): void {
-    carrier.attach(this.models.pieces[id]);
+  takeBasket(carrier: Object3D): void {
+    carrier.attach(this.root);
   }
 
   endCollection(returned: boolean): void {
     if (!this.collecting) return;
     this.collecting = false;
     this.returned = returned;
+    if (this.restParent === null) this.root.removeFromParent();
+    else this.restParent.add(this.root);
+    this.restTransform.decompose(this.root.position, this.root.quaternion, this.root.scale);
+    this.restParent = null;
+    this.root.visible = !returned;
     for (const id of HEART_PIECE_IDS) {
       const piece = this.models.pieces[id];
-      this.root.add(piece);
-      this.restTransforms[id].decompose(piece.position, piece.quaternion, piece.scale);
       piece.visible = this.ownedPieces[id] && !returned;
     }
   }

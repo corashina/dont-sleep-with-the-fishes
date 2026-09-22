@@ -26,6 +26,7 @@ export interface AudioScope {
     options: Readonly<SpatialAudioOptions>,
   ): AudioVoice | null;
   stopLoop(id: SoundId, fadeSeconds?: number): void;
+  stopSounds(ids: ReadonlySet<SoundId>): void;
   setLoopGain(id: SoundId, gain: number, rampSeconds?: number): void;
   setListenerPose(pose: Readonly<AudioListenerPose>): void;
   setPaused(paused: boolean): void;

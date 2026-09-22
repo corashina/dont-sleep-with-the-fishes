@@ -341,6 +341,7 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | lightWaveImpact | `lightWaveImpact.mp3` | [Waves Against Fishing Boat / kyles](https://freesound.org/people/kyles/sounds/637645/) |
 | hardWaveImpact | `hardWaveImpact.mp3` | [Strong Waves / Sheyvan](https://freesound.org/people/Sheyvan/sounds/520511/) |
 | confirm | `confirm.mp3` | [Wooden Confirmation / qubodup](https://freesound.org/people/qubodup/sounds/822568/) |
+| eventComplete | `eventComplete.mp3` | [Ship Bell Single Ring / Sojan](https://freesound.org/people/Sojan/sounds/353233/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). HQ MP3 preview, unchanged. |
 | denied | `denied.mp3` | [UI Reject / Rob_Marion](https://freesound.org/people/Rob_Marion/sounds/542040/) |
 | pause | `pause.mp3` | [Wooden Click / BenjaminNelan](https://freesound.org/people/BenjaminNelan/sounds/321083/) |
 | resume | `resume.mp3` | [Menu Click / Leszek_Szary](https://freesound.org/people/Leszek_Szary/sounds/146720/) |

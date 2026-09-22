@@ -14,7 +14,7 @@ import type {
 } from '../survival/eventPresentationCue';
 import type { AudioVoice } from './AudioBackend';
 import type { AudioScope } from './AudioScope';
-import type { SoundId } from './audioManifest';
+import { AUDIO_MANIFEST, SURVIVAL_SOUND_IDS, type SoundId } from './audioManifest';
 import type { SinkingSoundCue } from '../survival/SinkingEndingPresentation';
 
 const WEATHER_GAINS: Readonly<Record<
@@ -63,6 +63,13 @@ const WEATHER_LOOPS = Object.freeze([
   'rain',
   'boatCreak',
 ] as const);
+
+const ENDING_SOUNDS = new Set(SURVIVAL_SOUND_IDS.filter(
+  id => id !== 'eventComplete' && AUDIO_MANIFEST[id].bus !== 'interface',
+));
+const COMPLETION_SOUNDS = new Set([...ENDING_SOUNDS].filter(
+  id => !WEATHER_LOOPS.some(loop => loop === id),
+));
 
 const TOOL_SOUNDS: Readonly<Partial<Record<ItemId, SoundId>>> = Object.freeze({
   bucket: 'bucketRain',
@@ -134,6 +141,12 @@ export class SurvivalAudio {
   private pendingShadowMeow: SoundId | null = null;
   private shadowMeowDelay = 0;
   private disposed = false;
+  private completionVoice: AudioVoice | null = null;
+  private endingStopped = false;
+
+  private get worldAudioMuted(): boolean {
+    return this.endingStopped || this.completionVoice !== null;
+  }
 
   constructor(
     private readonly scope: AudioScope,
@@ -141,13 +154,13 @@ export class SurvivalAudio {
   ) {}
 
   start(): void {
-    if (this.disposed) return;
+    if (this.disposed || this.endingStopped) return;
     for (const id of WEATHER_LOOPS) this.scope.startLoop(id);
     this.setWeather(this.weather, 0);
   }
 
   update(deltaSeconds: number): void {
-    if (this.disposed || this.paused || this.sinkingActive) return;
+    if (this.disposed || this.paused || this.sinkingActive || this.worldAudioMuted) return;
     const elapsed = Math.max(0, deltaSeconds);
     this.waveClock += elapsed;
     if (this.midnightDigVoice !== null) {
@@ -175,8 +188,9 @@ export class SurvivalAudio {
   }
 
   setWeather(id: PresentationWeatherId, rampSeconds = 1.5): void {
-    if (this.disposed) return;
+    if (this.disposed || this.endingStopped) return;
     this.weather = id;
+    if (this.completionVoice !== null) return;
     const gains = WEATHER_GAINS[id];
     for (const loop of WEATHER_LOOPS) {
       this.scope.setLoopGain(loop, gains[loop], rampSeconds);
@@ -345,7 +359,7 @@ export class SurvivalAudio {
   }
 
   dawn(): void {
-    if (!this.disposed) this.scope.play('dawn');
+    if (!this.disposed && this.completionVoice === null && !this.endingStopped) this.scope.play('dawn');
   }
 
   eventReveal(eventId: string): void {
@@ -378,7 +392,12 @@ export class SurvivalAudio {
 
   beginEvent(eventId: string): void {
     this.clearEvent();
-    if (this.disposed) return;
+    if (this.disposed || this.endingStopped) return;
+    this.completionVoice?.stop(0.08);
+    this.playEventAmbience(eventId);
+  }
+
+  private playEventAmbience(eventId: string): void {
     if (eventId === 'thunderstorm') {
       this.scope.startLoop('stormRumble');
       this.scope.setLoopGain('stormRumble', 0, 0);
@@ -389,6 +408,11 @@ export class SurvivalAudio {
       this.scope.startLoop('underUsPresence');
       this.scope.setLoopGain('underUsPresence', 0, 0);
       this.scope.setLoopGain('underUsPresence', 1, 2.5);
+      if (eventId === 'kraken') {
+        this.scope.startLoop('underwaterMovement');
+        this.scope.setLoopGain('underwaterMovement', 0, 0);
+        this.scope.setLoopGain('underwaterMovement', 0.65, 3);
+      }
       return;
     }
     if (eventId === 'seagull-theft') {
@@ -430,7 +454,10 @@ export class SurvivalAudio {
 
   private beginDeepEventReaction(eventId: string): void {
     if (this.disposed || !['something-under-us', 'kraken'].includes(eventId)) return;
-    if (eventId === 'kraken') this.scope.startLoop('tentacleMovement');
+    if (eventId === 'kraken') {
+      this.scope.startLoop('tentacleMovement');
+      this.scope.setLoopGain('underwaterMovement', 0, 11);
+    }
     this.scope.setLoopGain('underUsPresence', 0, eventId === 'kraken' ? 21 : 3.5);
   }
 
@@ -452,6 +479,25 @@ export class SurvivalAudio {
   finishEventReaction(): void {
     if (this.disposed) return;
     this.clearEvent();
+  }
+
+  completionPopup(): void {
+    if (this.disposed) return;
+    this.scope.stopSounds(COMPLETION_SOUNDS);
+    this.playCompletionBell();
+  }
+
+  private playCompletionBell(): void {
+    const voice = this.scope.play('eventComplete');
+    if (voice === null) return;
+    this.completionVoice = voice;
+    this.waveClock = 0;
+    for (const loop of WEATHER_LOOPS) this.scope.setLoopGain(loop, 0, 0.15);
+    voice.onEnded(() => {
+      if (this.completionVoice !== voice) return;
+      this.completionVoice = null;
+      this.setWeather(this.weather);
+    });
   }
 
   midnightTourCue(cue: MidnightTourAudioCue): void {
@@ -484,6 +530,7 @@ export class SurvivalAudio {
 
   clearEvent(): void {
     if (this.diveActive) this.cancelDive();
+    this.scope.stopLoop('underwaterMovement', 0.3);
     this.pendingShadowMeow = null;
     this.shadowMeowDelay = 0;
     this.planeFlybyVoice?.stop(0.08);
@@ -529,14 +576,17 @@ export class SurvivalAudio {
   }
 
   thunder(): void {
-    if (this.disposed) return;
+    if (this.disposed || this.worldAudioMuted) return;
     this.scope.play(THUNDER_SOUNDS[this.thunderSoundIndex]!);
     this.thunderSoundIndex = (this.thunderSoundIndex + 1) % THUNDER_SOUNDS.length;
   }
 
   ending(id: SurvivalEndingId): void {
     if (this.disposed) return;
-    if (id === 'kraken') { this.clearEvent(); return; }
+    if (id === 'kraken') {
+      this.stopEndingSounds();
+      return;
+    }
     if (id === 'sinking') return;
     if (id === 'rescue') this.scope.play('rescueHorn');
     const cue = id === 'rescue'
@@ -547,6 +597,19 @@ export class SurvivalAudio {
       this.rescueEngine = voice;
       voice?.setGain(0.2);
     }
+  }
+
+  endingPopup(): void {
+    if (this.disposed) return;
+    this.stopEndingSounds();
+    this.playCompletionBell();
+  }
+
+  private stopEndingSounds(): void {
+    this.endingStopped = true;
+    this.clearEvent();
+    this.clearRadioSignal();
+    this.scope.stopSounds(ENDING_SOUNDS);
   }
 
   sinkingCue(cue: SinkingSoundCue): void {

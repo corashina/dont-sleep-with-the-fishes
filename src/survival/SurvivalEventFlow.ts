@@ -515,6 +515,7 @@ export class SurvivalEventFlow {
       this.focusedView.hide();
       await this.playFocusedChoiceAnimation(resolution.context);
       if (!await this.resumeFocus(eventId, 'resolving', generation, operation)) return;
+      this.dependencies.audio.finishEventReaction();
       await this.afterFocusedChoiceAnimation(resolution.context);
       if (!await this.resumeFocus(eventId, 'resolving', generation, operation)) return;
       this.focusState = 'returning';
@@ -857,7 +858,6 @@ export class SurvivalEventFlow {
   private async afterFocusedChoiceAnimation(context: FocusedChoiceContext): Promise<void> {
     if (!this.isCurrent(context.generation, context.operation)) return;
     if (!this.shouldShowDriftingReward(context)) return;
-    this.dependencies.audio.action('openChest');
     await (this.dependencies.ui.showRewardResult?.({
       title: 'SALVAGE',
       reward: context.outcome.rewardSummary!,
@@ -1087,7 +1087,11 @@ export class SurvivalEventFlow {
       operation,
     )) return;
     const resolved = this.dependencies.session.snapshot();
-    this.finishDeferredChoiceSync(focusedResult, resolved, generation);
+    this.finishDeferredChoiceSync(
+      focusedResult || (eventId === 'ocean-of-blood' && choiceId === 'scubaSet'),
+      resolved,
+      generation,
+    );
     const condition = resolved.inventory[instanceId]?.condition ?? 'lost';
     const resolvedChoice: EventChoicePresentation = { choiceId, instanceId, condition };
     const response = isEventPresentationRoute(eventId, 'dedicated')
@@ -1288,7 +1292,7 @@ export class SurvivalEventFlow {
   private beginContextualChoice(eventId: string, choiceId: EventResponseId): void {
     this.dependencies.ui.setEventSleepMask?.(eventId, choiceId === 'sleep');
     if (choiceId === 'sleep') this.dependencies.audio.sleep();
-    else this.dependencies.audio.confirm();
+    else if (eventId !== 'kraken') this.dependencies.audio.confirm();
     this.presentation = 'using';
     this.setBusy(true);
   }
@@ -1598,6 +1602,7 @@ export class SurvivalEventFlow {
   }
 
   private async completeChestAttack(generation: number, operation: number): Promise<void> {
+    this.dependencies.audio.finishEventReaction();
     if (!await this.prepareChestAttackReturn(generation, operation)) return;
     const snapshot = await this.chestAttackReturnSnapshot(generation, operation);
     if (!this.isCurrent(generation, operation)) return;
@@ -1934,6 +1939,10 @@ export class SurvivalEventFlow {
       revealFromCover,
     };
     this.beginEventResolution(context);
+    if (eventId === 'ocean-of-blood' && choice.choiceId === 'scubaSet') {
+      await this.completeBloodOceanDive(context);
+      return;
+    }
     await this.playEventResolutionReaction(context);
     if (!this.isCurrent(generation, operation)) return;
     this.dependencies.audio.finishEventReaction();
@@ -1949,6 +1958,29 @@ export class SurvivalEventFlow {
       return;
     }
     await this.completeContinuingEventResolution(context, terminal);
+  }
+
+  private async completeBloodOceanDive(context: EventResolutionContext): Promise<void> {
+    const { generation, operation } = context;
+    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (!this.isCurrent(generation, operation)) return;
+    this.dependencies.audio.finishEventReaction();
+    this.clearPresentation();
+    const snapshot = await this.runDawn(generation, operation);
+    if (!this.isCurrent(generation, operation)) return;
+    if (!await this.uncoverPendingEvent(generation, operation)) return;
+    if (!await this.resumeAfterVisibility(generation, operation)) return;
+    await this.showHeartReward(context);
+    if (!this.isCurrent(generation, operation)) return;
+    if (snapshot.state === 'dayEvent' && snapshot.pendingEventId !== null) {
+      this.dependencies.ui.beginEventPresentation?.();
+      await this.runPendingEventReveal(snapshot, generation, operation, false);
+      return;
+    }
+    this.presentation = 'idle';
+    this.setBusy(false);
+    this.dependencies.presentTerminal(snapshot);
+    this.dependencies.ui.restoreCommandFocus?.();
   }
 
   private async showHeartReward(context: EventResolutionContext): Promise<void> {
@@ -2203,6 +2235,7 @@ export class SurvivalEventFlow {
   ): Promise<void> {
     if (this.seagullOutcome === null) throw new Error('Seagull theft completed without grabbing food.');
     if (!await this.resumeAfterVisibility(generation, operation)) return;
+    this.dependencies.audio.finishEventReaction();
     this.dependencies.ui.clearEventPresentation?.();
     this.dependencies.world.setEventEligibleItems?.(null);
     this.presentation = 'idle';

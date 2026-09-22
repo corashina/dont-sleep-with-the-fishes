@@ -321,7 +321,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .system-screen--loading { justify-content: center; }
 .system-screen .screen__content { width: min(620px, calc(100vw - 64px)); }
 .system-screen--error .kicker { color: var(--ink-red-bright); }
-.system-loading-bytes {
+.system-loading-status {
   width: min(420px, 100%);
   margin: 0;
   color: #bbb9ad;
@@ -351,13 +351,11 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   background:
     repeating-linear-gradient(8deg, transparent 0 7px, #f2ead71f 8px 9px),
     linear-gradient(90deg, #77503a, #b77a35 72%, #d2a14a);
-  transition: width 180ms ease;
 }
 .system-loading-progress::-moz-progress-bar {
   background:
     repeating-linear-gradient(8deg, transparent 0 7px, #f2ead71f 8px 9px),
     linear-gradient(90deg, #77503a, #b77a35 72%, #d2a14a);
-  transition: width 180ms ease;
 }
 .screen.is-visible,
 .fishing-layer.is-visible,
@@ -887,13 +885,32 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 
 .fishing-fade.is-covered { opacity: 1; }
-.fishing-result-card {
+.fishing-result.dive-result {
+  align-items: start;
+}
+.fishing-result-card.dive-result__paper {
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
+  min-height: 0;
+  padding: 24px 48px;
   text-align: center;
 }
 .fishing-result-card .dive-result__title {
   font-size: clamp(1.4rem, 4vw, 2.15rem);
+  line-height: 1;
+  text-box-trim: trim-both;
+  text-box-edge: cap alphabetic;
+}
+.fishing-result-header {
+  position: relative;
+  width: 100%;
+  margin-block: 8px;
+}
+.fishing-result-header .dive-result__close {
+  top: 50%;
+  right: -30px;
+  padding: 0;
+  transform: translateY(-50%);
 }
 .fishing-result-card .dive-result__lines[hidden] {
   display: none;
@@ -910,6 +927,14 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .fishing-result-items {
   flex-wrap: wrap;
   gap: 24px;
+  min-height: 0;
+}
+.fishing-result-items .dive-result__reward {
+  width: 72px;
+  height: 72px;
+}
+.fishing-result-items .dive-result__reward-entry {
+  gap: 8px;
 }
 .fishing-view-exit {
   position: absolute;

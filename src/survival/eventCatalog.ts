@@ -451,6 +451,10 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(50, 'eventText172', effects([subtract('hull', { min: 15, max: 25 })], [loseRandom(1)]))),
   ]),
   event('ocean-of-blood', 'night', 'bloodOceanTitle', 'uncertain', 'darkness', 4, 19, 0, [
+    choice('fishingNet', 'eventText066', 'fishingNet',
+      outcome(1, 'bloodOceanSalvageResult', effects([add('food', 1), add('pressure', 1)]), 'blood-ocean-salvaged')),
+    choice('bucket', 'eventText065', 'bucket',
+      outcome(1, 'bloodOceanSalvageResult', effects([add('food', 1), add('pressure', 1)]), 'blood-ocean-salvaged')),
     choice('scubaSet', 'bloodOceanDiveChoice', 'scubaSet',
       outcome(1, 'bloodOceanDiveResult', { ...effects([add('pressure', 1)]), grantHeartPiece: 'blood' }, 'blood-ocean-searched')),
     contextualChoice('sleep', 'bloodOceanWaitChoice',

@@ -10,6 +10,25 @@ afterEach(() => {
 });
 
 describe('GameUI', () => {
+  // Importance: 98/100. Dorothy must report its first visible popup frame only.
+  it('notifies once when the Dorothy popup appears', () => {
+    const ui = new GameUI(document.body);
+    const shown = vi.fn(() => {
+      expect(document.querySelector('[data-ending]')?.getAttribute('aria-hidden')).toBe('false');
+    });
+    ui.onEndingShown = shown;
+    const ending = { id: 'dorothy' as const, day: 0 as const, savedPickupCount: 0 };
+    try {
+      ui.renderEnding('sinking', 0.5, ending);
+      expect(shown).not.toHaveBeenCalled();
+      ui.renderEnding('endingHold', 1, ending);
+      expect(shown).toHaveBeenCalledOnce();
+      ui.renderEnding('endingHold', 1, ending);
+      ui.renderEnding('menuReady', 1, ending);
+      expect(shown).toHaveBeenCalledOnce();
+    } finally { ui.dispose(); }
+  });
+
   it('fades successful evacuation without showing the failure ending', () => {
     const mount = document.createElement('main');
     document.body.append(mount);

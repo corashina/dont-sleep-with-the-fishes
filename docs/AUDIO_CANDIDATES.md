@@ -70,6 +70,7 @@ Keep source records after download.
 | Light wave impact | Water laps against the hull | [Waves Against Fishing Boat](https://freesound.org/people/kyles/sounds/637645/) |
 | Hard wave impact | Broad hit during rough weather | [Strong Waves](https://freesound.org/people/Sheyvan/sounds/520511/) |
 | Confirm | Physical interface confirmation | [Wooden Confirmation](https://freesound.org/people/qubodup/sounds/822568/) |
+| Result popup | One ship bell when a reward or any ending popup becomes visible | [Ship Bell Single Ring / Sojan](https://freesound.org/people/Sojan/sounds/353233/) |
 | Denied action | Restrained refusal | [UI Reject](https://freesound.org/people/Rob_Marion/sounds/542040/) |
 | Pause | Pause panel opens | [Wooden Click](https://freesound.org/people/BenjaminNelan/sounds/321083/) |
 | Resume | Pause panel closes | [Menu Click](https://freesound.org/people/Leszek_Szary/sounds/146720/) |

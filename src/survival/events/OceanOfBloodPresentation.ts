@@ -10,11 +10,12 @@ import { BloodOceanBodies } from './bloodOceanBodies';
 
 export const BLOOD_OCEAN_REVEAL_SECONDS = 9;
 const PLACEMENTS = [
-  [3.1, -3.2, 0.55],
-  [-5.5, -8, -0.9], [-8, -14, 0.35], [-13, -19, 1.1],
-  [-10, -26, -0.4], [-19, -32, 0.7],
-  [7, -10, -0.5], [11, -16, 1.25], [9, -23, -0.75],
-  [18, -28, 0.2], [16, -37, -1.1], [-1, -31, 0.3],
+  [3.8, -4, 0.55], [-4.5, -4.8, -0.9],
+  [-7.8, -8, 0.35], [8.8, -9, -0.5],
+  [-13, -11.5, 1.1], [14.5, -12, 1.25],
+  [-18, -20, -0.4], [20, -23, -0.75],
+  [-8, -21, 0.7], [8, -28, 0.2],
+  [-27, -31, 0.3], [30, -34, -1.1],
 ] as const;
 const FACE_FORWARD = new Vector3(0, 0, 1);
 
@@ -28,7 +29,6 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
     ...this.models.create(index), x, z, yaw,
     restHead: new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), index % 2 ? -1.15 : 1.05),
   }));
-  private readonly loot = new Group();
   private readonly wave: WaveSample = {
     height: 0, displacementX: 0, displacementZ: 0, normal: { x: 0, y: 1, z: 0 },
   };
@@ -56,16 +56,11 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
   private driftPhase = 0;
 
   constructor(private readonly environment: DedicatedEventEnvironment) {
-    const heart = environment.featuredModels.clone('bloodHeart');
-    heart.name = 'blood-heart-piece';
-    heart.position.set(0.12, 0.12, 0.18);
-    heart.rotation.set(-0.35, 0.25, -0.2);
-    this.loot.name = 'blood-ocean-recovered-loot';
-    this.loot.add(heart);
     this.worldRoot.name = 'ocean-of-blood-world';
     this.boatRoot.name = 'ocean-of-blood-boat';
     for (const body of this.bodies) this.worldRoot.add(body.root);
-    this.worldRoot.add(this.itemAimTarget);
+    this.itemAimTarget.position.set(-0.15, -0.2, 0.23);
+    this.bodies[0]!.figure.add(this.itemAimTarget);
     this.worldRoot.visible = false;
     this.boatRoot.visible = false;
   }
@@ -76,10 +71,6 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
     this.staged = true;
     this.applyAtmosphere();
     this.driftPhase = (context.variantSeed % 1024) / 1024 * Math.PI * 2;
-    this.bodies[0]!.figure.add(this.loot);
-    this.loot.position.set(-0.15, -0.2, 0.23);
-    this.loot.rotation.set(0.4, 0, 0.2);
-    this.loot.visible = true;
     this.update(this.time, 0);
   }
 
@@ -98,15 +89,15 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
         onWaterImpact: () => {
           if (operation !== this.diveOperation) return;
           this.searchProgress = 1;
-          this.loot.visible = false;
         },
       });
       return operation === this.diveOperation;
-    } finally {
+    } catch (error) {
       if (operation === this.diveOperation) {
         this.diving = false;
         this.environment.dive.clear();
       }
+      throw error;
     }
   }
 
@@ -148,8 +139,6 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
       this.headTarget.setFromUnitVectors(FACE_FORWARD, this.direction);
       body.head.quaternion.copy(body.restHead).slerp(this.headTarget, turn);
     }
-    this.loot.getWorldPosition(this.itemAimTarget.position);
-    this.worldRoot.worldToLocal(this.itemAimTarget.position);
   }
 
   private applyAtmosphere(): void {
@@ -178,7 +167,6 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
     this.revealProgress = 0;
     this.searchProgress = 0;
     this.reactionProgress = 0;
-    this.worldRoot.add(this.loot);
     this.worldRoot.visible = false;
     this.boatRoot.visible = false;
   }

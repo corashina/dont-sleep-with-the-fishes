@@ -33,7 +33,7 @@ export class SurvivalModalViews {
   onResume: () => void = () => undefined;
   onRestart: () => void = () => undefined;
   onReturnToMenu: () => void = () => undefined;
-  onEndingReady: () => void = () => undefined;
+  onEndingReady: (id: Exclude<EndingRecord, { id: 'dorothy' }>['id']) => void = () => undefined;
   onRepairTarget: (instanceId: ItemInstanceId) => void = () => undefined;
   onDiscardTarget: (instanceId: ItemInstanceId) => void = () => undefined;
   onRepairCancel: () => void = () => undefined;
@@ -255,7 +255,7 @@ export class SurvivalModalViews {
     this.endingFadeTimer = null;
     this.endingRoot.classList.remove('is-fading');
     this.endingPanel.hidden = false;
-    this.onEndingReady();
+    if (this.currentEnding !== null) this.onEndingReady(this.currentEnding.id);
   };
 
   private cancelEndingFade(): void {

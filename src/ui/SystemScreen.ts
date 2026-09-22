@@ -26,9 +26,8 @@ function loadingProgress(): HTMLProgressElement {
   const progress = document.createElement('progress');
   progress.className = 'system-loading-progress';
   progress.max = 1;
-  progress.value = 0;
   progress.setAttribute('aria-label', systemText('loading'));
-  progress.setAttribute('aria-valuetext', '0%');
+  progress.setAttribute('aria-valuetext', systemText('preparingScene'));
   return progress;
 }
 
@@ -49,7 +48,7 @@ export function createSystemScreen(
   if (description.kind === 'loading') {
     content.append(
       loadingProgress(),
-      textElement('p', 'system-loading-bytes ui-role-numeral', '0.0 / 0.0 MB'),
+      textElement('p', 'system-loading-status ui-role-numeral', systemText('preparingScene')),
     );
   } else {
     content.append(
@@ -70,31 +69,29 @@ export function createSystemScreen(
 }
 
 export function observeSystemScreenDownloads(screen: HTMLElement): () => void {
-  const label = screen.querySelector<HTMLElement>('.system-loading-bytes');
+  const label = screen.querySelector<HTMLElement>('.system-loading-status');
   const progress = screen.querySelector<HTMLProgressElement>('progress');
   const format = new Intl.NumberFormat(getLanguage(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const precise = new Intl.NumberFormat(getLanguage(), { minimumFractionDigits: 1, maximumFractionDigits: 6 });
   return observeAssetDownloads(({ loaded, total }) => {
     if (label === null || progress === null) return;
-    const text = `${format.format(loaded / 1_000_000)} / ${total === null ? '…' : format.format(total / 1_000_000)} MB`;
+    let text: string;
+    if (total !== null && loaded >= total) {
+      progress.removeAttribute('value');
+      text = systemText('preparingScene');
+    } else if (total === null) {
+      progress.removeAttribute('value');
+      text = systemText('downloadedMegabytes', format.format(loaded / 1_000_000));
+    } else {
+      progress.max = total;
+      progress.value = loaded;
+      const loadedMB = loaded / 1_000_000;
+      const totalMB = total / 1_000_000;
+      // Preserve the difference when rounding would imply a finished download.
+      const numbers = format.format(loadedMB) === format.format(totalMB) ? precise : format;
+      text = `${numbers.format(loadedMB)} / ${numbers.format(totalMB)} MB`;
+    }
     label.textContent = text;
-    progress.setAttribute('aria-valuetext', `${Math.round(progress.position * 100)}%, ${text}`);
+    progress.setAttribute('aria-valuetext', text);
   });
-}
-
-export function updateSystemScreenProgress(
-  screen: HTMLElement,
-  completed: number,
-  total: number,
-): void {
-  const progress = screen.querySelector<HTMLProgressElement>('.system-loading-progress');
-  if (progress === null) return;
-
-  const safeTotal = Number.isFinite(total) ? Math.max(1, Math.floor(total)) : 1;
-  const safeCompleted = Number.isFinite(completed)
-    ? Math.min(safeTotal, Math.max(0, Math.floor(completed)))
-    : 0;
-  progress.max = safeTotal;
-  progress.value = safeCompleted;
-  const bytes = screen.querySelector('.system-loading-bytes')?.textContent;
-  progress.setAttribute('aria-valuetext', `${Math.round(safeCompleted / safeTotal * 100)}%${bytes ? `, ${bytes}` : ''}`);
 }

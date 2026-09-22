@@ -26,7 +26,7 @@ function setup() {
 }
 const returned = { outcome: { accepted: true, eventResult: { resultId: 'heart-returned' } } } as EventOutcomePresentation;
 
-it('finishes only after the nine-second reveal and full twenty-one-second collection and descent', async () => {
+it('finishes only after the nine-second reveal and full eleven-second collection and descent', async () => {
   const { scene, display, dispose } = setup();
   const revealDone = vi.fn();
   const reveal = scene.reveal().then(revealDone);
@@ -35,39 +35,44 @@ it('finishes only after the nine-second reveal and full twenty-one-second collec
   scene.update(9, 1); await reveal;
   const releaseDone = vi.fn();
   const release = scene.react(returned).then(releaseDone);
-  scene.update(29, KRAKEN_RELEASE_SECONDS - 1); await Promise.resolve();
+  scene.update(19, KRAKEN_RELEASE_SECONDS - 1); await Promise.resolve();
   expect(releaseDone).not.toHaveBeenCalled();
-  scene.update(30, 1); await release;
+  scene.update(20, 1); await release;
   expect(scene.worldRoot.getObjectByName('kraken-body')?.visible).toBe(false);
-  expect(display.root.visible).toBe(true);
+  expect(display.root.visible).toBe(false);
   expect(display.tooltip).toBe('?');
   dispose();
 });
 
-it('takes the actual models one at a time, without moving a piece before contact', async () => {
+it('takes the whole basket at contact and carries all pieces together through descent', async () => {
   const { scene, display, boat, dispose } = setup();
   const reveal = scene.reveal();
   scene.settleForVisibilityChange(); await reveal;
   const release = scene.react(returned);
   scene.update(0, 2.4);
   expect(display.tooltip).toBe('Brain, Heart, Kidneys');
-  const brain = display.piece('flowers');
+  expect(display.root.parent).toBe(boat);
+  const restPositions = HEART_PIECE_IDS.map(id => display.piece(id).position.clone());
   boat.position.x += 0.15;
-  const before = brain.getWorldPosition(new Vector3());
+  const before = display.root.getWorldPosition(new Vector3());
   scene.update(0, 0.1);
-  expect(brain.parent?.name).toBe('kraken-grip');
-  expect(brain.getWorldPosition(new Vector3()).distanceTo(before)).toBeLessThan(1e-6);
-  expect(display.tooltip).toBe('Heart, Kidneys');
+  expect(display.root.parent?.name).toBe('kraken-grip');
+  expect(display.root.getWorldPosition(new Vector3()).distanceTo(before)).toBeLessThan(1e-6);
+  expect(display.root.getObjectByName('heart-basket')?.parent).toBe(display.root);
   scene.update(0, 0.5);
-  expect(brain.getWorldPosition(new Vector3()).y).toBeGreaterThan(before.y);
-  scene.update(0, 4.5);
-  expect(display.piece('blood').parent?.name).toBe('kraken-grip');
-  expect(display.piece('chest').parent).toBe(display.root);
-  expect(display.tooltip).toBe('Kidneys');
-  scene.update(0, 5);
-  expect(display.piece('chest').parent?.name).toBe('kraken-grip');
-  expect(display.tooltip).toBe('?');
+  expect(display.root.getWorldPosition(new Vector3()).y).toBeGreaterThan(before.y);
+  scene.update(0, 2);
+  const carriedHeight = display.root.getWorldPosition(new Vector3()).y;
+  scene.update(0, 3);
+  expect(display.root.getWorldPosition(new Vector3()).y).toBeLessThan(carriedHeight);
+  HEART_PIECE_IDS.forEach((id, index) => {
+    expect(display.piece(id).parent).toBe(display.root);
+    expect(display.piece(id).position).toEqual(restPositions[index]);
+    expect(display.piece(id).visible).toBe(true);
+  });
   scene.settleForVisibilityChange(); await release;
+  expect(display.root.parent).toBe(boat);
+  expect(display.root.visible).toBe(false);
   for (const id of HEART_PIECE_IDS) {
     expect(display.piece(id).parent).toBe(display.root);
     expect(display.piece(id).visible).toBe(false);
@@ -76,10 +81,12 @@ it('takes the actual models one at a time, without moving a piece before contact
 });
 
 it('restores untouched pieces when the reveal is cancelled', async () => {
-  const { scene, display, dispose } = setup();
+  const { scene, display, boat, dispose } = setup();
   const reveal = scene.reveal();
   scene.update(2, 2);
   scene.clear(); await reveal;
+  expect(display.root.parent).toBe(boat);
+  expect(display.root.visible).toBe(true);
   expect(display.tooltip).toBe('Brain, Heart, Kidneys');
   dispose();
 });
@@ -93,7 +100,7 @@ it.each(['settle', 'clear', 'dispose'] as const)('releases models and resolves t
   if (action === 'settle') scene.settleForVisibilityChange();
   else scene[action]();
   await release;
-  expect(display.root.visible).toBe(true);
+  expect(display.root.visible).toBe(false);
   for (const id of HEART_PIECE_IDS) expect(display.piece(id).parent).toBe(display.root);
   expect(display.tooltip).toBe('?');
   dispose();

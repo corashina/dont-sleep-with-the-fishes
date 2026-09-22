@@ -102,6 +102,10 @@ it('keeps every production catch clear of the rod during reeling and reward disp
           .toBeGreaterThan(distance);
         const projected = world.projectFishingCatch(1280, 720);
         expect(projected?.visible, `${definition.id} reward must stay in view`).toBe(true);
+        // Importance: 90/100. Every catch must remain centered below the result popup.
+        expect(Math.abs(projected!.x - 640), definition.id).toBeLessThan(15);
+        expect(projected!.y - projected!.height / 2, definition.id).toBeGreaterThan(360);
+        expect(projected!.y + projected!.height / 2, definition.id).toBeLessThan(700);
       }
     }
   } finally {

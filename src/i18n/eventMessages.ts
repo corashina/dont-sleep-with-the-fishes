@@ -66,6 +66,7 @@ const EVENT_TEXT = {
   bloodOceanTitle: { en: 'Ocean of Blood', pl: 'Ocean krwi', 'es-AR': 'Océano de sangre' },
   bloodOceanReveal: { en: 'The sea turns red. Bodies drift beneath a red sun. One stops beside the boat. Every head turns toward you.', pl: 'Morze czerwienieje. Pod czerwonym słońcem dryfują ciała. Jedno zatrzymuje się przy łodzi. Wszystkie głowy obracają się ku tobie.', 'es-AR': 'El mar se vuelve rojo. Flotan cuerpos bajo un sol rojo. Uno se detiene junto al bote. Todas las cabezas giran hacia vos.' },
   bloodOceanDiveChoice: { en: 'Dive for the heart', pl: 'Zanurkuj po serce', 'es-AR': 'Buceá para buscar el corazón' },
+  bloodOceanSalvageResult: { en: 'You recover a sealed tin floating among the bodies. The food is safe. The sight stays with you.', pl: 'Wyławiasz zamkniętą puszkę spomiędzy ciał. Jedzenie jest bezpieczne. Ten widok zostaje w pamięci.', 'es-AR': 'Recuperás una lata cerrada que flota entre los cuerpos. La comida está bien. La imagen no se te borra.' },
   bloodOceanWaitChoice: { en: 'Wait for dawn', pl: 'Czekaj do świtu', 'es-AR': 'Esperá el amanecer' },
   bloodOceanDiveResult: { en: 'You dive beneath the bodies and recover a piece of the Heart of the Sea.', pl: 'Nurkujesz pod ciałami i odzyskujesz fragment Serca Morza.', 'es-AR': 'Buceás bajo los cuerpos y recuperás un fragmento del Corazón del Mar.' },
   flowersCollectChoice: { en: 'Collect brain', pl: 'Zbierz mózg', 'es-AR': 'Recogé el cerebro' },

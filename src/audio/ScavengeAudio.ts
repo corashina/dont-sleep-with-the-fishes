@@ -6,8 +6,10 @@ import type {
   SpatialAudioOptions,
 } from './AudioBackend';
 import type { AudioScope } from './AudioScope';
+import { SHIP_SOUND_IDS } from './audioManifest';
 
 const STEP_DISTANCE = 1.35;
+const SHIP_ENDING_SOUNDS = new Set(SHIP_SOUND_IDS);
 const COUNTDOWN_START_SECONDS = 50;
 const SHIP_ALARM_SPATIAL_OPTIONS: Readonly<SpatialAudioOptions> = Object.freeze({
   gain: 0.5,
@@ -25,6 +27,7 @@ export class ScavengeAudio {
   private countdownStarted = false;
   private runBegun = false;
   private disposed = false;
+  private endingShown = false;
 
   constructor(
     private readonly scope: AudioScope,
@@ -56,7 +59,7 @@ export class ScavengeAudio {
     elapsedSeconds = 0,
     listenerPose: Readonly<AudioListenerPose> | null = null,
   ): void {
-    if (this.disposed) return;
+    if (this.disposed || this.endingShown) return;
     this.updateListener(listenerPose);
     this.startCountdown(elapsedSeconds);
     this.updateFootsteps(motion, movementActive);
@@ -95,6 +98,13 @@ export class ScavengeAudio {
     if (this.disposed || this.crashPlayed) return;
     this.crashPlayed = true;
     this.scope.play('shipCrash');
+  }
+
+  endingPopup(): void {
+    if (this.disposed || this.endingShown) return;
+    this.endingShown = true;
+    this.scope.stopSounds(SHIP_ENDING_SOUNDS);
+    this.scope.play('eventComplete');
   }
 
   dispose(): void {

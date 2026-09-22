@@ -55,7 +55,8 @@ const CENTERED_FISHING_CAST: FishingCastPoint = Object.freeze({ x: 0, z: -6.4 })
 const FISHING_TARGET_SIZE = 52;
 const FISHING_BITE_PARTICLE_INTERVAL_SECONDS = 0.12;
 const FISHING_BITE_PARTICLE_INTENSITY = 0.85;
-const FISHING_CATCH_REST = Object.freeze({ x: 0.75, y: 1.02, z: -3.1 });
+const FISHING_CATCH_REST = Object.freeze({ x: 0, y: -0.3, z: -0.9 });
+const FISHING_RESULT_ROD_OFFSET = -0.55;
 
 export interface FishingCameraControl {
   restoreBasePose(): void;
@@ -329,6 +330,7 @@ export class FishingPresentation {
   private readonly fishing: FishingVisuals;
   private readonly baseRodPivotRotationX: number;
   private readonly baseRodPivotRotationY: number;
+  private readonly baseRodPivotPositionX: number;
   private readonly cameraPosition = new Vector3(
     FISHING_PLAYER_SEAT.x,
     FISHING_PLAYER_SEAT.y,
@@ -439,6 +441,7 @@ export class FishingPresentation {
     );
     this.baseRodPivotRotationX = dependencies.rodPivot.rotation.x;
     this.baseRodPivotRotationY = dependencies.rodPivot.rotation.y;
+    this.baseRodPivotPositionX = dependencies.rodPivot.position.x;
     try {
       this.fishing = createFishingVisuals(
         this.root,
@@ -456,6 +459,7 @@ export class FishingPresentation {
         dependencies.camera.up,
       );
       this.cameraQuaternion.setFromRotationMatrix(this.matrixScratch);
+      this.catchRest.position.applyQuaternion(this.cameraQuaternion).add(this.cameraPosition);
     } catch (error) {
       try {
         runCleanupSteps([
@@ -612,6 +616,7 @@ export class FishingPresentation {
     const fishingCatch = await this.dependencies.catches.prepare(catchId);
     if (!fishingCatch || this.disposed) return;
     this.activeCatch = fishingCatch;
+    this.activeCatch.removeFromParent();
     this.activeCatch.position.set(0, 0, 0);
     this.activeCatch.rotation.set(0, 0.08, -0.04);
     this.activeCatch.updateMatrixWorld(true);
@@ -623,7 +628,7 @@ export class FishingPresentation {
       this.activeCatch.updateMatrixWorld(true);
       this.catchBounds.setFromObject(this.activeCatch, true);
     }
-    this.activeCatch.position.y = -this.catchBounds.min.y;
+    this.catchBounds.getCenter(this.activeCatch.position).negate();
     this.fishing.catchDisplay.add(this.activeCatch);
     this.reelStartWorld.set(
       this.castPosition.x,
@@ -841,6 +846,7 @@ export class FishingPresentation {
 
     if (this.phase === 'landed') {
       this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX;
+      this.dependencies.rodPivot.position.x = this.baseRodPivotPositionX + FISHING_RESULT_ROD_OFFSET;
       this.fishing.catchDisplay.visible = this.activeCatch !== null;
       return;
     }
@@ -859,6 +865,7 @@ export class FishingPresentation {
   }
 
   private applyRodStrain(): void {
+    this.dependencies.rodPivot.position.x = this.baseRodPivotPositionX;
     this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX;
     this.dependencies.rodPivot.rotation.y = this.baseRodPivotRotationY;
     if (this.phase !== 'fighting') {
@@ -934,9 +941,12 @@ export class FishingPresentation {
 
   private applyReelAnimation(normalized: number): void {
     this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX;
+    this.dependencies.rodPivot.position.x = this.baseRodPivotPositionX
+      + FISHING_RESULT_ROD_OFFSET * easeOut(normalized);
     if (this.activeCatch === null) return;
     this.catchRest.getWorldPosition(this.catchTargetWorld);
     this.catchApproachWorld.copy(this.catchTargetWorld);
+    this.catchApproachWorld.x += 0.75;
     this.catchApproachWorld.y += 0.72;
     if (normalized < 0.72) {
       const haul = easeOut(normalized / 0.72);
@@ -980,6 +990,7 @@ export class FishingPresentation {
   }
 
   private resetVisuals(): void {
+    this.dependencies.rodPivot.position.x = this.baseRodPivotPositionX;
     this.rodBend?.update(0, this.strainTarget);
     this.dependencies.rodPivot.rotation.y = this.baseRodPivotRotationY;
     this.net?.clear();

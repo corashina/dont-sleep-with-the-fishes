@@ -51,6 +51,8 @@ export class SurvivalUI {
   onJournalOpen: () => void = () => undefined;
   onJournalClose: () => void = () => undefined;
   onJournalPage: () => void = () => undefined;
+  onRewardShown: () => void = () => undefined;
+  onEndingShown: (id: Exclude<EndingRecord, { id: 'dorothy' }>['id']) => void = () => undefined;
   onRadioPauseChange: (paused: boolean) => void = () => undefined;
   onFishingCast: ((point: { readonly x: number; readonly y: number } | null) => boolean) | null = null;
   onFishingReel: (() => boolean) | null = null;
@@ -193,7 +195,10 @@ export class SurvivalUI {
       if (!this.disposed) this.onEventChoice(choiceId);
     };
     this.eventView.onAnnouncement = () => this.publishAnnouncement();
-    this.coverView.onResultShow = () => this.showLayer(this.coverView.resultRoot);
+    this.coverView.onResultShow = () => {
+      this.showLayer(this.coverView.resultRoot);
+      this.onRewardShown();
+    };
     this.coverView.onResultHide = () => this.hideLayer(this.coverView.resultRoot);
     this.coverView.onResultClose = () => {
       if (this.modalFocus.topmostModal() === this.coverView.resultRoot) {
@@ -255,8 +260,10 @@ export class SurvivalUI {
     this.modalViews.onReturnToMenu = () => {
       if (!this.disposed) this.onReturnToMenu();
     };
-    this.modalViews.onEndingReady = () => {
-      if (!this.disposed) this.modalFocus.focusInitial(this.modalViews.endingRoot);
+    this.modalViews.onEndingReady = (id) => {
+      if (this.disposed) return;
+      this.modalFocus.focusInitial(this.modalViews.endingRoot);
+      this.onEndingShown(id);
     };
 
     document.addEventListener('click', this.handleDocumentClick, true);
@@ -581,6 +588,7 @@ export class SurvivalUI {
     this.hideLayer(this.modalViews.repairRoot);
     this.modalViews.showEnding(record, this.currentSnapshot);
     this.showLayer(this.modalViews.endingRoot);
+    if (record.id === 'rescue') this.onEndingShown(record.id);
   }
 
   dispose(): void {
@@ -641,6 +649,8 @@ export class SurvivalUI {
       () => { this.onJournalOpen = () => undefined; },
       () => { this.onJournalClose = () => undefined; },
       () => { this.onJournalPage = () => undefined; },
+      () => { this.onRewardShown = () => undefined; },
+      () => { this.onEndingShown = () => undefined; },
       () => { this.onRadioPauseChange = () => undefined; },
       () => { this.onFishingCast = null; },
       () => { this.onFishingReel = null; },

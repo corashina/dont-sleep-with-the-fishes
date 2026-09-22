@@ -172,7 +172,7 @@ const BOAT_STORAGE_SLOTS = {
     scale: 0.5,
   }],
   flashlight: [restingSlot('shelf', 'flashlight', -0.78334, -1.60, -Math.PI / 2)],
-  shotgun: [restingSlot('floor', 'shotgun', -1.43, -1.16, 0.20, 0.5, Math.PI / 2)],
+  shotgun: [restingSlot('floor', 'shotgun', -1.43, -1.28, 0.20, 0.5, Math.PI / 2)],
   energyBar: [restingSlot('shelf', 'energyBar', 0.48, LIFEBOAT_PLAYER_BENCH_Z - 0.05, Math.PI)],
   carlitos: [
     restingSlot('gunwale', 'carlitos', 1.58, -1.75, Math.PI, 0.68),

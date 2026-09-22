@@ -39,6 +39,7 @@ const freesoundSources = [
   ['lightWaveImpact', 'kyles', '637645'],
   ['hardWaveImpact', 'Sheyvan', '520511'],
   ['confirm', 'qubodup', '822568'],
+  ['eventComplete', 'Sojan', '353233'],
   ['denied', 'Rob_Marion', '542040'],
   ['pause', 'BenjaminNelan', '321083'],
   ['resume', 'Leszek_Szary', '146720'],
