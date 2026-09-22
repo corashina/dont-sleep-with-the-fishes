@@ -43,7 +43,7 @@ export const seaFogShader = /* glsl */`
       float heightDensity = exp(-max(position.y - 0.6, 0.0) * 0.48);
       float density = (0.28 + smoothstep(0.24, 0.78, bank) * 1.5)
         * mix(0.62, 1.25, wisp) * heightDensity;
-      float lowBank = 1.0 + 3.5 * (1.0 - smoothstep(0.5, 3.5, position.y));
+      float lowBank = 1.0 + 0.8 * (1.0 - smoothstep(0.5, 3.5, position.y));
       float extinction = density * lowBank * 0.24 * smoothstep(1.5, 7.0, distanceAlongRay);
       float stepTransmission = exp(-extinction * stepLength);
       float lightAccess = exp(-density * 0.85);
