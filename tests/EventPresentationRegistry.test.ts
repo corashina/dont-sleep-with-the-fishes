@@ -1,5 +1,7 @@
 // Importance: 10/10. Protects exhaustive event adapter routing and family delegation.
 import { Group } from 'three';
+import { EventPresentationHost } from '../src/survival/EventPresentationHost';
+import type { DedicatedEventPresentation } from '../src/survival/eventPresentationTypes';
 import { beforeEach,describe,expect,it,vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
 import {
@@ -15,7 +17,6 @@ import type {
 
 const constructors = vi.hoisted(() => ({
   layer: vi.fn(),
-  coordinator: vi.fn(),
   featured: vi.fn(),
   weather: vi.fn(),
   supernatural: vi.fn(),
@@ -32,9 +33,6 @@ const constructors = vi.hoisted(() => ({
 
 vi.mock('../src/survival/EventPresentationLayer', () => ({
   EventPresentationLayer: constructors.layer,
-}));
-vi.mock('../src/survival/EventPresentationCoordinator', () => ({
-  EventPresentationCoordinator: constructors.coordinator,
 }));
 vi.mock('../src/survival/FeaturedEventPresentations', () => ({
   FeaturedEventPresentations: constructors.featured,
@@ -93,24 +91,6 @@ function createLayer() {
   };
 }
 
-function createCoordinator() {
-  return {
-    worldRoot: new Group(),
-    boatRoot: new Group(),
-    stage: vi.fn(() => true),
-    reveal: asyncVoid(),
-    playChoice: asyncVoid(),
-    playItemUse: vi.fn(async () => true),
-    itemAimTarget: vi.fn(() => null),
-    interactionTargets: vi.fn((): readonly FocusedEventInteractionTarget[] => []),
-    interactionRoot: vi.fn((_id: string): Group | null => null),
-    react: asyncVoid(),
-    update: vi.fn(),
-    settleForVisibilityChange: vi.fn(),
-    clear: vi.fn(),
-    dispose: vi.fn(),
-  };
-}
 
 function createFeatured() {
   return {
@@ -176,15 +156,15 @@ function createMoon() {
 
 function createDedicatedPresentation() {
   return {
-    eventId: 'leak',
-    worldRoot: new Group(),
-    boatRoot: new Group(),
-    dispose: vi.fn(),
-  };
+    eventId: 'leak' as const, worldRoot: new Group(), boatRoot: new Group(), itemAimTarget: new Group(),
+    stage: vi.fn(), reveal: asyncVoid(), skip: vi.fn(), playChoice: asyncVoid(),
+    playItemUse: vi.fn(async () => true), react: asyncVoid(), update: vi.fn(),
+    settleForVisibilityChange: vi.fn(), clear: vi.fn(), dispose: vi.fn(),
+  } satisfies DedicatedEventPresentation;
 }
 
 let layer = createLayer();
-let coordinator = createCoordinator();
+let dedicated = createDedicatedPresentation();
 let featured = createFeatured();
 let weather = createWeather();
 let supernatural = createSupernatural();
@@ -235,18 +215,17 @@ function createDependencies() {
 beforeEach(() => {
   vi.clearAllMocks();
   layer = createLayer();
-  coordinator = createCoordinator();
+  dedicated = createDedicatedPresentation();
   featured = createFeatured();
   weather = createWeather();
   supernatural = createSupernatural();
   moon = createMoon();
   constructors.layer.mockImplementation(() => layer);
-  constructors.coordinator.mockImplementation(() => coordinator);
   constructors.featured.mockImplementation(() => featured);
   constructors.weather.mockImplementation(() => weather);
   constructors.supernatural.mockImplementation(() => supernatural);
   constructors.moon.mockImplementation(() => moon);
-  const presentation = createDedicatedPresentation();
+  const presentation = dedicated;
   constructors.leak.mockImplementation(() => presentation);
   constructors.schoolOfFish.mockImplementation(() => presentation);
   constructors.snatcher.mockImplementation(() => presentation);
@@ -261,6 +240,48 @@ beforeEach(() => {
 });
 
 describe('EventPresentationRegistry', () => {
+  // Importance: 97/100. A cleanup failure must not retain scene roots or dispose borrowed assets.
+  it('detaches dedicated roots even when clear fails during disposal', () => {
+    const { dependencies } = createDependencies();
+    const adapter = new EventPresentationRegistry().create('leak', dependencies);
+    const host = new EventPresentationHost();
+    host.attach(adapter);
+    host.stage({ eventId: 'leak', targetInstanceId: null, variantSeed: 4 });
+    const failure = new Error('clear failed');
+    dedicated.clear.mockImplementationOnce(() => { throw failure; });
+    expect(() => adapter.dispose()).toThrow(failure);
+    adapter.dispose();
+    expect(dedicated.dispose).toHaveBeenCalledOnce();
+    expect(dedicated.worldRoot.parent).toBeNull();
+    expect(dedicated.boatRoot.parent).toBeNull();
+    expect(dependencies.dedicatedEnvironment.eventModels.dispose).not.toHaveBeenCalled();
+  });
+
+  // Importance: 95/100. Cleared or disposed events must not animate or capture interactions.
+  it('restages dedicated events and makes cleared operations inert', async () => {
+    const { dependencies } = createDependencies();
+    const adapter = new EventPresentationRegistry().create('leak', dependencies);
+    const context = { eventId: 'leak' as const, targetInstanceId: null, variantSeed: 4 };
+    adapter.stage(context);
+    adapter.stage(context);
+    expect(dedicated.clear).toHaveBeenCalledOnce();
+    expect(adapter.itemAimTarget()).toBe(dedicated.itemAimTarget);
+    adapter.clear();
+    adapter.clear();
+    await adapter.reveal();
+    adapter.update(2, 0.1);
+    expect(dedicated.clear).toHaveBeenCalledTimes(2);
+    expect(dedicated.reveal).not.toHaveBeenCalled();
+    expect(dedicated.update).not.toHaveBeenCalled();
+    expect(adapter.itemAimTarget()).toBeNull();
+    adapter.stage(context);
+    await adapter.reveal();
+    expect(dedicated.reveal).toHaveBeenCalledOnce();
+    adapter.dispose();
+    adapter.stage(context);
+    expect(dedicated.stage).toHaveBeenCalledTimes(3);
+  });
+
 
   it('creates and disposes a default adapter for every event', () => {
     const registry = new EventPresentationRegistry();

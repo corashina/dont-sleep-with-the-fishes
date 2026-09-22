@@ -8,6 +8,7 @@ import {
   BufferGeometry,
   Float32BufferAttribute,
   Group,
+  Light,
   Line,
   Material,
   Mesh,
@@ -135,7 +136,7 @@ async function createTestFeaturedModels(
   });
 }
 
-function expectEventEffectRootsCleared(scene: Object3D): void {
+function expectEventEffectRootsCleared(scene: Object3D, eventId: SurvivalEventId): void {
   const itemEffects = scene.getObjectByName('event-item-effects');
   expect(itemEffects, 'event-item-effects exists').toBeDefined();
   itemEffects!.children.forEach((effect) => {
@@ -159,20 +160,27 @@ function expectEventEffectRootsCleared(scene: Object3D): void {
   ]) {
     const root = scene.getObjectByName(name);
     root?.children.forEach((effect) => {
-      expect(effect.visible, `${name}/${effect.name} hidden`).toBe(false);
-    });
-  }
-  for (const name of ['dedicated-event-world', 'dedicated-event-boat']) {
-    const root = scene.getObjectByName(name);
-    root?.children.forEach((effect) => {
-      const hasRenderableContent = effect.children.length > 0
-        || effect instanceof Mesh
-        || effect instanceof Line
-        || effect instanceof Points;
-      if (hasRenderableContent) {
-        expect(effect.visible, `${name}/${effect.name} hidden`).toBe(false);
+      if (effect instanceof Light) {
+        expect(effect.intensity, name + '/' + effect.name + ' inactive').toBe(0);
+      } else if (effect.children.length > 0 || effect instanceof Mesh || effect instanceof Line || effect instanceof Points) {
+        expect(effect.visible, name + '/' + effect.name + ' hidden').toBe(false);
       }
     });
+  }
+  const dedicatedRoots: Partial<Record<SurvivalEventId, string>> = {
+    leak: 'leak', 'school-of-fish': 'school-of-fish', snatcher: 'tentacle-attack',
+    'death-stare': 'death-stare', 'swarm-of-sharks': 'shark-swarm', tornado: 'tornado',
+    'starry-night': 'starry-night', 'ocean-of-blood': 'ocean-of-blood',
+    'something-under-us': 'something-under-us', 'shadow-figure': 'shadow-figure', 'guarded-sleep': 'guarded-sleep',
+  };
+  const prefix = dedicatedRoots[eventId];
+  if (prefix !== undefined) {
+    for (const suffix of ['world', 'boat']) {
+      const name = prefix + '-' + suffix;
+      const root = scene.getObjectByName(name);
+      expect(root, name + ' exists').toBeDefined();
+      if (root!.children.length > 0) expect(root!.visible, name + ' hidden').toBe(false);
+    }
   }
   itemEffects!.traverse((object) => {
     if (object instanceof PointLight) expect(object.intensity).toBe(0);
@@ -751,7 +759,7 @@ describe('BoatWorld helpers', () => {
   it('cancels every shared item effect family at forty percent', async () => {
     const cases: readonly [
       context: EventItemUseContext,
-      eventId: string,
+      eventId: SurvivalEventId,
       choiceId: string,
       itemId: ItemId,
       routedDuration: number,
@@ -820,7 +828,7 @@ describe('BoatWorld helpers', () => {
         expect(release).toHaveBeenCalledOnce();
         expect(camera.position).toEqual(basePosition);
         expect(camera.fov).toBe(baseFieldOfView);
-        expectEventEffectRootsCleared(world.scene);
+        expectEventEffectRootsCleared(world.scene, eventId);
 
         world.stageEvent(eventId);
         const secondBorrowCount = borrowActor.mock.results.length;
@@ -1049,7 +1057,7 @@ describe('BoatWorld helpers', () => {
   });
 
   it.each([
-    ['leak', 'bucket', 'bucket', 'dedicated-event-boat', 'bucket-scoop', LEAK_ITEM_DURATION, 0.5],
+    ['leak', 'bucket', 'bucket', 'leak-boat', 'bucket-scoop', LEAK_ITEM_DURATION, 0.5],
     [
       'shower-night',
       'umbrella',

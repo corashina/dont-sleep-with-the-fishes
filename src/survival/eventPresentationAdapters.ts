@@ -7,7 +7,6 @@ import type {
   EventPresentationReaction,
   EventPresentationRoot,
 } from './EventPresentationAdapter';
-import { EventPresentationCoordinator } from './EventPresentationCoordinator';
 import { EventPresentationLayer } from './EventPresentationLayer';
 import type { EventModelLibrary } from './EventModelLibrary';
 import type { EventModelId } from './eventModelManifest';
@@ -201,23 +200,6 @@ function createBorrowedDedicatedEnvironment(
   return { ...environment, eventModels };
 }
 
-function createDedicatedCoordinator(
-  eventId: DedicatedEventId,
-  environment: DedicatedEventEnvironment,
-): EventPresentationCoordinator {
-  const dedicatedEnvironment = createBorrowedDedicatedEnvironment(environment);
-  const presentations: DedicatedEventPresentation[] = [];
-  try {
-    presentations.push(createDedicatedPresentation(eventId, dedicatedEnvironment));
-    return new EventPresentationCoordinator(presentations);
-  } catch (error) {
-    return preserveConstructionError(
-      error,
-      presentations.map((presentation) => () => presentation.dispose()),
-    );
-  }
-}
-
 function createDedicatedPresentation(
   eventId: DedicatedEventId,
   environment: DedicatedEventEnvironment,
@@ -298,39 +280,50 @@ export const createDedicatedAdapter: EventPresentationAdapterFactory = (
   dependencies,
 ) => {
   assertRoute(eventId, 'dedicated');
-  const coordinator = createDedicatedCoordinator(eventId, dependencies.dedicatedEnvironment);
-  return createAdapter(eventId, [
-    { parent: dependencies.worldParent, root: coordinator.worldRoot },
-    { parent: dependencies.boatParent, root: coordinator.boatRoot },
-  ], {
-    stage: (context) => {
-      if (!isEventPresentationRoute(context.eventId, 'dedicated')) return;
-      coordinator.stage({
-        eventId: context.eventId,
-        targetInstanceId: context.targetInstanceId,
-        variantSeed: context.variantSeed,
-      });
-    },
-    reveal: () => coordinator.reveal(),
-    playChoice: (choice) => coordinator.playChoice(choice.choiceId),
-    playItemUse: (choiceId, instanceId, onAction) => onAction === undefined
-      ? coordinator.playItemUse(choiceId, instanceId)
-      : coordinator.playItemUse(choiceId, instanceId, onAction),
-    itemAimTarget: () => coordinator.itemAimTarget(),
-    netCatch: () => coordinator.netCatch(),
-    interactionTargets: () => coordinator.interactionTargets(),
-    interactionRoot: (id) => coordinator.interactionRoot(id),
-    resultRoot: noRoot,
-    react: ({ result }) => {
-      if (result === null) {
-        throw new Error('Dedicated event reaction requires exact result data.');
-      }
-      return coordinator.react(result);
-    },
-    update: (time, delta) => coordinator.update(time, delta),
-    settleForVisibilityChange: () => coordinator.settleForVisibilityChange(),
-    clear: () => coordinator.clear(),
-  }, [() => coordinator.dispose()]);
+  const presentation = createDedicatedPresentation(
+    eventId,
+    createBorrowedDedicatedEnvironment(dependencies.dedicatedEnvironment),
+  );
+  let active = false;
+  const clear = (): void => {
+    if (!active) return;
+    active = false;
+    presentation.clear();
+  };
+  const cleanupSteps = [clear, () => presentation.dispose(),
+    () => presentation.worldRoot.removeFromParent(),
+    () => presentation.boatRoot.removeFromParent()];
+  try {
+    return createAdapter(eventId, [
+      { parent: dependencies.worldParent, root: presentation.worldRoot },
+      { parent: dependencies.boatParent, root: presentation.boatRoot },
+    ], {
+      stage: (context) => {
+        clear();
+        active = true;
+        presentation.stage({ eventId, targetInstanceId: context.targetInstanceId, variantSeed: context.variantSeed });
+      },
+      reveal: () => active ? presentation.reveal() : noChoice(),
+      playChoice: (choice) => active ? presentation.playChoice?.(choice.choiceId) ?? noChoice() : noChoice(),
+      playItemUse: (choiceId, instanceId, onAction) => !active ? noItemUse()
+        : onAction === undefined ? presentation.playItemUse(choiceId, instanceId)
+          : presentation.playItemUse(choiceId, instanceId, onAction),
+      itemAimTarget: () => active ? presentation.itemAimTarget : null,
+      netCatch: () => active ? presentation.netCatch?.() ?? null : null,
+      interactionTargets: () => active ? presentation.interactionTargets?.() ?? EMPTY_INTERACTION_TARGETS : EMPTY_INTERACTION_TARGETS,
+      interactionRoot: (id) => active ? presentation.interactionRoot?.(id) ?? null : null,
+      resultRoot: noRoot,
+      react: ({ result }) => {
+        if (result === null) throw new Error('Dedicated event reaction requires exact result data.');
+        return active ? presentation.react(result) : noChoice();
+      },
+      update: (time, delta) => { if (active) presentation.update(time, delta); },
+      settleForVisibilityChange: () => { if (active) presentation.settleForVisibilityChange(); },
+      clear,
+    }, cleanupSteps);
+  } catch (error) {
+    return preserveConstructionError(error, cleanupSteps);
+  }
 };
 
 export const createFocusedAdapter: EventPresentationAdapterFactory = (
