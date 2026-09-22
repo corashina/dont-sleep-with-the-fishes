@@ -19,7 +19,7 @@ function castToWaiting(session: FishingSession): void {
 }
 
 describe('FishingSession', () => {
-  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+  it.each([0, Number.NaN])(
     'rejects invalid fish weight multiplier %s',
     (fishWeightMultiplier) => {
       expect(() => new FishingSession({

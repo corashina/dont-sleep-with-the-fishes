@@ -1,3 +1,4 @@
+import { KrakenPresentation } from './events/KrakenPresentation';
 import { type Object3D } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { runCleanupSteps } from '../world/SceneResources';
@@ -204,6 +205,7 @@ function createDedicatedPresentation(
   environment: DedicatedEventEnvironment,
 ): DedicatedEventPresentation {
   switch (eventId) {
+    case 'kraken': return new KrakenPresentation(environment);
     case 'starry-night': return new StarryNightPresentation(environment);
     case 'ocean-of-blood': return new OceanOfBloodPresentation(environment);
     case 'leak': return new LeakPresentation(environment);
@@ -213,8 +215,7 @@ function createDedicatedPresentation(
     case 'swarm-of-sharks': return new SharkSwarmPresentation(environment);
     case 'something-under-us': return new SomethingUnderUsPresentation(environment);
     case 'tornado': return new TornadoPresentation(environment);
-    case 'shadow-figure':
-    case 'guarded-sleep': return new CarlitosEventPresentation(eventId, environment);
+    default: return new CarlitosEventPresentation(eventId, environment);
   }
 }
 

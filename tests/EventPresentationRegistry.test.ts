@@ -2,6 +2,7 @@
 import { Group } from 'three';
 import { EventPresentationHost } from '../src/survival/EventPresentationHost';
 import type { DedicatedEventPresentation } from '../src/survival/eventPresentationTypes';
+import { BoatHeartDisplay } from '../src/survival/BoatHeartDisplay';
 import { beforeEach,describe,expect,it,vi } from 'vitest';
 import { FOCUSED_EVENT_IDS } from '../src/survival/eventPresentationRoutes';
 import type { EventPresentationReaction } from '../src/survival/EventPresentationAdapter';
@@ -175,6 +176,7 @@ function createDependencies() {
       worldParent: new Group(),
       boatParent: new Group(),
       dedicatedEnvironment: {
+        heartDisplay: new BoatHeartDisplay({ clone: () => new Group() }),
         setBloodOceanIntensity: vi.fn(),
         eventModels: {
           create: vi.fn(() => ({
@@ -184,7 +186,7 @@ function createDependencies() {
           animations: vi.fn(() => []),
           dispose: vi.fn(),
         },
-        featuredModels: {},
+        featuredModels: { clone: () => new Group() },
         dive: {
           play: asyncVoid(),
           clear: vi.fn(),

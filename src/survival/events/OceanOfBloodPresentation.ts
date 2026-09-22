@@ -1,12 +1,9 @@
 import { Group, Quaternion, Vector3 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
 import type { WaveSample } from '../../ocean/WaveField';
-import type { EventNetCatch } from '../EventItemUseController';
 import type {
   DedicatedEventEnvironment, DedicatedEventPresentation, EventOutcomePresentation, EventSceneContext,
 } from '../eventPresentationTypes';
-import { eventItemUseDurationForItem } from '../eventItemUseChoreography';
-import { eventItemMotionProfile } from '../eventItemMotionProfile';
 import { smoothstepRange } from '../animationMath';
 import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import { StationaryEventCamera } from '../StationaryEventCamera';
@@ -33,7 +30,7 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
     ...this.models.create(index), x, z, yaw,
     restHead: new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), index % 2 ? -1.15 : 1.05),
   }));
-  private readonly tin = this.models.createTin();
+  private readonly loot = new Group();
   private readonly wave: WaveSample = {
     height: 0, displacementX: 0, displacementZ: 0, normal: { x: 0, y: 1, z: 0 },
   };
@@ -42,24 +39,9 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
   private readonly direction = new Vector3();
   private readonly inverseFigure = new Quaternion();
   private readonly headTarget = new Quaternion();
-  private readonly catch: EventNetCatch = {
-    capture: (net) => {
-      if (!this.staged || this.caught) return;
-      this.caught = true;
-      net.attach(this.tin);
-      this.tin.position.set(...eventItemMotionProfile('fishingNet').actionOrigin);
-      this.tin.rotation.set(0.2, 0, 0.3);
-    },
-    release: () => {
-      if (!this.caught) return;
-      this.worldRoot.add(this.tin);
-      this.tin.visible = false;
-    },
-  };
-  private readonly animation = new TimedPresentationAnimation<'reveal' | 'search' | 'reaction'>(
+  private readonly animation = new TimedPresentationAnimation<'reveal' | 'reaction'>(
     (kind, _time, progress) => {
       if (kind === 'reveal') this.revealProgress = progress;
-      if (kind === 'search') this.searchProgress = smoothstepRange(0.58, 1, progress);
       if (kind === 'reaction') this.reactionProgress = progress;
       this.applyAtmosphere();
     },
@@ -75,13 +57,20 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
   private reactionProgress = 0;
   private waited = false;
   private revealing = false;
-  private caught = false;
+  private diving = false;
+  private diveOperation = 0;
   private staged = false;
   private disposed = false;
   private time = 0;
   private driftPhase = 0;
 
   constructor(private readonly environment: DedicatedEventEnvironment) {
+    const heart = environment.featuredModels.clone('bloodHeart');
+    heart.name = 'blood-heart-piece';
+    heart.position.set(0.12, 0.12, 0.18);
+    heart.rotation.set(-0.35, 0.25, -0.2);
+    this.loot.name = 'blood-ocean-recovered-loot';
+    this.loot.add(heart);
     this.cameraLook = environment.camera ? new StationaryEventCamera(environment.camera) : null;
     this.worldRoot.name = 'ocean-of-blood-world';
     this.boatRoot.name = 'ocean-of-blood-boat';
@@ -97,10 +86,10 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
     this.staged = true;
     this.applyAtmosphere();
     this.driftPhase = (context.variantSeed % 1024) / 1024 * Math.PI * 2;
-    this.bodies[0]!.figure.add(this.tin);
-    this.tin.position.set(-0.15, -0.2, 0.23);
-    this.tin.rotation.set(0.4, 0, 0.2);
-    this.tin.visible = true;
+    this.bodies[0]!.figure.add(this.loot);
+    this.loot.position.set(-0.15, -0.2, 0.23);
+    this.loot.rotation.set(0.4, 0, 0.2);
+    this.loot.visible = true;
     this.update(this.time, 0);
   }
 
@@ -111,15 +100,26 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
     return this.animation.start('reveal', BLOOD_OCEAN_REVEAL_SECONDS);
   }
 
-  netCatch(): EventNetCatch | null {
-    return this.staged ? this.catch : null;
-  }
-
-  playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
-    if (!this.staged || this.disposed || choiceId !== 'fishingNet') return Promise.resolve(false);
-    return this.animation.start('search', eventItemUseDurationForItem('net-scoop', 'fishingNet'), {
-      complete: true, cancel: false,
-    });
+  async playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
+    if (!this.staged || this.disposed || this.diving || choiceId !== 'scubaSet') return false;
+    this.diving = true;
+    const operation = ++this.diveOperation;
+    try {
+      await this.environment.dive.play(instanceId, {
+        waterAppearance: 'blood',
+        onWaterImpact: () => {
+          if (operation !== this.diveOperation) return;
+          this.searchProgress = 1;
+          this.loot.visible = false;
+        },
+      });
+      return operation === this.diveOperation;
+    } finally {
+      if (operation === this.diveOperation) {
+        this.diving = false;
+        this.environment.dive.clear();
+      }
+    }
   }
 
   react(result: EventOutcomePresentation): Promise<void> {
@@ -160,10 +160,8 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
       this.headTarget.setFromUnitVectors(FACE_FORWARD, this.direction);
       body.head.quaternion.copy(body.restHead).slerp(this.headTarget, turn);
     }
-    if (!this.caught) {
-      this.tin.getWorldPosition(this.itemAimTarget.position);
-      this.worldRoot.worldToLocal(this.itemAimTarget.position);
-    }
+    this.loot.getWorldPosition(this.itemAimTarget.position);
+    this.worldRoot.worldToLocal(this.itemAimTarget.position);
     this.frameReveal();
   }
 
@@ -185,22 +183,25 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
 
   settleForVisibilityChange(): void {
     if (!this.staged || this.disposed) return;
+    if (this.diving) this.environment.dive.settleForVisibilityChange();
     this.animation.settle(this.time);
     this.update(this.time, 0);
   }
 
   clear(): void {
+    this.diveOperation += 1;
+    if (this.diving) this.environment.dive.clear();
+    this.diving = false;
     this.animation.cancel();
     this.cameraLook?.restore();
     this.revealing = false;
     this.environment.setBloodOceanIntensity(0);
     this.staged = false;
-    this.caught = false;
     this.waited = false;
     this.revealProgress = 0;
     this.searchProgress = 0;
     this.reactionProgress = 0;
-    this.worldRoot.add(this.tin);
+    this.worldRoot.add(this.loot);
     this.worldRoot.visible = false;
     this.boatRoot.visible = false;
   }

@@ -79,7 +79,7 @@ describe('domain language', () => {
     setLanguage('pl');
     expect(settlement.message).toContain('łosoś');
     expect(formatJournalEntry(entry).daytime).toContain('łososia');
-    expect(formatJournalEntry(entry).nighttime).toContain('Morze dało mi pospać');
+    expect(formatJournalEntry(entry).nighttime).toContain('Przespałem noc');
   });
 
   it('reloads event outcomes in Polish with no saved display text', () => {

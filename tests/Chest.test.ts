@@ -1,3 +1,4 @@
+import { COMPLETE_HEART } from '../src/survival/heartOfTheSea';
 import { describe, expect, it } from 'vitest';
 import { ITEM_IDS, type ItemId } from '../src/game/ItemState';
 import { drawChestReward } from '../src/survival/chest';
@@ -12,12 +13,12 @@ describe('chest rewards', () => {
       itemId !== 'compass' && itemId !== 'scubaSet'
     )));
 
-    expect(drawChestReward(owned, sequenceRandom([0.249999]))).toEqual({ kind: 'item', itemId: 'compass' });
-    expect(drawChestReward(owned, sequenceRandom([0.25]))).toEqual({ kind: 'item', itemId: 'scubaSet' });
+    expect(drawChestReward(owned, COMPLETE_HEART, sequenceRandom([0.249999]))).toEqual({ kind: 'item', itemId: 'compass' });
+    expect(drawChestReward(owned, COMPLETE_HEART, sequenceRandom([0.25]))).toEqual({ kind: 'item', itemId: 'scubaSet' });
   });
 
   it('gives two food when every reward item is owned', () => {
-    expect(drawChestReward(new Set(rewardItems), sequenceRandom([0]))).toEqual({
+    expect(drawChestReward(new Set(rewardItems), COMPLETE_HEART, sequenceRandom([0]))).toEqual({
       kind: 'resource',
       resource: 'food',
       quantity: 2,
@@ -55,7 +56,7 @@ describe('chest energy costs', () => {
     const saved = kind === 'resource'
       ? ITEM_IDS.filter((id) => id !== 'carlitos').map((type) => ({ instanceId: `${type}-1` as const, type }))
       : [];
-    const session = new SurvivalSession(saved, {
+    const session = new SurvivalSession(saved, { initialHeartPieces: COMPLETE_HEART,
       seed: 1, initial: { energy: 3 }, initialChest: { state: 'closed', acquiredDay: 0 },
     });
     expect(session.perform('openChest')).toMatchObject({

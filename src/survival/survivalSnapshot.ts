@@ -1,3 +1,4 @@
+import type { HeartPieces } from './heartOfTheSea';
 import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
 import type { EndingRecord } from '../game/ending';
 import type { SurvivalReading } from '../game/runStatistics';
@@ -29,6 +30,7 @@ export interface SurvivalSnapshot {
   readonly rescueTraceFinds: number;
   radioSignalAvailable: boolean;
   radioSignalsSent: number;
+  readonly heartPieces: HeartPieces;
   readonly chest: ChestSnapshot;
   weather: WeatherId;
   actedToday: boolean;

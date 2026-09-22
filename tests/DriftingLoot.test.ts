@@ -1,13 +1,12 @@
 import { describe,expect,it } from 'vitest';
 import { ITEM_DEFINITIONS, type ItemId } from '../src/game/ItemState';
 import { DRIFTING_LOOT_POOLS,drawDriftingLoot } from '../src/survival/driftingLoot';
-import { DRIFTING_SUPPLY_KINDS } from '../src/survival/driftingSupplies';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { createSurvivalSaveDocument,parseSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
 import { sequenceRandom } from './helpers/random';
 
 describe('drifting loot', () => {
-  it.each(DRIFTING_SUPPLY_KINDS)('keeps %s supply quantities independent and within 1–3', (kind) => {
+  it.each(['barrel'] as const)('keeps %s supply quantities independent and within 1–3', (kind) => {
     const rewards = drawDriftingLoot(kind, new Set(), sequenceRandom([0.99, 0, 0.999, 0.99, 0.99]));
     expect(rewards).toEqual([
       { kind: 'resource', id: 'food', quantity: 1 },

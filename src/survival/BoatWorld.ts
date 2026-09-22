@@ -71,6 +71,7 @@ import {
 } from './BoatInteraction';
 import { BoatInteractionProjector } from './BoatInteractionProjector';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
+import { BoatHeartDisplay } from './BoatHeartDisplay';
 import { SIREN_SCENE_OFFSET_Z } from './SirenAppearance';
 import { BoatCameraController } from './BoatCameraController';
 import { CarlitosPresentation, CARLITOS_FEED_DURATION } from './CarlitosPresentation';
@@ -375,6 +376,7 @@ export class BoatWorld {
   private readonly baseCameraLookTarget = new Vector3(0, 0.88, -1.55);
   private readonly diveController: DivePresentationController;
   private readonly supplyDisplay: BoatSupplyDisplay;
+  private readonly heartDisplay: BoatHeartDisplay;
   private readonly carlitos: CarlitosPresentation;
   private ambientCarlitosSide: EventSide = 1;
   private eventCarlitosSide: EventSide | null = null;
@@ -529,6 +531,7 @@ export class BoatWorld {
     let hangingLantern: HangingLantern | null = null;
     let carlitos: CarlitosPresentation | null = null;
     let supplyDisplay: BoatSupplyDisplay | null = null;
+    let heartDisplay: BoatHeartDisplay | null = null;
     let chestDisplay: ChestDisplay | null = null;
     let itemUseAdapter: EventItemUseAdapter | null = null;
     let itemUseController: EventItemUseController | null = null;
@@ -604,6 +607,9 @@ export class BoatWorld {
         savedItems,
       );
       this.supplyDisplay = supplyDisplay;
+      heartDisplay = new BoatHeartDisplay(this.fallbackFeaturedEventModels);
+      this.heartDisplay = heartDisplay;
+      this.boat.add(heartDisplay.root);
       chestDisplay = new ChestDisplay(
         propModels.createEventModel('chestClosed')?.root ?? null,
       );
@@ -720,6 +726,8 @@ export class BoatWorld {
         this.camera,
         {
           boatRoot: this.boat,
+          heartBasketRoot: this.heartDisplay.root,
+          heartBasketLabel: () => this.heartDisplay.tooltip,
           supplyRecords: this.supplyDisplay.records(),
           carlitosRoot: this.carlitos.root,
           carlitosInteractionRoot: this.carlitos.interactionRoot,
@@ -748,6 +756,7 @@ export class BoatWorld {
           () => itemUseAdapter?.dispose(),
           () => chestDisplay?.dispose(),
           () => supplyDisplay?.dispose(),
+          () => heartDisplay?.dispose(),
           () => carlitos?.dispose(),
           () => this.toolHoverOutline.dispose(),
           () => this.fishingAvailableOutline.dispose(),
@@ -800,6 +809,7 @@ export class BoatWorld {
       worldParent: this.scene,
       boatParent: this.boat,
       dedicatedEnvironment: {
+        heartDisplay: this.heartDisplay,
         setBloodOceanIntensity: (intensity) => {
           this.sky.setBloodOceanIntensity(intensity);
           this.ocean.setBloodOceanIntensity(intensity);
@@ -997,6 +1007,7 @@ export class BoatWorld {
   syncInventory(snapshot: SurvivalSnapshot): void {
     if (this.disposed) return;
     this.supplyDisplay.sync(snapshot);
+    this.heartDisplay.sync(snapshot);
     this.radioSignalAvailable = snapshot.radioSignalAvailable;
     this.setCarlitosAmbientSide(eventSideFromSeed(snapshot.seed));
     this.carlitos.sync(snapshot.carlitos);
@@ -1731,6 +1742,7 @@ export class BoatWorld {
       () => this.diveController.dispose(),
       () => this.carlitos.dispose(),
       () => this.supplyDisplay.dispose(),
+      () => this.heartDisplay.dispose(),
       () => this.chestDisplay.dispose(),
       () => this.hangingLantern.dispose(),
       () => this.sleepPillow.dispose(),

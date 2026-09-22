@@ -31,6 +31,7 @@ const PAD_SPREAD_Z = 1.7;
 export class FlowersPresentation extends KeyedEventPresentation {
   private readonly pads: Group[] = [];
   private readonly scoopTarget = new Object3D();
+  private readonly brain: Group;
   private caught = false;
   readonly netCatch: EventNetCatch = {
     capture: (net) => this.captureInNet(net),
@@ -48,6 +49,9 @@ export class FlowersPresentation extends KeyedEventPresentation {
   constructor(models: SurvivalEventModels, private readonly deckTarget: Object3D) {
     super('flowers-presentation');
     this.subject.name = 'event-prop:flowers';
+    this.brain = models.clone('flowersHeart');
+    this.brain.name = 'flowers-heart-piece';
+    this.brain.scale.multiplyScalar(0.4);
     PAD_POSITIONS.forEach(([x, y, z], index) => {
       const pad = new Group();
       pad.name = `flowers:pad:${index}`;
@@ -74,6 +78,8 @@ export class FlowersPresentation extends KeyedEventPresentation {
 
   protected reset(): void {
     this.caught = false;
+    this.subject.add(this.brain);
+    this.brain.visible = false;
     this.subject.position.set(0, 0, 0);
     this.pads.forEach((pad, index) => {
       this.subject.add(pad);
@@ -87,7 +93,7 @@ export class FlowersPresentation extends KeyedEventPresentation {
   protected applyIdle(time: number): void {
     if (this.settledKind === 'flowers.collect') {
       this.floatPads(time);
-      if (!this.caught) this.moveFirstToDeck(1);
+      if (!this.caught) this.moveBrainToDeck(1);
       return;
     }
     this.floatPads(time);
@@ -99,7 +105,7 @@ export class FlowersPresentation extends KeyedEventPresentation {
       this.floatPads(time);
     } else if (kind === 'flowers.collect') {
       this.floatPads(time);
-      if (!this.caught) this.moveFirstToDeck(eased);
+      if (!this.caught) this.moveBrainToDeck(eased);
     } else if (kind === 'flowers.drift') {
       this.floatPads(time);
       this.subject.position.x = -eased * 1.4;
@@ -109,13 +115,12 @@ export class FlowersPresentation extends KeyedEventPresentation {
   }
 
   protected disposeOwned(): void {
-    // Restore the flower from the boat before removing this presentation.
-    this.subject.add(this.pads[0]!);
+    // Restore the brain from the net before removing this presentation.
+    this.subject.add(this.brain);
   }
 
   private floatPads(time: number): void {
     for (let index = 0; index < this.pads.length; index += 1) {
-      if (index === 0 && this.caught) continue;
       const pad = this.pads[index]!;
       const base = this.basePositions[index]!;
       sampleWaveFieldInto(this.wave, DEFAULT_WAVES, time, base.x, base.z, 1);
@@ -133,26 +138,29 @@ export class FlowersPresentation extends KeyedEventPresentation {
   private captureInNet(net: Object3D): void {
     if (this.caught) return;
     this.caught = true;
-    const pad = this.pads[0]!;
-    net.attach(pad);
-    pad.position.set(...eventItemMotionProfile('fishingNet').actionOrigin);
-    pad.rotation.set(0, 0, 0);
+    net.add(this.brain);
+    this.brain.position.set(...eventItemMotionProfile('fishingNet').actionOrigin);
+    this.brain.position.y += 0.055;
+    this.brain.rotation.set(0.15, -0.3, 0.1);
+    this.brain.visible = true;
   }
 
   private releaseFromNet(): void {
     if (!this.caught) return;
-    // Leave the flower inside the stored net and follow the boat's motion.
-    (this.deckTarget.parent ?? this.subject).attach(this.pads[0]!);
+    // The collected copy is now shown in the boat's basket.
+    this.subject.add(this.brain);
+    this.brain.visible = false;
   }
 
-  private moveFirstToDeck(progress: number): void {
-    const pad = this.pads[0]!;
+  private moveBrainToDeck(progress: number): void {
     const base = this.basePositions[0]!;
     this.deckTarget.getWorldPosition(this.target);
     this.root.worldToLocal(this.target);
-    pad.position.set(
+    this.brain.visible = progress < 1;
+    this.brain.rotation.set(0.15, -0.3, 0.1);
+    this.brain.position.set(
       base.x + (this.target.x - base.x) * progress,
-      base.y + (this.target.y - base.y) * progress,
+      base.y + (this.target.y - base.y) * progress + Math.sin(progress * Math.PI) * 0.5,
       base.z + (this.target.z - base.z) * progress,
     );
   }

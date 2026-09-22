@@ -411,6 +411,31 @@ describe('AudioSystem', () => {
     expect(feedback.setPaused).not.toHaveBeenCalled();
   });
 
+  // Importance: 95/100. A successful Kraken ending must not play rescue or death audio.
+  it('keeps Kraken ending audio separate from rescue and death', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.ending('kraken');
+    expect(backend.voices.map(({ id }) => id)).not.toEqual(expect.arrayContaining(['rescueHorn']));
+    expect(backend.voices.map(({ id }) => id).filter((id) => ['rescueHorn', 'rescueEnding', 'deathEnding'].includes(id))).toEqual([]);
+    audio.dispose();
+  });
+
+  // Importance: 96/100. A looping handover sound must stop with its event.
+  it.each(['reaction', 'ending', 'clear'] as const)('stops the Kraken handover loop on %s', (exit) => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.beginEvent('kraken');
+    audio.beginEventReaction('kraken', { accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'none' });
+    const tentacle = backend.voices.find(({ id }) => id === 'tentacleMovement')!;
+    expect(tentacle).toBeDefined();
+    if (exit === 'reaction') audio.finishEventReaction();
+    else if (exit === 'ending') audio.ending('kraken');
+    else audio.clearEvent();
+    expect(tentacle.stop).toHaveBeenCalledOnce();
+    audio.dispose();
+  });
+
   it('disposes scopes before the backend and remains idempotent', () => {
     const backend = new FakeAudioBackend();
     const system = AudioSystem.forTest(backend);

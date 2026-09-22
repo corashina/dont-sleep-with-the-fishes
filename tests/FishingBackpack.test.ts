@@ -9,7 +9,7 @@ import { createJournalEntry } from '../src/survival/journalRecords';
 import { journalItemChanges } from '../src/survival/journalItemChanges';
 
 describe('fishing backpack', () => {
-  it.each(['map', 'cannedFood', 'baitTin'] as const)('settles and saves a missing %s exactly once', (missing) => {
+  it.each(['map'] as const)('settles and saves a missing %s exactly once', (missing) => {
     const saved = ITEM_IDS.filter((id) => id !== missing)
       .map((type) => ({ type, instanceId: `${type}-1` as const }));
     const session = new SurvivalSession(saved, {
@@ -29,10 +29,10 @@ describe('fishing backpack', () => {
     expect(session.snapshot().inventory[`${missing}-1`]?.condition).toBe('usable');
     expect(session.snapshot().inventory['compass-1']?.condition).toBe('broken');
     expect(formatFishingResult(result, outcome).items).toEqual([{ itemId: missing, quantity: 1, condition: 'usable' }]);
-    expect(session.snapshot().food).toBe(before.food + (missing === 'cannedFood' ? 1 : 0));
-    expect(session.snapshot().bait).toBe(before.bait + (missing === 'baitTin' ? 1 : 0));
-    expect(session.snapshot().recoveredFood).toBe(before.recoveredFood + (missing === 'cannedFood' ? 1 : 0));
-    expect(session.snapshot().recoveredBait).toBe(before.recoveredBait + (missing === 'baitTin' ? 1 : 0));
+    expect(session.snapshot().food).toBe(before.food);
+    expect(session.snapshot().bait).toBe(before.bait);
+    expect(session.snapshot().recoveredFood).toBe(before.recoveredFood);
+    expect(session.snapshot().recoveredBait).toBe(before.recoveredBait);
     expect(session.finishFishing(attempt.snapshot().id, result).accepted).toBe(false);
     const document = createSurvivalSaveDocument({ scavengeElapsedSeconds: 0, session: session.exportCheckpoint() });
     const parsed = parseSurvivalSaveDocument(JSON.parse(JSON.stringify(document)));

@@ -124,6 +124,7 @@ lines.push('### Outcomes (seed runs)');
 lines.push('');
 lines.push('| Outcome | Count | Rate |');
 lines.push('| --- | --- | --- |');
+lines.push(countRows('kraken', report.kraken, totalRuns));
 lines.push(countRows('rescued', report.rescued, totalRuns));
 lines.push(countRows('dead', report.dead, totalRuns));
 lines.push(countRows('sunk', report.sunk, totalRuns));

@@ -2,6 +2,7 @@ import type { Group, Object3D, PerspectiveCamera } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveSample, VortexWaveState } from '../ocean/WaveField';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
+import type { BoatHeartDisplay } from './BoatHeartDisplay';
 import type { EventNetCatch } from './EventItemUseController';
 import type { CarlitosPresentation } from './CarlitosPresentation';
 import type { DivePresentationController } from './DivePresentationController';
@@ -65,6 +66,7 @@ export interface UnderwaterViewEnvironment {
 }
 
 export interface DedicatedEventEnvironment {
+  readonly heartDisplay: BoatHeartDisplay;
   readonly setBloodOceanIntensity: (intensity: number) => void;
   readonly eventModels: EventModelLibrary;
   readonly featuredModels: SurvivalEventModels;

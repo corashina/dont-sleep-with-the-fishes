@@ -11,6 +11,7 @@ export type DeathCause =
 export type EndingRecord =
   | { readonly id: 'dorothy'; readonly day: 0; readonly savedPickupCount: number }
   | { readonly id: 'rescue'; readonly day: number; readonly savedPickupCount: number; readonly signalAssisted: boolean }
+  | { readonly id: 'kraken'; readonly day: number; readonly savedPickupCount: number }
   | { readonly id: 'death'; readonly day: number; readonly savedPickupCount: number; readonly cause: DeathCause }
   | { readonly id: 'sinking'; readonly day: number; readonly savedPickupCount: number; readonly cause: { readonly eventId: string | null } };
 
@@ -19,6 +20,7 @@ export type SurvivalEndingId = Exclude<EndingRecord['id'], 'dorothy'>;
 const t = defineMessages({
   dorothy: { en: 'SUNK WITH DOROTHY', pl: 'NA DNIE Z DOROTHY', "es-AR": "TE HUNDISTE CON DOROTHY" },
   rescue: { en: 'RESCUE FOUND YOU', pl: 'NADESZŁA POMOC', "es-AR": "LLEGÓ EL RESCATE" },
+  kraken: { en: 'THE SEA RELEASES YOU', pl: 'MORZE ZWRACA CI WOLNOŚĆ', 'es-AR': 'EL MAR TE DEJA IR' },
   death: { en: 'THE SEA OUTLASTED YOU', pl: 'MORZE PRZETRWAŁO DŁUŻEJ', "es-AR": "EL MAR AGUANTÓ MÁS QUE VOS" },
   sinking: { en: 'THE BOAT IS GONE', pl: 'ŁÓDŹ ZNIKNĘŁA', "es-AR": "EL BOTE DESAPARECIÓ" },
   beforeDay: { en: 'BEFORE DAY 1', pl: 'PRZED DNIEM 1', "es-AR": "ANTES DEL DÍA 1" },

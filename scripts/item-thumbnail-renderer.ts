@@ -12,6 +12,7 @@ import {
 } from 'three';
 import { ITEM_IDS, type ItemId } from '../src/game/ItemState';
 import { PropModelLibrary } from '../src/world/PropModelLibrary';
+import { SurvivalEventModelLibrary } from '../src/survival/SurvivalEventModelLibrary';
 
 const SIZE = 256;
 const CAMERA_DIRECTION = new Vector3(1, 0.8, 1).normalize();
@@ -78,7 +79,7 @@ async function pngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
-async function uploadThumbnail(id: ItemId, canvas: HTMLCanvasElement): Promise<void> {
+async function uploadThumbnail(id: string, canvas: HTMLCanvasElement): Promise<void> {
   const response = await fetch(`/__item-thumbnail/${id}`, {
     method: 'POST',
     body: await pngBlob(canvas),
@@ -102,10 +103,12 @@ async function main(): Promise<void> {
   scene.add(fill);
 
   let library: PropModelLibrary | undefined;
+  let hearts: SurvivalEventModelLibrary | undefined;
   try {
-    library = await PropModelLibrary.load();
-    for (const id of ITEM_IDS) {
-      const root = library.create({ instanceId: `${id}-1`, type: id });
+    const items = new URLSearchParams(location.search).has('heart-pieces') ? [] : ITEM_IDS;
+    if (items.length > 0) library = await PropModelLibrary.load();
+    for (const id of items) {
+      const root = library!.create({ instanceId: `${id}-1`, type: id });
       try {
         root.rotation.set(...(THUMBNAIL_ROTATIONS[id] ?? [0, 0, 0]));
         scene.add(root);
@@ -121,10 +124,21 @@ async function main(): Promise<void> {
         disposeClone(root);
       }
     }
+    const heartIds = ['flowersHeart', 'bloodHeart', 'chestHeart'] as const;
+    hearts = await SurvivalEventModelLibrary.load(heartIds);
+    for (const id of heartIds) {
+      const root = hearts.clone(id);
+      scene.add(root);
+      fitCamera(camera, root);
+      renderer.render(scene, camera);
+      await uploadThumbnail(id, renderer.domElement);
+      scene.remove(root);
+    }
     const response = await fetch('/__item-thumbnail-complete', { method: 'POST' });
     if (!response.ok) throw new Error(`Could not complete thumbnail generation: ${response.status}`);
   } finally {
     library?.dispose();
+    hearts?.dispose();
     renderer.dispose();
   }
 }

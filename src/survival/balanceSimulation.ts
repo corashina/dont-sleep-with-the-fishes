@@ -34,6 +34,7 @@ export interface BalanceSimulationConfig {
 export interface BalanceOutcomeBucket {
   readonly totalRuns: number;
   readonly rescued: number;
+  readonly kraken: number;
   readonly dead: number;
   readonly sunk: number;
   readonly blocked: number;
@@ -81,6 +82,7 @@ export function enumerateMissingPickupSets(): readonly MissingPickupSet[] {
 }
 
 const EVENT_CHOICE_PRIORITY = Object.freeze({
+  kraken: ['return-heart'],
   'starry-night': ['wish'],
   'quiet-night': ['sleep'],
   'something-under-us': ['baitTin', 'sleep'],
@@ -296,11 +298,11 @@ function average(values: readonly number[]): number | null {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-type OutcomeKey = 'rescued' | 'dead' | 'sunk' | 'blocked';
+type OutcomeKey = 'kraken' | 'rescued' | 'dead' | 'sunk' | 'blocked';
 type MutableBucket = { -readonly [Key in keyof BalanceOutcomeBucket]: number };
 
 function emptyBucket(): MutableBucket {
-  return { totalRuns: 0, rescued: 0, dead: 0, sunk: 0, blocked: 0 };
+  return { totalRuns: 0, kraken: 0, rescued: 0, dead: 0, sunk: 0, blocked: 0 };
 }
 
 function recordOutcome(bucket: MutableBucket, outcome: OutcomeKey): void {
@@ -338,6 +340,7 @@ interface SimulationStats {
 
 function outcomeForEnding(ending: SessionEnding): OutcomeKey {
   if (ending === null) return 'blocked';
+  if (ending.id === 'kraken') return 'kraken';
   if (ending.id === 'rescue') return 'rescued';
   if (ending.id === 'sinking') return 'sunk';
   return 'dead';
@@ -506,6 +509,7 @@ export function runBalanceSimulation(
 
 function addBucket(target: MutableBucket, source: BalanceOutcomeBucket): void {
   target.totalRuns += source.totalRuns;
+  target.kraken += source.kraken;
   target.rescued += source.rescued;
   target.dead += source.dead;
   target.sunk += source.sunk;

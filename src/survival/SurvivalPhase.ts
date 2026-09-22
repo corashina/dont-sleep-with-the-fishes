@@ -1,10 +1,11 @@
+import { COMPLETE_HEART } from './heartOfTheSea';
 import { PerspectiveCamera } from 'three';
 import type { SurvivalPhaseContext, GamePhase } from '../app/GamePhase';
 import { prepareScene } from '../rendering/prepareScene';
 import type { SurvivalContent } from './SurvivalContent';
 import { AudioSystem } from '../audio/AudioSystem';
 import { SurvivalAudio } from '../audio/SurvivalAudio';
-import type { SurvivalEndingId } from '../game/ending';
+import type { EndingRecord, SurvivalEndingId } from '../game/ending';
 import {
   type ItemInstance,
   type ItemInstanceId,
@@ -158,6 +159,7 @@ function createSession(
     return SurvivalSession.createEndingPreview(start.savedItems, start.seed, start.endingId);
   }
   return new SurvivalSession(start.savedItems, {
+    ...(initialEventId === 'kraken' || itemAnimationLab ? { initialHeartPieces: COMPLETE_HEART } : {}),
     seed: start.seed,
     ...(itemAnimationLab
       ? {
@@ -1033,13 +1035,21 @@ export class SurvivalPhase implements GamePhase {
         this.reportFocusedError(this.presentRescueEnding(snapshot.ending));
         return;
       }
+      if (snapshot.ending.id === 'kraken') {
+        this.showTerminalPanel(snapshot.ending);
+        return;
+      }
       if (this.shouldPresentLossEnding(snapshot.ending.id)) {
         this.reportFocusedError(this.presentLossEnding(snapshot.ending, snapshot.ending.id));
         return;
       }
-      this.audio.ending(snapshot.ending.id);
-      this.ui.showEnding?.(snapshot.ending);
+      this.showTerminalPanel(snapshot.ending);
     }
+  }
+
+  private showTerminalPanel(ending: Extract<EndingRecord, { id: 'kraken' | 'death' | 'sinking' }>): void {
+    this.audio.ending(ending.id);
+    this.ui.showEnding?.(ending);
   }
 
   private shouldPresentLossEnding(id: SurvivalEndingId): boolean {
@@ -1047,7 +1057,7 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private async presentLossEnding(
-    ending: Exclude<NonNullable<SurvivalSnapshot['ending']>, { id: 'dorothy' | 'rescue' }>,
+    ending: Exclude<NonNullable<SurvivalSnapshot['ending']>, { id: 'dorothy' | 'rescue' | 'kraken' }>,
     cue: 'death' | 'sinking',
   ): Promise<void> {
     const generation = this.lifecycleGeneration;

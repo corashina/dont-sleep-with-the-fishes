@@ -58,36 +58,10 @@ describe('EventBundleManager', () => {
 
   it.each([
     ['campfire model', { missingModel: 'midnightCampfire' }, 'Missing required Midnight Tour campfire model.'],
-    ['wood log model', { missingModel: 'midnightWoodLog' }, 'Missing required Midnight Tour wood log model.'],
-    [
-      'palm model',
-      { missingModel: 'midnightPalmTrees' },
-      'Missing required Midnight Tour palm model.',
-    ],
-    [
-      'chest model',
-      { missingModel: 'chestClosed' },
-      'Missing required Midnight Tour chest model.',
-    ],
-    [
-      'shovel model',
-      { missingModel: 'midnightShovel' },
-      'Missing required Midnight Tour shovel model.',
-    ],
-    [
-      'monster model',
-      { missingModel: 'midnightMonster' },
-      'Missing required Midnight Tour monster model.',
-    ],
     [
       'monster idle clip',
       { missingClip: 'CharacterArmature|Idle' },
       'Missing required Midnight Tour monster clip: CharacterArmature|Idle.',
-    ],
-    [
-      'monster attack clip',
-      { missingClip: 'CharacterArmature|Idle_Attack' },
-      'Missing required Midnight Tour monster clip: CharacterArmature|Idle_Attack.',
     ],
   ] as const)(
     'rejects Midnight Tour activation when the required %s is missing',

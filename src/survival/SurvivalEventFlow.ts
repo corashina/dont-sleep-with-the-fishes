@@ -1,4 +1,5 @@
 import { eventChoiceDecision, type EventChoiceFailure } from './eventChoiceRules';
+import { isHeartComplete } from './heartOfTheSea';
 import { carlitosHelpUnavailableMessage } from './CarlitosState';
 import { domainMessage } from '../i18n/domainMessages';
 import { flowText } from '../i18n/flowMessages';
@@ -1937,6 +1938,8 @@ export class SurvivalEventFlow {
     if (!this.isCurrent(generation, operation)) return;
     this.dependencies.audio.finishEventReaction();
     if (!await this.resumeAfterVisibility(generation, operation)) return;
+    await this.showHeartReward(context);
+    if (!this.isCurrent(generation, operation)) return;
     const terminal = this.dependencies.session.snapshot();
     if ((focusedResult || eventId === 'check-the-back') && !isTerminal(terminal.state)) {
       this.flushDeferredPresentationSync(terminal, generation);
@@ -1946,6 +1949,16 @@ export class SurvivalEventFlow {
       return;
     }
     await this.completeContinuingEventResolution(context, terminal);
+  }
+
+  private async showHeartReward(context: EventResolutionContext): Promise<void> {
+    const reward = context.outcome.rewardSummary;
+    const hasHeart = reward?.kind === 'heartPiece'
+      || (reward?.kind === 'bundle' && reward.rewards.some((entry) => entry.kind === 'heartPiece'));
+    if (hasHeart) {
+      const complete = isHeartComplete(this.dependencies.session.snapshot().heartPieces);
+      await this.dependencies.ui.showRewardResult?.({ title: 'SALVAGE', reward: reward!, lines: [], ...(complete ? { heartCompleted: true } : {}) });
+    }
   }
 
   private beginEventResolution(context: EventResolutionContext): void {
@@ -2318,6 +2331,10 @@ export class SurvivalEventFlow {
     generation: number,
     operation: number,
   ): Promise<void> {
+    if (event.id === 'kraken') {
+      await this.resolveContextualChoice('return-heart', generation, operation);
+      return;
+    }
     if (event.id === 'chest-attack') {
       await this.resolveChestAttack(generation, operation);
       return;

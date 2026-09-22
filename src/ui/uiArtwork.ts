@@ -1,7 +1,7 @@
 import type { ItemId } from '../game/ItemState';
 
 export const UI_ARTWORK_IDS = [
-  'health', 'hunger', 'mood', 'energy', 'hull', 'watch', 'journal', 'chest', 'warning', 'howToPlay',
+  'heart', 'health', 'hunger', 'mood', 'energy', 'hull', 'watch', 'journal', 'chest', 'warning', 'howToPlay',
   'guideSearch', 'guideCarry', 'guideSave',
   'guidePrepare', 'guideWatch', 'guideEndDay',
 ] as const;
@@ -9,6 +9,7 @@ export const UI_ARTWORK_IDS = [
 export type UiArtworkId = typeof UI_ARTWORK_IDS[number];
 
 const ARTWORK: Record<UiArtworkId, string> = {
+  heart: '<path data-heart-segment="flowers" d="M38 22C24 4 7 13 9 28c1 9 9 19 17 27l8-15-6-6z"/><path data-heart-segment="blood" d="M43 22C57 4 73 13 71 28c-1 8-7 17-14 24l-13-7 7-12z"/><path data-heart-segment="chest" d="m39 27-6 8 7 6-10 17 10 10 13-12-14-9 7-13z"/>',
   health: '<path d="M32 57C9 42 5 23 17 13c8-7 18-3 23 5 6-8 17-12 25-4 12 12 2 31-20 45l-6 4z"/><path class="ui-artwork__shine" d="M18 25c2-7 8-10 14-7"/>',
   hunger: '<g data-hunger-scale transform="translate(40 36) scale(.8) translate(-40 -36)"><path data-hunger-part="body" d="M22 5h12c-1 11 0 20 5 25 4 4 8 4 14 0 10-6 19-3 23 7 6 13 1 25-10 31-10 6-23 4-31-5-4-4-6-6-10-5-5 2-9 7-11 14L4 67c3-9 8-15 14-18 7-3 10-6 9-13-1-8-5-16-5-24z"/><path class="ui-artwork__shine" data-hunger-part="shine" d="M41 58c7 4 16 4 24 0"/></g>',
   mood: '<circle cx="40" cy="36" r="27"/><circle cx="31" cy="31" r="2"/><circle cx="49" cy="31" r="2"/><path fill="none" d="M26 46c8 7 20 7 28 0"/><path class="ui-artwork__shine" d="M22 25c4-7 10-11 17-12"/>',

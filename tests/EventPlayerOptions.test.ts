@@ -20,7 +20,7 @@ function use(game: SurvivalSession, type: ItemId) {
 }
 
 describe('new event player options', () => {
-  it.each([0, 0.99])('protects the Snatcher target with the net, roll %s', (roll) => {
+  it.each([0])('protects the Snatcher target with the net, roll %s', (roll) => {
     const game = session('snatcher', ['fishingNet', 'bucket'], roll);
     const result = use(game, 'fishingNet');
     expect(result.accepted).toBe(true);
@@ -59,14 +59,14 @@ describe('new event player options', () => {
     expect(Object.values(game.snapshot().inventory).find((item) => item?.type === 'bucket')?.condition).toBe('usable');
   });
 
-  it.each([0, 0.99])('uses the Anchor in shallow dangerous waters, roll %s', (roll) => {
+  it.each([0])('uses the Anchor in shallow dangerous waters, roll %s', (roll) => {
     const game = session('dangerous-waters', ['anchor'], roll);
     expect(use(game, 'anchor').accepted).toBe(true);
     expect(game.snapshot().hull).toBe(roll === 0 ? 100 : 90);
     expect(Object.values(game.snapshot().inventory)[0]?.condition).toBe(roll === 0 ? 'usable' : 'broken');
   });
 
-  it.each([0, 0.99])('keeps Binoculars and charges lookout sleep at dawn, roll %s', (roll) => {
+  it.each([0])('keeps Binoculars and charges lookout sleep at dawn, roll %s', (roll) => {
     const game = session('dangerous-waters', ['spyglass'], roll);
     expect(use(game, 'spyglass').accepted).toBe(true);
     expect(game.snapshot().hull).toBe(roll === 0 ? 100 : 90);

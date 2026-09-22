@@ -5,7 +5,7 @@ const thumbnailModules = import.meta.glob<string>(
   { eager: true, query: '?url', import: 'default' },
 );
 
-export function itemThumbnailUrl(id: ItemId): string {
+export function itemThumbnailUrl(id: ItemId | 'flowersHeart' | 'bloodHeart' | 'chestHeart'): string {
   const url = thumbnailModules[`../assets/models/item-thumbnails/${id}.png`];
   if (url === undefined) throw new Error(`Missing item thumbnail: ${id}`);
   return url;

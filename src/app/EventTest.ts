@@ -152,6 +152,7 @@ export const EVENT_TEST_OPTIONS: readonly EventTestOption[] = Object.freeze([
     })
     .map((option) => Object.freeze(option)),
   endingOption('dorothy', 'eventTestDorothy'),
+  endingOption('kraken', 'eventTestKraken'),
   endingOption('rescue', 'eventTestRescue'),
   endingOption('death', 'eventTestDeath'),
   endingOption('sinking', 'eventTestSinking'),

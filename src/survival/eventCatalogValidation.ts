@@ -1,3 +1,4 @@
+import { HEART_PIECE_IDS, type HeartPieceId } from './heartOfTheSea';
 import {
   ITEM_DEFINITIONS,
   ITEM_IDS,
@@ -226,12 +227,16 @@ function validateEffectRecord(value: unknown, path: string): PlainRecord {
     `${path}.effects`,
     'effect',
     [
-      'resources', 'items', 'chest',
+      'resources', 'items', 'chest', 'grantHeartPiece',
       'nextDawnEnergy', 'nextDawnEnergyReduction', 'maximumNextDawnEnergy', 'followUpNight', 'restoreCrew',
     ],
   );
   if (Object.hasOwn(candidateEffects, 'restoreCrew') && candidateEffects.restoreCrew !== true) {
     throw new Error(`${path}.effects.restoreCrew must be true`);
+  }
+  if (Object.hasOwn(candidateEffects, 'grantHeartPiece')
+    && !HEART_PIECE_IDS.includes(candidateEffects.grantHeartPiece as HeartPieceId)) {
+    throw new Error(path + '.effects.grantHeartPiece is invalid');
   }
   return candidateEffects;
 }

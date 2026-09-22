@@ -124,8 +124,8 @@ const BOAT_STORAGE_SLOTS = {
   compass: [restingSlot(
     'shelf',
     'compass',
-    -0.60,
-    -1.62,
+    -0.46,
+    -1.60,
     COMPASS_REST_ROTATION[1],
     0.5,
     COMPASS_REST_ROTATION[0],
@@ -141,7 +141,8 @@ const BOAT_STORAGE_SLOTS = {
     rotation: [68 * Math.PI / 180, 42 * Math.PI / 180, -1.02758174],
     scale: 1,
   }],
-  knife: [restingSlot('shelf', 'knife', 1.05, -1.62, 0, 0.5, Math.PI / 2)],
+  // Turn the flat blade along the bench depth, beside the compass and left of the bait.
+  knife: [restingSlot('shelf', 'knife', -1.20, -1.60, 0, 0.5, Math.PI / 2, Math.PI / 2)],
   bucket: [restingSlot('floor', 'bucket', 1.03, -1.00, -0.12)],
   flareGun: [restingSlot(
     'edgeShelf',
@@ -170,7 +171,7 @@ const BOAT_STORAGE_SLOTS = {
     rotation: [1.22, 0, 0],
     scale: 0.5,
   }],
-  flashlight: [restingSlot('shelf', 'flashlight', -1.03, -1.6, -Math.PI / 2)],
+  flashlight: [restingSlot('shelf', 'flashlight', -0.78334, -1.60, -Math.PI / 2)],
   shotgun: [restingSlot('floor', 'shotgun', -1.43, -1.16, 0.20, 0.5, Math.PI / 2)],
   energyBar: [restingSlot('shelf', 'energyBar', 0.48, LIFEBOAT_PLAYER_BENCH_Z - 0.05, Math.PI)],
   carlitos: [

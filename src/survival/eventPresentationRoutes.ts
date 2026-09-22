@@ -15,6 +15,7 @@ type EventPresentationRouteMap = Readonly<Record<
 >>;
 
 export const EVENT_PRESENTATION_ROUTES = Object.freeze({
+  kraken: 'dedicated',
   'quiet-night': null,
   'starry-night': 'dedicated',
   'ocean-of-blood': 'dedicated',

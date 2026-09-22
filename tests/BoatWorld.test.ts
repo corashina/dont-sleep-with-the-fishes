@@ -127,7 +127,7 @@ function createTestEventModels(): EventModelLibrary {
 async function createTestFeaturedModels(
   ids: Parameters<typeof SurvivalEventModelLibrary.load>[0],
 ): Promise<SurvivalEventModelLibrary> {
-  return SurvivalEventModelLibrary.load(ids, {
+  return SurvivalEventModelLibrary.load([...ids, 'bloodHeart', 'flowersHeart', 'chestHeart'], {
     load: async () => {
       const root = new Group();
       root.add(new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial()));
@@ -140,6 +140,12 @@ function expectEventEffectRootsCleared(scene: Object3D, eventId: SurvivalEventId
   const itemEffects = scene.getObjectByName('event-item-effects');
   expect(itemEffects, 'event-item-effects exists').toBeDefined();
   itemEffects!.children.forEach((effect) => {
+    // Importance: 95/100. Idle lights must remain prepared without lighting the scene.
+    if (effect instanceof PointLight) {
+      expect(effect.visible, `${effect.name} prepared`).toBe(true);
+      expect(effect.intensity, `${effect.name} inactive`).toBe(0);
+      return;
+    }
     if (effect.name === 'event-item-flashlight-beam') {
       expect(
         effect.getObjectByName('event-item-flashlight-cone')!.visible,
@@ -159,11 +165,14 @@ function expectEventEffectRootsCleared(scene: Object3D, eventId: SurvivalEventId
     'supernatural-event-world',
   ]) {
     const root = scene.getObjectByName(name);
-    root?.children.forEach((effect) => {
+    root?.traverseVisible((effect) => {
       if (effect instanceof Light) {
         expect(effect.intensity, name + '/' + effect.name + ' inactive').toBe(0);
-      } else if (effect.children.length > 0 || effect instanceof Mesh || effect instanceof Line || effect instanceof Points) {
-        expect(effect.visible, name + '/' + effect.name + ' hidden').toBe(false);
+      } else {
+        expect(
+          effect instanceof Mesh || effect instanceof Line || effect instanceof Points,
+          name + '/' + effect.name + ' has no visible geometry',
+        ).toBe(false);
       }
     });
   }
@@ -218,6 +227,7 @@ function snapshot(
     rescueTraceFinds: 0,
     radioSignalAvailable: false,
     radioSignalsSent: 0,
+    heartPieces: { flowers: false, blood: false, chest: false },
     chest: { state: 'none', acquiredDay: null },
     weather: 'calm',
     actedToday: false,
@@ -309,6 +319,25 @@ function focusedPresenterTestDouble(eventId: string): FocusedPresenterTestDouble
 }
 
 describe('BoatWorld helpers', () => {
+  // Importance: 95/100. Restored ownership must drive the boat models and ending cleanup.
+  it('shows collected heart pieces on the boat and removes them after return', () => {
+    const world = new BoatWorld(new PerspectiveCamera(), createTestPropModels(), ...createTestSkyTextures());
+    try {
+      world.syncInventory(snapshot([], { heartPieces: { flowers: true, blood: false, chest: true } }));
+      const display = world.scene.getObjectByName('boat-heart-pieces')!;
+      expect(display.getObjectByName('flowers-heart-piece')!.visible).toBe(true);
+      expect(display.getObjectByName('blood-heart-piece')!.visible).toBe(false);
+      expect(display.getObjectByName('chest-heart-piece')!.visible).toBe(true);
+      world.syncInventory(snapshot([], { heartPieces: { flowers: true, blood: true, chest: true } }));
+      expect(display.getObjectByName('blood-heart-piece')!.visible).toBe(true);
+      world.syncInventory(snapshot([], { ending: { id: 'kraken', day: 1, savedPickupCount: 0 } }));
+      expect(display.visible).toBe(true);
+      expect(display.getObjectByName('heart-basket')!.visible).toBe(true);
+      for (const id of ['flowers', 'blood', 'chest']) {
+        expect(display.getObjectByName(id + '-heart-piece')!.visible).toBe(false);
+      }
+    } finally { world.dispose(); }
+  });
   // Importance: 95/100. Protects the terminal handoff and prevents replaying the ending after event outcomes.
   it('holds the blackout after a visible break and fall before showing the ending', async () => {
     const camera = new PerspectiveCamera();
@@ -1005,7 +1034,7 @@ describe('BoatWorld helpers', () => {
     }
   });
 
-  it('carries flowers inside the net from water contact through the return', async () => {
+  it('carries only the brain inside the net from water contact through the return', async () => {
     const item = savedItem('fishingNet');
     const propModels = createTestPropModels();
     const borrow = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
@@ -1014,6 +1043,7 @@ describe('BoatWorld helpers', () => {
       world.syncInventory(snapshot([item]));
       world.stageEvent('flowers');
       const flower = world.scene.getObjectByName('flowers:pad:0')!;
+      const brain = flower.parent!.getObjectByName('flowers-heart-piece')!;
       const use = world.playEventItemUse('flowers', 'fishingNet', item.instanceId);
       const net = borrow.mock.results.at(-1)!.value.root as Group;
       const duration = eventItemUseDuration('net-scoop');
@@ -1023,29 +1053,28 @@ describe('BoatWorld helpers', () => {
       const basket = net.localToWorld(new Vector3(0, 0, -0.56));
       expect(basket.distanceTo(flower.getWorldPosition(new Vector3()))).toBeLessThan(0.01);
       world.update(duration * 0.76, duration * 0.02);
-      expect(flower.parent).toBe(net);
-      expect(flower.position.toArray()).toEqual([0, 0, -0.56]);
+      expect(flower.parent).not.toBe(net);
+      expect(brain.parent).toBe(net);
+      expect(brain.visible).toBe(true);
+      expect(brain.position.toArray()).toEqual([0, 0.055, -0.56]);
       world.update(duration, duration * 0.24);
       await use;
-      expect(flower.parent).toBe(net);
+      expect(brain.parent).toBe(net);
       const returning = world.returnEventItemUse();
       const recovery = eventItemOutcomeDuration('fishingNet', 'recover');
       world.update(duration + recovery / 2, recovery / 2);
-      expect(flower.parent).toBe(net);
+      expect(brain.parent).toBe(net);
       world.update(duration + recovery, recovery / 2);
       await returning;
-      expect(flower.parent).toBe(world.scene.getObjectByName('flowers-deck-target')!.parent);
-      const landed = flower.position.clone();
-      const storedNet = world.scene.getObjectByName('boat-supply:fishingNet:copy-1')!;
-      const storedBasket = storedNet.localToWorld(new Vector3(0, 0, -0.56));
-      expect(storedBasket.distanceTo(flower.getWorldPosition(new Vector3()))).toBeLessThan(0.01);
+      expect(brain.parent?.name).toBe('event-prop:flowers');
+      expect(brain.visible).toBe(false);
       const collected = world.reactToEventOutcome('flowers', {
         accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'none',
         eventPresentationKey: 'flowers.collect',
       });
       world.update(duration + recovery + 1, 1);
       await collected;
-      expect(flower.position).toEqual(landed);
+      expect(brain.visible).toBe(false);
       world.clearEvent();
       expect(flower.parent?.name).toBe('event-prop:flowers');
       expect(flower.visible).toBe(true);

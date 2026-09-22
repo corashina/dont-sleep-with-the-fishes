@@ -17,6 +17,9 @@ export const SURVIVAL_EVENT_MODEL_IDS = [
   'anglerFish',
   'mysteryChest',
   'flowers',
+  'bloodHeart',
+  'flowersHeart',
+  'chestHeart',
 ] as const;
 
 export type SurvivalEventModelId = typeof SURVIVAL_EVENT_MODEL_IDS[number];
@@ -29,11 +32,30 @@ export interface SurvivalEventModelSpec {
 }
 
 const NO_ROTATION = [0, 0, 0] as const;
+const HEART_PIECE_MODEL_SIZE = 0.5;
 
 export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
   SurvivalEventModelId,
   SurvivalEventModelSpec
 >> = Object.freeze({
+  flowersHeart: Object.freeze({
+    url: new URL('../assets/models/ending/flowersHeart.glb', import.meta.url).href,
+    targetLongestDimension: HEART_PIECE_MODEL_SIZE,
+    rotation: NO_ROTATION,
+    maxTriangles: 3070,
+  }),
+  chestHeart: Object.freeze({
+    url: new URL('../assets/models/ending/chestHeart.glb', import.meta.url).href,
+    targetLongestDimension: HEART_PIECE_MODEL_SIZE,
+    rotation: NO_ROTATION,
+    maxTriangles: 768,
+  }),
+  bloodHeart: Object.freeze({
+    url: new URL('../assets/models/ending/bloodHeart.glb', import.meta.url).href,
+    targetLongestDimension: HEART_PIECE_MODEL_SIZE,
+    rotation: NO_ROTATION,
+    maxTriangles: 733,
+  }),
   rescueBoat: Object.freeze({
     url: new URL('../assets/models/ending/rescueBoat.glb', import.meta.url).href,
     targetLongestDimension: 12,

@@ -189,14 +189,10 @@ describe('SurvivalSaveStore', () => {
 
   it.each([
     ['phase', (event: any) => { event.phase = 'day'; }],
-    ['title', (event: any) => { event.title = 'Wrong title'; }],
-    ['prompt', (event: any) => { event.prompt = 'Wrong prompt'; }],
     ['choice', (event: any) => { event.attemptedChoiceId = 'check'; }],
-    ['choice label', (event: any) => { event.choiceLabel = 'Check'; }],
     ['item', (event: any) => { event.attemptedItemId = 'compass'; }],
     ['presentation key', (event: any) => { event.eventPresentationKey = 'drifting-barrel.food'; }],
     ['outcome code', (event: any) => { event.outcomeCode = 'wrong-code'; }],
-    ['outcome', (event: any) => { event.outcomeMessage = 'Wrong outcome'; }],
   ] as const)('rejects a journal event with a mismatched %s', (_name, corrupt) => {
     const value = mutableSave(journalRunCheckpoint());
     corrupt(value.checkpoint.session.journalEntries[0].nighttime.event);

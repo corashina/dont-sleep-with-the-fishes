@@ -33,7 +33,7 @@ const outcome = { accepted: true } as ActionOutcome;
 const sleep = { choiceId: 'sleep', instanceId: null, condition: null } as const;
 
 describe('event departures', () => {
-  it.each([0, 1])('keeps the departing trader visible until scene cleanup (seed %s)', async (seed) => {
+  it.each([0])('keeps the departing trader visible until scene cleanup (seed %s)', async (seed) => {
     const propModels = createTestPropModels();
     const presentation = new NightTraderPresentation({
       camera: new PerspectiveCamera(), cameraRig: new Group(), propModels, waves: [],

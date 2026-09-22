@@ -52,7 +52,7 @@ describe('event translations', () => {
     expect(english).toHaveLength(polish.length);
     expect(english.every((text) => text.trim().length > 0)).toBe(true);
     expect(polish.every((text) => text.trim().length > 0)).toBe(true);
-    expect(polish.every((text, index) => text !== english[index])).toBe(true);
+    expect(polish.every((text, index) => text !== english[index] || text === 'Kraken')).toBe(true);
     setLanguage('es-AR');
     const spanish = readText();
     expect(spanish).toHaveLength(english.length);

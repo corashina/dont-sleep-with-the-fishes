@@ -123,17 +123,6 @@ export class BloodOceanBodies {
     return { root, figure, head };
   }
 
-  createTin(): Group {
-    const tin = new Group();
-    tin.name = 'blood-ocean-sealed-tin';
-    const metal = this.material(0xa7a19a, 0.4);
-    const label = this.material(0xa89969, 0.92);
-    this.part(tin, 'tin-can', this.limb, metal, 0, 0, 0, 0.1, 0.16, 0.1);
-    this.part(tin, 'weathered-label', this.limb, label, 0, 0, 0, 0.102, 0.11, 0.102);
-    this.part(tin, 'sealed-lid', this.limb, metal, 0, 0.085, 0, 0.104, 0.018, 0.104);
-    return tin;
-  }
-
   dispose(): void {
     disposeResourceSets(this.geometries, this.materials);
   }

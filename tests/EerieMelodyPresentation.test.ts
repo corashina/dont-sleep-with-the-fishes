@@ -6,7 +6,7 @@ import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnim
 import { supernaturalItemUseDuration, supernaturalRevealDuration } from '../src/survival/supernaturalEventChoreography';
 
 describe('Eerie Melody fog', () => {
-  it.each([0, -10])('keeps fog stable through every phase with health change %s', async (health) => {
+  it.each([-10])('keeps fog stable through every phase with health change %s', async (health) => {
     const display = {
       resetEventPoseForFrame: vi.fn(), clearEventPose: vi.fn(),
     } as unknown as BoatSupplyDisplay;

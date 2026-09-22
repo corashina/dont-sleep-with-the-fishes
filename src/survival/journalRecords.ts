@@ -76,6 +76,7 @@ export interface JournalCarlitosDawnState {
 }
 
 export type JournalDayActionRecord =
+  | { readonly kind: 'heartPiece'; readonly pieceId: 'chest'; readonly deltas: Readonly<ResourceDelta> }
   | JournalFishingRecord
   | JournalSurvivalActionRecord
   | JournalCarlitosCareRecord
@@ -237,6 +238,7 @@ export function cloneJournalActions(
   actions: readonly JournalDayActionRecord[],
 ): readonly JournalDayActionRecord[] {
   return Object.freeze(actions.map((action) => {
+    if (action.kind === 'heartPiece') return Object.freeze({ ...action, deltas: Object.freeze({ ...action.deltas }) });
     if (action.kind === 'fishing') {
       return Object.freeze({ ...action, deltas: Object.freeze({ ...action.deltas }),
         inventoryMutations: cloneJournalInventoryMutations(action.inventoryMutations) });

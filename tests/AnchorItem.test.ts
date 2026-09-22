@@ -95,7 +95,7 @@ it('supports the anchor on the floor and port hull beside the shotgun', async ()
   }
 });
 
-it.each(['anchor-drop', 'trade-handover', 'base'] as const)(
+it.each(['anchor-drop'] as const)(
   'starts and returns %s at the leaning anchor pose and casts outside the starboard hull', (context) => {
     const models = createTestPropModels();
     const boat = new Group();

@@ -43,15 +43,15 @@ export function journalCatchName(catchId: FishingCatchId): string {
 }
 
 export const journalInventoryMessage = defineMessages({
-  break: { en: (item: string) => `I was left with ${item} damaged. It will need repairs before I can use it again.`, pl: (item: string) => `Uszkodziłem ${item}. Nie obejdzie się bez naprawy.`, 'es-AR': (item: string) => `No pude volver a usar ${item} sin reparaciones.` },
-  consume: { en: (item: string) => `I used up ${item}. There is nothing left for another try.`, pl: (item: string) => `Zużyłem ${item} do końca. Na następną próbę już nie wystarczy.`, 'es-AR': (item: string) => `Agoté ${item}. No queda nada para otro intento.` },
+  break: { en: (item: string) => `I need to repair ${item} before I can use it again.`, pl: (item: string) => `Muszę naprawić ${item}, zanim znów użyję tego sprzętu.`, 'es-AR': (item: string) => `Tengo que reparar ${item} antes de volver a usarlo.` },
+  consume: { en: (item: string) => `I used up ${item}.`, pl: (item: string) => `Zużyłem ${item} do końca.`, 'es-AR': (item: string) => `Agoté ${item}.` },
   gain: { en: (item: string) => `I brought ${item} aboard.`, pl: (item: string) => `Zabrałem ${item} na pokład.`, 'es-AR': (item: string) => `Subí ${item} a bordo.` },
-  lose: { en: (item: string) => `I lost ${item} in the trouble.`, pl: (item: string) => `Straciłem przy tym ${item}.`, 'es-AR': (item: string) => `Perdí ${item} en medio del lío.` },
-  repair: { en: (item: string) => `I got ${item} working again.`, pl: (item: string) => `Udało mi się naprawić ${item}.`, 'es-AR': (item: string) => `Logré reparar ${item}.` },
+  lose: { en: (item: string) => `I lost ${item}.`, pl: (item: string) => `Straciłem ${item}.`, 'es-AR': (item: string) => `Perdí ${item}.` },
+  repair: { en: (item: string) => `I repaired ${item}.`, pl: (item: string) => `Naprawiłem ${item}.`, 'es-AR': (item: string) => `Reparé ${item}.` },
   trade: { en: (item: string) => `I handed over ${item} for the trade.`, pl: (item: string) => `Oddałem ${item} w ramach wymiany.`, 'es-AR': (item: string) => `Entregué ${item} como parte del intercambio.` },
   tradedChest: { en: 'I handed over the closed chest for the trade.', pl: 'Oddałem zamkniętą skrzynię w ramach wymiany.', 'es-AR': "Entregué el cofre cerrado como parte del intercambio." },
-  emptyMedkit: { en: 'The medkit was empty afterwards. I kept the dressings on and hoped they would hold.', pl: 'W apteczce nic już nie zostało. Zostawiłem opatrunki na miejscu. Oby wytrzymały.', 'es-AR': "El botiquín quedó vacío. Dejé las vendas puestas y esperé que aguantaran." },
-  emptyTape: { en: 'That used the last of the duct tape. No more patches from that roll.', pl: 'Na to poszła reszta taśmy klejącej. Z tej rolki nie będzie już żadnej łaty.', 'es-AR': "Ahí se fue lo último de la cinta adhesiva. Ese rollo ya no alcanza para otro parche." },
-  emptyFlare: { en: 'That was the last flare. I have nothing left to load into the flare gun.', pl: 'To była ostatnia flara. Nie mam już czym załadować rakietnicy.', 'es-AR': "Era la última bengala. Ya no tengo con qué cargar la pistola de bengalas." },
-  emptyShotgun: { en: 'That was the last shell. The shotgun has no bite left now.', pl: 'To był ostatni nabój. Strzelba już nikogo nie ugryzie.', 'es-AR': "Era el último cartucho. A la escopeta ya no le quedan dientes." },
+  emptyMedkit: { en: 'I used the last of the dressings in the medkit.', pl: 'Zużyłem ostatnie opatrunki z apteczki.', 'es-AR': 'Usé las últimas vendas del botiquín.' },
+  emptyTape: { en: 'I used the last of the duct tape.', pl: 'Zużyłem resztę taśmy klejącej.', 'es-AR': 'Usé lo último de la cinta adhesiva.' },
+  emptyFlare: { en: 'I fired the last flare.', pl: 'Wystrzeliłem ostatnią flarę.', 'es-AR': 'Disparé la última bengala.' },
+  emptyShotgun: { en: 'I fired the last shotgun shell.', pl: 'Wystrzeliłem ostatni nabój ze strzelby.', 'es-AR': 'Disparé el último cartucho de la escopeta.' },
 });

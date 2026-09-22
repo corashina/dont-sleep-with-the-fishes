@@ -1,3 +1,4 @@
+import { isHeartComplete } from './heartOfTheSea';
 import { flowText } from '../i18n/flowMessages';
 import type { SurvivalAudio } from '../audio/SurvivalAudio';
 import { ITEM_DEFINITIONS, type ItemInstanceId } from '../game/ItemState';
@@ -207,6 +208,11 @@ export class SurvivalDayActionFlow {
     }
   }
 
+  private chestHeartCompletion(outcome: ActionOutcome): { heartCompleted?: true } {
+    return outcome.rewardSummary?.kind === 'heartPiece' && isHeartComplete(this.dependencies.session.snapshot().heartPieces)
+      ? { heartCompleted: true } : {};
+  }
+
   private async runChestAction(
     outcome: ActionOutcome,
     beforeAction: SurvivalSnapshot,
@@ -221,6 +227,7 @@ export class SurvivalDayActionFlow {
       if (!this.isCurrent(generation, operation)) return;
       await (this.dependencies.ui.showRewardResult?.({
         title: 'CHEST REWARD',
+        ...this.chestHeartCompletion(outcome),
         reward: outcome.rewardSummary ?? null,
         lines: [],
       }) ?? Promise.resolve());

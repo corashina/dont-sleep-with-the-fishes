@@ -84,12 +84,14 @@ function summarize(label: string, cohort: BalanceScenarioReport): CohortSummary 
     label,
     totalRuns: total,
     outcomes: {
+      kraken: cohort.kraken,
       rescued: cohort.rescued,
       dead: cohort.dead,
       sunk: cohort.sunk,
       blocked: cohort.blocked,
     },
     rates: {
+      kraken: rate(cohort.kraken),
       rescued: rate(cohort.rescued),
       dead: rate(cohort.dead),
       sunk: rate(cohort.sunk),

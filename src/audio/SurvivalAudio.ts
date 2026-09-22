@@ -383,7 +383,7 @@ export class SurvivalAudio {
       this.scope.setLoopGain('stormRumble', 1, 0.6);
       return;
     }
-    if (eventId === 'something-under-us') {
+    if (['something-under-us', 'kraken'].includes(eventId)) {
       this.scope.startLoop('underUsPresence');
       this.scope.setLoopGain('underUsPresence', 0, 0);
       this.scope.setLoopGain('underUsPresence', 1, 2.5);
@@ -426,10 +426,14 @@ export class SurvivalAudio {
     this.scope.startLoop('eerieMelody');
   }
 
+  private beginDeepEventReaction(eventId: string): void {
+    if (this.disposed || !['something-under-us', 'kraken'].includes(eventId)) return;
+    if (eventId === 'kraken') this.scope.startLoop('tentacleMovement');
+    this.scope.setLoopGain('underUsPresence', 0, eventId === 'kraken' ? 21 : 3.5);
+  }
+
   beginEventReaction(eventId: string, outcome: ActionOutcome): void {
-    if (!this.disposed && eventId === 'something-under-us') {
-      this.scope.setLoopGain('underUsPresence', 0, 3.5);
-    }
+    this.beginDeepEventReaction(eventId);
     if (!this.disposed && eventId === 'flying-saucer') {
       this.scope.setLoopGain('ufoFlyby', 0, 5);
     }
@@ -530,6 +534,7 @@ export class SurvivalAudio {
 
   ending(id: SurvivalEndingId): void {
     if (this.disposed) return;
+    if (id === 'kraken') { this.clearEvent(); return; }
     if (id === 'sinking') return;
     if (id === 'rescue') this.scope.play('rescueHorn');
     const cue = id === 'rescue'

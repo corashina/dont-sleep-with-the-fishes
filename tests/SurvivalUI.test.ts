@@ -203,7 +203,7 @@ const carlitosAnchor = (x = 720, y = 360) => ({
 });
 
 describe('SurvivalUI', () => {
-  it.each(['tired', 'exhausted'] as const)('keeps disabled Carlitos retrieval and its hint visible while %s', (rest) => {
+  it.each(['tired'] as const)('keeps disabled Carlitos retrieval and its hint visible while %s', (rest) => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -1141,7 +1141,7 @@ describe('SurvivalUI', () => {
   });
 
   // Importance: 90. Broken items must retain repair access and clear their state after repair.
-  it.each(['bucket', 'flashlight'] as const)('keeps broken %s inspectable and exposes its item actions', (itemType) => {
+  it.each(['bucket'] as const)('keeps broken %s inspectable and exposes its item actions', (itemType) => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);

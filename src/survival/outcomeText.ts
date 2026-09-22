@@ -8,6 +8,7 @@ import type { FishingCatchId } from './fishingCatalog';
 import type { ActionOutcome, EventResultPresentation } from './survivalTypes';
 
 export type OutcomeText =
+  | { readonly kind: 'chestHeartPiece' }
   | { readonly kind: 'domain'; readonly id: DomainMessageId }
   | { readonly kind: 'eventPrompt'; readonly eventId: string }
   | { readonly kind: 'eventResult'; readonly reference: EventResultPresentation }
@@ -18,6 +19,7 @@ export type OutcomeText =
   | { readonly kind: 'chestRequired'; readonly state: 'none' | 'closed' | 'mimic' };
 
 const t = defineMessages({
+  chestHeartPiece: { en: 'The chest holds a piece of the Heart of the Sea.', pl: 'W skrzyni jest fragment Serca Morza.', 'es-AR': 'El cofre contiene un fragmento del Corazón del Mar.' },
   backpackItem: { en: (label: string) => `The backpack holds ${label}.`, pl: (label: string) => `Zawartość plecaka: ${label}.`, "es-AR": (label: string) => `La mochila contiene: ${label}.` },
   fishing: { en: (label: string, fish: boolean) => fish ? `You caught a ${label}.` : `You reeled in ${label}.`, pl: (label: string, fish: boolean) => fish ? `Twój połów: ${label}.` : `Wyławiasz znalezisko: ${label}.`, "es-AR": (label: string, fish: boolean) => fish ? `Pescaste ${label}.` : `Sacaste del agua: ${label}.` },
   chestResource: { en: (quantity: string) => `The chest holds ${quantity}.`, pl: (quantity: string) => `Zawartość skrzyni: ${quantity}.`, "es-AR": (quantity: string) => `El cofre contiene ${quantity}.` },
@@ -47,6 +49,7 @@ export function resolveOutcomeText(text: OutcomeText): string {
     case 'eventResult': return getEventResultMessage(text.reference);
     case 'fishing': return t('fishing', catchLabel(text.catchId).toLocaleLowerCase(), text.fish);
     case 'chestResource': return t('chestResource', resourceQuantity(text.resource, text.quantity));
+    case 'chestHeartPiece': return t('chestHeartPiece');
     case 'chestItem': return t('chestItem', itemLabel(text.itemId).toLocaleLowerCase());
     case 'backpackItem': return t('backpackItem', itemLabel(text.itemId).toLocaleLowerCase());
     case 'chestRequired': return t('chestRequired', t(text.state));
