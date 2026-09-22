@@ -494,7 +494,7 @@ export class SurvivalPhase implements GamePhase {
     if (this.world.scene === undefined || this.disposed) return;
     const snapshot = this.session.snapshot();
     this.syncVisualState(snapshot);
-    this.world.setPhase?.(snapshot.state === 'nightEvent' ? 'night' : 'day');
+    this.world.setPhase?.(this.visualState.phase);
     if (!this.itemAnimationLab && snapshot.pendingEventId !== null && !isTerminal(snapshot.state)) {
       await this.eventBundles.beginLoad(snapshot.pendingEventId as Parameters<EventBundleManager['beginLoad']>[0]);
       if (this.disposed) return;
@@ -957,7 +957,7 @@ export class SurvivalPhase implements GamePhase {
     const snapshot = this.session.snapshot();
     this.syncAvailableActions(snapshot);
     this.syncVisualState(snapshot);
-    this.world.setPhase?.(snapshot.state === 'nightEvent' ? 'night' : 'day');
+    this.world.setPhase?.(this.visualState.phase);
     this.ui.render?.(snapshot, (action) => (
       this.itemAnimationLab && snapshot.carlitos !== null
         && (action === 'petCarlitos' || action === 'feedCarlitos')
@@ -976,7 +976,8 @@ export class SurvivalPhase implements GamePhase {
 
   private syncVisualState(snapshot: Readonly<SurvivalSnapshot>): void {
     this.visualState.elapsedSeconds = this.elapsedSeconds;
-    this.visualState.phase = snapshot.state === 'nightEvent' ? 'night' : 'day';
+    this.visualState.phase = snapshot.state === 'nightEvent' || snapshot.ending?.id === 'kraken'
+      ? 'night' : 'day';
     this.visualState.weather = snapshot.weather;
   }
 

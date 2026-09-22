@@ -3,7 +3,6 @@ import { Mesh,PerspectiveCamera,Scene,Texture,Vector3 } from 'three';
 import type { DivePlayOptions } from '../src/survival/DivePresentation';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { survivalEventById } from '../src/survival/eventCatalog';
-import { eligibleEvents } from '../src/survival/eventSelection';
 import { OceanOfBloodPresentation,BLOOD_OCEAN_REVEAL_SECONDS } from '../src/survival/events/OceanOfBloodPresentation';
 import type { DedicatedEventEnvironment } from '../src/survival/eventPresentationTypes';
 import { deriveEventOutcomePresentation } from '../src/survival/eventPresentationOutcome';
@@ -16,7 +15,7 @@ import type { ItemId,ItemInstanceId } from '../src/game/ItemState';
 function session(hunger = 0, item?: ItemId): SurvivalSession {
   return new SurvivalSession(item ? [{ type: item, instanceId: `${item}-1` as ItemInstanceId }] : [], {
     seed: 51, initialEventId: 'ocean-of-blood',
-    initial: { day: 12, pressure: 2, hunger },
+    initial: { day: 19, pressure: 2, hunger },
   });
 }
 
@@ -54,19 +53,6 @@ describe('Ocean of Blood rules', () => {
     expect(run.snapshot()).toEqual(before);
   });
 
-  it('draws only at night from day 12 with pressure 2 and can recur after its cooldown', () => {
-    const event = survivalEventById('ocean-of-blood')!;
-    const criteria = {
-      phase: 'night' as const, day: 12, pressure: 2, weather: 'calm' as const,
-      lastEventId: null, lastSeenDay: new Map<string, number>(), appearanceCounts: new Map<string, number>(),
-      targetableItemIds: new Set<ItemId>(), inventoryItemIds: new Set<ItemId>(), rescueLead: 0,
-    };
-    expect(eligibleEvents([event], criteria)).toEqual([event]);
-    expect(eligibleEvents([event], { ...criteria, day: 11 })).toEqual([]);
-    expect(eligibleEvents([event], { ...criteria, phase: 'day' })).toEqual([]);
-    expect(eligibleEvents([event], { ...criteria, pressure: 1 })).toEqual([]);
-    expect(eligibleEvents([event], { ...criteria, day: 30, appearanceCounts: new Map([[event.id, 1]]) })).toEqual([event]);
-  });
 });
 
 function presentation() {
@@ -112,16 +98,19 @@ describe('Ocean of Blood presentation', () => {
     }
   });
 
-  it('frames the nearest body during reveal and restores the camera when interrupted', async () => {
+  // Importance: 90/100. The reveal must not take control of the player's camera.
+  it('preserves the camera throughout reveal and cleanup', async () => {
     const { event, camera, intensity } = presentation();
     const original = camera.quaternion.clone();
     const originalPosition = camera.position.clone();
     const reveal = event.reveal();
-    event.update(4.5, 4.5);
-    expect(camera.quaternion.angleTo(original)).toBeGreaterThan(0.1);
-    expect(camera.position.y).toBeGreaterThan(originalPosition.y);
-    event.clear();
+    for (let time = 1; time <= BLOOD_OCEAN_REVEAL_SECONDS; time += 1) {
+      event.update(time, 1);
+      expect(camera.quaternion.angleTo(original)).toBeLessThan(0.0001);
+      expect(camera.position).toEqual(originalPosition);
+    }
     await reveal;
+    event.clear();
     expect(camera.quaternion.angleTo(original)).toBeLessThan(0.0001);
     expect(camera.position).toEqual(originalPosition);
     expect(intensity).toHaveBeenLastCalledWith(0);

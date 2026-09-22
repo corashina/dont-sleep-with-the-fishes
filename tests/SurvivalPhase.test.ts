@@ -67,15 +67,16 @@ describe('survival checkpoints', () => {
     } finally { phase.dispose(); }
   });
 
-  // Importance: 99/100. All Kraken encounters must return the heart automatically once.
+  // Importance: 99/100. Kraken must finish once without switching its night scene to daylight.
   it.each([true, false])('submits Kraken preview once after reveal: ending=%s', async (endingPreview) => {
     const reveal = deferred();
     const reaction = deferred();
     const reactToEventOutcome = vi.fn(() => reaction.promise);
     const showEnding = vi.fn();
     const playRescueEnding = vi.fn();
+    const setPhase = vi.fn();
     const phase = SurvivalPhase.forTestStart({
-      world: { stageEvent: vi.fn(), revealEvent: vi.fn(() => reveal.promise), reactToEventOutcome, playRescueEnding },
+      world: { setPhase, stageEvent: vi.fn(), revealEvent: vi.fn(() => reveal.promise), reactToEventOutcome, playRescueEnding },
       ui: { showEnding, setSleepCovered: vi.fn(async () => undefined), showEventReveal: vi.fn(async () => undefined) },
     }, endingPreview
       ? { kind: 'ending-preview', savedItems: [], seed: 41, scavengeElapsedSeconds: 0, endingId: 'kraken' }
@@ -86,8 +87,13 @@ describe('survival checkpoints', () => {
       reveal.resolve(); await flushPromises();
       expect(reactToEventOutcome).toHaveBeenCalledTimes(1);
       expect(showEnding).not.toHaveBeenCalled();
+      phase.update(30, 1 / 60);
+      expect(phase.getPresentationPhase()).toBe('night');
       reaction.resolve(); await flushPromises();
       phase.start(); await flushPromises();
+      phase.update(31, 1 / 60);
+      expect(phase.getPresentationPhase()).toBe('night');
+      expect(setPhase).not.toHaveBeenCalledWith('day');
       expect(showEnding).toHaveBeenCalledTimes(1);
       expect(playRescueEnding).not.toHaveBeenCalled();
     } finally { phase.dispose(); }

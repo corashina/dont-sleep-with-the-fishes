@@ -1,12 +1,25 @@
 // @vitest-environment jsdom
 // Importance: 92/100. Protects visible quest rewards and live translations.
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { setLanguage } from '../src/i18n/language';
 
 let ui: SurvivalUI | undefined;
-afterEach(() => { ui?.dispose(); document.body.replaceChildren(); setLanguage('en'); });
+afterEach(() => { ui?.dispose(); document.body.replaceChildren(); setLanguage('en'); vi.restoreAllMocks(); vi.useRealTimers(); });
+
+// Importance: 95/100. Prevents reward timers from surviving UI disposal.
+it('clears the reward dismissal timer when disposed', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  ui = new SurvivalUI(document.body);
+  const reward = ui.showRewardResult({ title: 'SALVAGE', reward: { kind: 'heartPiece', id: 'flowers', quantity: 1 }, lines: [] });
+  const schedule = vi.spyOn(window, 'setTimeout');
+  const cancel = vi.spyOn(window, 'clearTimeout');
+  ui.dispose();
+  await reward;
+  expect(schedule).toHaveBeenCalled();
+  for (const timer of schedule.mock.results) expect(cancel).toHaveBeenCalledWith(timer.value);
+});
 
 it('shows a heart reward and translates its completion line while open', () => {
   ui = new SurvivalUI(document.body);

@@ -6,7 +6,6 @@ import type {
 } from '../eventPresentationTypes';
 import { smoothstepRange } from '../animationMath';
 import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
-import { StationaryEventCamera } from '../StationaryEventCamera';
 import { BloodOceanBodies } from './bloodOceanBodies';
 
 export const BLOOD_OCEAN_REVEAL_SECONDS = 9;
@@ -25,7 +24,6 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
   readonly boatRoot = new Group();
   readonly itemAimTarget = new Group();
   private readonly models = new BloodOceanBodies();
-  private readonly cameraLook: StationaryEventCamera | null;
   private readonly bodies = PLACEMENTS.map(([x, z, yaw], index) => ({
     ...this.models.create(index), x, z, yaw,
     restHead: new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), index % 2 ? -1.15 : 1.05),
@@ -45,18 +43,11 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
       if (kind === 'reaction') this.reactionProgress = progress;
       this.applyAtmosphere();
     },
-    (kind) => {
-      if (kind === 'reveal') {
-        this.revealing = false;
-        this.cameraLook?.restore();
-      }
-    },
   );
   private revealProgress = 0;
   private searchProgress = 0;
   private reactionProgress = 0;
   private waited = false;
-  private revealing = false;
   private diving = false;
   private diveOperation = 0;
   private staged = false;
@@ -71,7 +62,6 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
     heart.rotation.set(-0.35, 0.25, -0.2);
     this.loot.name = 'blood-ocean-recovered-loot';
     this.loot.add(heart);
-    this.cameraLook = environment.camera ? new StationaryEventCamera(environment.camera) : null;
     this.worldRoot.name = 'ocean-of-blood-world';
     this.boatRoot.name = 'ocean-of-blood-boat';
     for (const body of this.bodies) this.worldRoot.add(body.root);
@@ -95,8 +85,6 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
 
   reveal(): Promise<void> {
     if (!this.staged || this.disposed) return Promise.resolve();
-    this.cameraLook?.capture();
-    this.revealing = true;
     return this.animation.start('reveal', BLOOD_OCEAN_REVEAL_SECONDS);
   }
 
@@ -162,15 +150,6 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
     }
     this.loot.getWorldPosition(this.itemAimTarget.position);
     this.worldRoot.worldToLocal(this.itemAimTarget.position);
-    this.frameReveal();
-  }
-
-  private frameReveal(): void {
-    if (this.revealing) {
-      const focus = smoothstepRange(0.18, 0.42, this.revealProgress)
-        * (1 - smoothstepRange(0.86, 1, this.revealProgress));
-      this.cameraLook?.applyLookAt(this.itemAimTarget, focus * 0.9, 0.55);
-    }
   }
 
   private applyAtmosphere(): void {
@@ -193,8 +172,6 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
     if (this.diving) this.environment.dive.clear();
     this.diving = false;
     this.animation.cancel();
-    this.cameraLook?.restore();
-    this.revealing = false;
     this.environment.setBloodOceanIntensity(0);
     this.staged = false;
     this.waited = false;

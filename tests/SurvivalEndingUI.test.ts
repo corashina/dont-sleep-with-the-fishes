@@ -43,7 +43,8 @@ describe('survival ending animation', () => {
     expect(view.panel.hidden).toBe(false);
   });
 
-  it.each(['death', 'sinking'] as const)('fades %s before showing its popup and menu controls', (id) => {
+  // Importance: 99/100. Endings must keep their popup and actions hidden until the fade completes.
+  it.each(['death', 'sinking', 'kraken'] as const)('fades %s before showing its popup and menu controls', (id) => {
     const view = setup();
     const restart = vi.fn();
     const menu = vi.fn();
@@ -51,7 +52,9 @@ describe('survival ending animation', () => {
     view.ui.onReturnToMenu = menu;
     const record = id === 'death'
       ? { id, day: 8, savedPickupCount: 4, cause: { kind: 'starvation' as const } }
-      : { id, day: 8, savedPickupCount: 4, cause: { eventId: 'tornado' } };
+      : id === 'sinking'
+        ? { id, day: 8, savedPickupCount: 4, cause: { eventId: 'tornado' } }
+        : { id, day: 8, savedPickupCount: 4 };
 
     view.ui.showEnding(record);
     expect(view.panel.hidden).toBe(true);
@@ -68,7 +71,9 @@ describe('survival ending animation', () => {
     vi.advanceTimersByTime(1);
     expect(view.panel.hidden).toBe(false);
     expect(document.activeElement).toBe(view.title);
-    expect(view.title.textContent).toBe(id === 'death' ? 'THE SEA OUTLASTED YOU' : 'THE BOAT IS GONE');
+    expect(view.title.textContent).toBe({
+      death: 'THE SEA OUTLASTED YOU', sinking: 'THE BOAT IS GONE', kraken: 'THE SEA RELEASES YOU',
+    }[id]);
     expect(document.querySelector('[data-ending-stats]')?.textContent).toBe('DAY 8');
     view.menu.click();
     view.menu.click();

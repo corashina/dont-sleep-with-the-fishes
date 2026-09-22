@@ -2485,6 +2485,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 .ending-overlay { z-index: 21; }
 .ending-overlay[data-ending="death"],
+.ending-overlay[data-ending="kraken"],
 .ending-overlay[data-ending="sinking"] { background: #000; transition: none; }
 .ending-overlay.is-fading { transition: opacity var(--ending-fade-duration) ease-in-out; }
 .ending-overlay .cinematic-overlay__content[hidden] { display: none; }

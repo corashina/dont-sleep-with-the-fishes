@@ -594,6 +594,7 @@ export class SurvivalUI {
       () => this.coverView.settleCoverTransition(),
       () => this.coverView.settleDiveHold(),
       () => this.coverView.settleRewardConfirmation(),
+      () => this.coverView.settleRewardDismissal(),
       () => this.fishingView.settleFade(),
       () => this.eventView.settleChoiceBeat(),
       () => this.coverView.settleEventOutcomeHold(),
