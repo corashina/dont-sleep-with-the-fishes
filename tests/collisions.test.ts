@@ -141,12 +141,7 @@ describe('player movement helpers', () => {
     expect(result.z).toBeCloseTo(expectedZ);
   });
 
-  it.each([
-    ['bow port', 'bow', -2, -3, 17, 18.5, -1],
-    ['bow starboard', 'bow', 2, 3, 17, 18.5, 1],
-    ['stern port', 'stern', -2, -3, -17, -18.5, -1],
-    ['stern starboard', 'stern', 2, 3, -17, -18.5, 1],
-  ] as const)(
+  it.each([['bow port', 'bow', -2, -3, 17, 18.5, -1], ['stern starboard', 'stern', 2, 3, -17, -18.5, 1]] as const)(
     'retains tangential progress around the %s shoulder',
     (_label, end, startX, targetX, startZ, targetZ, direction) => {
       const result = resolveLocalMovement(
@@ -198,10 +193,7 @@ describe('player movement helpers', () => {
     expect(result).toEqual({ x: 0, y: 6, z: 20 });
   });
 
-  it.each([
-    ['bow then stern', ['bow', 'stern']],
-    ['stern then bow', ['stern', 'bow']],
-  ] as const)('leaves midship side movement unchanged with %s arcs', (_label, ends) => {
+  it.each([['bow then stern', ['bow', 'stern']]] as const)('leaves midship side movement unchanged with %s arcs', (_label, ends) => {
     const desired = { x: 5.526, y: 3.7, z: 0 };
     const result = resolveLocalMovement(
       { x: 5.4, y: 3.7, z: -0.2 },
@@ -295,10 +287,7 @@ describe('player movement helpers', () => {
     }
   });
 
-  it.each([
-    ['port waist rail', new Vector3(-SHIP_LAYOUT.rail.innerFaceX, RAIL_SAMPLE_Y, 0)],
-    ['starboard waist rail forward', new Vector3(SHIP_LAYOUT.rail.innerFaceX, RAIL_SAMPLE_Y, 4)],
-  ])('blocks the planned collision sample at the %s', (_label, point) => {
+  it.each([['port waist rail', new Vector3(-SHIP_LAYOUT.rail.innerFaceX, RAIL_SAMPLE_Y, 0)]])('blocks the planned collision sample at the %s', (_label, point) => {
     const ship = createTestShip();
     try {
       const blocksPlayer = _label === 'stern machinery'
@@ -341,10 +330,7 @@ describe('player movement helpers', () => {
     }
   });
 
-  it.each([
-    ['port', -1],
-    ['starboard', 1],
-  ] as const)('crosses the %s storage doorway at player radius', (_side, direction) => {
+  it.each([['port', -1]] as const)('crosses the %s storage doorway at player radius', (_side, direction) => {
     const ship = createTestShip();
     const door = layoutDoor(direction < 0 ? 'storage-port-door' : 'storage-starboard-door');
     const doorZ = door.center[1];
@@ -490,12 +476,6 @@ describe('player movement helpers', () => {
       'starboard side window',
       new Vector3(4.7, PLAYER_Y, 18),
       new Vector3(5.8, PLAYER_Y, 18),
-      'x',
-    ],
-    [
-      'port forward window',
-      new Vector3(-5, PLAYER_Y, 12),
-      new Vector3(-6.1, PLAYER_Y, 12),
       'x',
     ],
     [

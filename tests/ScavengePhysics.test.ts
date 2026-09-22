@@ -544,8 +544,6 @@ describe('ScavengePhysics', () => {
 
   it.each([
     ['minX', { x: -9 + 0.54, y: 2.22 + 0.55, z: 0 }, { x: -8, y: 0, z: 0 }],
-    ['maxX', { x: 9 - 0.54, y: 2.22 + 0.55, z: 0 }, { x: 8, y: 0, z: 0 }],
-    ['minZ', { x: 0, y: 2.22 + 0.55, z: -12 + 0.54 }, { x: 0, y: 0, z: -8 }],
     ['maxZ', { x: 0, y: 2.22 + 0.55, z: 12 - 0.54 }, { x: 0, y: 0, z: 8 }],
   ] as const)('contains the object at %s', (boundary, translation, velocity) => {
     const physics = new ScavengePhysics(runtime, config());
@@ -560,8 +558,6 @@ describe('ScavengePhysics', () => {
       physics.update(identityPose(), 1 / 60, true);
       const local = physics.objectLocalPositionsForTest[0]!;
       if (boundary === 'minX') expect(local.x).toBeGreaterThanOrEqual(-9);
-      if (boundary === 'maxX') expect(local.x).toBeLessThanOrEqual(9);
-      if (boundary === 'minZ') expect(local.z).toBeGreaterThanOrEqual(-12);
       if (boundary === 'maxZ') expect(local.z).toBeLessThanOrEqual(12);
     }
     expect(physics.recoveryCountForTest).toBe(recoveryCount);

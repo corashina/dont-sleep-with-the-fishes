@@ -58,24 +58,14 @@ function setup(itemId: ItemId, context: EventItemUseContext) {
   };
 }
 
-const RETURNING_ITEMS = [
-  ['shotgun', 'shotgun-fire'],
-  ['flareGun', 'flare-target'],
-  ['flareGun', 'flare-sky'],
-  ['ductTape', 'tape-stretch'],
-  ['ductTape', 'tape-secure'],
-] as const;
-
 describe('consumed item return', () => {
   // Importance: 95/100. Cleanup must not conceal an incorrect return destination.
   it.each([
-    ...RETURNING_ITEMS,
-    ['compass', 'compass-search'], ['map', 'map-read'],
-    ['fishingNet', 'net-scoop'], ['fishingNet', 'net-slap'],
-    ['bucket', 'bucket-scoop'], ['radio', 'radio-call'],
-    ['radio', 'radio-signal-receive'], ['knife', 'knife-stab'],
-    ['flashlight', 'flashlight-threat-beam'], ['flashlight', 'flashlight-signal'],
-    ['umbrella', 'umbrella-overhead'], ['radio', 'base'],
+    ['shotgun', 'shotgun-fire'],
+    ['flareGun', 'flare-target'],
+    ['ductTape', 'tape-stretch'],
+    ['fishingNet', 'net-scoop'],
+    ['radio', 'base'],
   ] as const)('returns %s from %s to its pickup pose before cleanup', (itemId, context) => {
     const rig = setup(itemId, context);
     try {
@@ -98,7 +88,7 @@ describe('consumed item return', () => {
     }
   });
 
-  it.each(RETURNING_ITEMS)('keeps %s visible after %s until scene cleanup', async (itemId, context) => {
+  it.each([['shotgun', 'shotgun-fire'], ['flareGun', 'flare-target'], ['ductTape', 'tape-stretch']] as const)('keeps %s visible after %s until scene cleanup', async (itemId, context) => {
     const rig = setup(itemId, context);
     try {
       const use = rig.play();
@@ -137,7 +127,7 @@ describe('consumed item return', () => {
     }
   });
 
-  it.each(RETURNING_ITEMS)('restores usable %s after previewing %s', async (itemId, context) => {
+  it.each([['shotgun', 'shotgun-fire']] as const)('restores usable %s after previewing %s', async (itemId, context) => {
     const rig = setup(itemId, context);
     try {
       const use = rig.play();

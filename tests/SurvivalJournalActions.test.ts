@@ -36,13 +36,13 @@ describe('ordinary day action journal', () => {
     const copy = formatJournalEntry(entry).daytime;
     expect(copy).toContain('I dressed my wounds with the medkit.');
     expect(copy).toContain('It brought some relief.');
-    expect(copy).toContain('medkit was empty');
-    expect(copy).not.toContain('Just water and sky');
+    expect(copy).toContain('last of the dressings in the medkit');
+    expect(copy).not.toContain('I saw water and sky');
   });
 
   it.each([
     [0.1, { food: 1 }, 'something to eat'],
-    [0.5, { bait: 1 }, 'bait worth keeping'],
+    [0.5, { bait: 1 }, 'bait for the next cast'],
     [0.9, { rescueLead: 1 }, 'a clue'],
   ])('records a dive reward from roll %s and its energy cost', (roll, reward, text) => {
     const session = new SurvivalSession(saved('scubaSet'), {
@@ -65,7 +65,7 @@ describe('ordinary day action journal', () => {
         : 'bait' in reward ? [{ itemId: 'baitTin', kind: 'gain' }] : []);
     expect(copy).toContain('left me worn out');
     expect(copy).toContain(text);
-    expect(copy).not.toContain('Just water and sky');
+    expect(copy).not.toContain('I saw water and sky');
   });
 
   it('records both the reward and injury from the same dive', () => {
@@ -80,7 +80,7 @@ describe('ordinary day action journal', () => {
     }]);
     const copy = formatJournalEntry(entry).daytime;
     expect(copy).toContain('I came back hurt');
-    expect(copy).toContain('bait worth keeping');
+    expect(copy).toContain('bait for the next cast');
   });
 
   it('records an empty dive without inventing a reward', () => {
@@ -106,7 +106,7 @@ describe('ordinary day action journal', () => {
       kind: 'dayAction', action: 'dive', deltas: { energy: -3 },
       inventoryMutations: [{ kind: 'break', instanceIds: ['scubaSet-1'] }],
     }]);
-    expect(formatJournalEntry(entry).daytime).toContain('scuba gear damaged');
+    expect(formatJournalEntry(entry).daytime).toContain('repair the scuba gear before I can use it again');
   });
 
   it('records energy-scaled hull repair without consuming Duct Tape', () => {
@@ -123,7 +123,7 @@ describe('ordinary day action journal', () => {
       inventoryMutations: [],
     }]);
     const copy = formatJournalEntry(entry).daytime;
-    expect(copy).toContain('The boat feels sounder now');
+    expect(copy).toContain('I patched the damaged hull');
     expect(copy).not.toContain('Duct Tape');
     expect(session.snapshot().inventory['ductTape-1']?.condition).toBe('usable');
     expect(copy).not.toMatch(/repair material|repair timber/i);
@@ -146,7 +146,7 @@ describe('ordinary day action journal', () => {
       ],
     }]);
     const copy = formatJournalEntry(entry).daytime;
-    expect(copy).toContain('compass working again');
+    expect(copy).toContain('I repaired the compass');
     expect(copy).toContain('last of the duct tape');
   });
 
@@ -161,7 +161,7 @@ describe('ordinary day action journal', () => {
 
     const entry = finishDay(session);
     expect(entry.actions).toEqual([]);
-    expect(formatJournalEntry(entry).daytime).toBe('Just water and sky all day. I am starting to miss having something to complain about.');
+    expect(formatJournalEntry(entry).daytime).toBe('I saw water and sky all day. I am starting to miss having something to complain about.');
   });
 
   it.each(['pending', 'finalized'] as const)('round-trips %s action records without repeating actions', (stage) => {

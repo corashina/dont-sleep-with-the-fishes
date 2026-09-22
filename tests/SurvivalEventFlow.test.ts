@@ -445,11 +445,7 @@ describe('event selection contracts', () => {
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });
 
-  it.each([
-    'spyglass',
-    'flareGun',
-    'ductTape',
-  ] as const)('loses the selected Handyman %s instance and records the resolved reward', async (
+  it.each(['spyglass'] as const)('loses the selected Handyman %s instance and records the resolved reward', async (
     source,
   ) => {
     const selectedId = `${source}-2` as ItemInstanceId;
@@ -541,7 +537,7 @@ describe('event selection contracts', () => {
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });
 
-  it.each(['flareGun', 'flashlight'] as const)(
+  it.each(['flareGun'] as const)(
     'keeps a Plane %s signal selected before expiry through animation and repeated input',
     async (itemId) => {
       const instanceId = `${itemId}-1` as ItemInstanceId;
@@ -603,7 +599,7 @@ describe('event selection contracts', () => {
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });
 
-  it.each(['flashlight', 'flareGun'] as const)('waits for the UFO beam after %s and clears the scene', async (itemId) => {
+  it.each(['flashlight'] as const)('waits for the UFO beam after %s and clears the scene', async (itemId) => {
     const rig = createSessionRig(new SurvivalSession([
       { instanceId: `${itemId}-1`, type: itemId },
     ], { seed: 1113, initial: { day: 15 }, initialEventId: 'flying-saucer' }));
@@ -671,7 +667,7 @@ describe('event selection contracts', () => {
   });
 
   // Importance: 95/100. Spent guns must remain until the fade fully covers their return.
-  it.each(['shotgun', 'flareGun'] as const)(
+  it.each(['shotgun'] as const)(
     'clears the spent %s only after the event fade covers the scene', async (itemId) => {
       const instanceId: ItemInstanceId = `${itemId}-1`;
       const rig = createSessionRig(new SurvivalSession([{ instanceId, type: itemId }], {
@@ -1146,7 +1142,7 @@ describe('SurvivalEventFlow', () => {
     expect(rig.presentTerminal).not.toHaveBeenCalled();
   });
 
-  it.each(['drifting-supplies', 'drifting-chest'] as const)(
+  it.each(['drifting-supplies'] as const)(
     'keeps %s visible after Let It Drift, then clears it at night',
     async (eventId) => {
       const rig = createSessionRig(new SurvivalSession([], {

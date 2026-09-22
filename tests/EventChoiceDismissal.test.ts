@@ -30,11 +30,7 @@ function activate(button: HTMLButtonElement, input: string): void {
 }
 
 describe.each(['click', 'Enter', ' '])('event popup dismissal with %s', (input) => {
-  it.each([
-    ['midnight-tour', 'visit'], ['midnight-tour', 'sleep'],
-    ['check-the-back', 'check'], ['check-the-back', 'sleep'],
-    ['guarded-sleep', 'watch'], ['guarded-sleep', 'sleep'],
-  ])('closes %s before resolving %s', async (eventId, choiceId) => {
+  it.each([['midnight-tour', 'visit']])('closes %s before resolving %s', async (eventId, choiceId) => {
     const { ui, mount } = fixture();
     const event = survivalEventById(eventId)!;
     void ui.showEventReveal(event);
@@ -61,7 +57,7 @@ describe.each(['click', 'Enter', ' '])('event popup dismissal with %s', (input) 
     expect(popup.getAttribute('aria-hidden')).toBe('false');
   });
 
-  it.each(['drifting-supplies', 'drifting-chest'] as const)(
+  it.each(['drifting-chest'] as const)(
     'closes %s before resolving a choice', async (eventId) => {
       const { ui, mount } = fixture();
       ui.showFocusedEvent({

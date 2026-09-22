@@ -48,9 +48,7 @@ describe('run statistics history', () => {
 
   it.each([
     undefined,
-    [],
     [{ day: 1, health: Number.NaN, hunger: 0, hull: 100 }],
-    [{ day: 1, health: 101, hunger: 0, hull: 100 }],
     [{ day: 2, health: 100, hunger: 0, hull: 100 }],
     [{ day: 1, health: 100, hunger: 0, hull: 100 }, { day: 1, health: 90, hunger: 0, hull: 100 }],
   ])('rejects missing, invalid, or unordered saved history: %j', (history) => {

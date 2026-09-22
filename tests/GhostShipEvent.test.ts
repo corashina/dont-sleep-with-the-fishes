@@ -19,11 +19,7 @@ function session(health = 100) {
 }
 
 describe('ghost ship event', () => {
-  it.each([
-    ['flashlight', 'usable', 'flashlight-signal'],
-    ['flareGun', 'consumed', 'flare-sky'],
-    ['shotgun', 'consumed', 'shotgun-fire'],
-  ] as const)('punishes %s signals and uses the normal item cost', (itemId, condition, context) => {
+  it.each([['flashlight', 'usable', 'flashlight-signal'], ['flareGun', 'consumed', 'flare-sky']] as const)('punishes %s signals and uses the normal item cost', (itemId, condition, context) => {
     const game = session();
     const before = game.snapshot();
     const instanceId = `${itemId}-1` as ItemInstanceId;

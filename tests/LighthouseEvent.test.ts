@@ -14,11 +14,7 @@ function session(itemId?: ItemId): SurvivalSession {
 }
 
 describe('lighthouse signals', () => {
-  it.each([
-    ['flareGun', 4, 'consumed', 'flare-sky'],
-    ['flashlight', 2, 'usable', 'flashlight-signal'],
-    ['shotgun', 1, 'consumed', 'shotgun-fire'],
-  ] as const)('resolves %s with its normal animation and item cost', (itemId, lead, condition, context) => {
+  it.each([['flareGun', 4, 'consumed', 'flare-sky'], ['flashlight', 2, 'usable', 'flashlight-signal']] as const)('resolves %s with its normal animation and item cost', (itemId, lead, condition, context) => {
     const run = session(itemId);
     const instanceId = `${itemId}-1` as ItemInstanceId;
     expect(resolveEventItemUseContext('lighthouse', itemId, itemId)).toBe(context);

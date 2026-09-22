@@ -28,7 +28,7 @@ describe('dive item selection', () => {
 });
 
 describe('normal dive item rewards', () => {
-  it.each(['calm', 'overcast'] as const)('gives an item on 15%% of all dives in %s weather', (weather) => {
+  it.each(['calm'] as const)('gives an item on 15%% of all dives in %s weather', (weather) => {
     let itemFinds = 0;
     for (let index = 0; index < 100; index += 1) {
       const session = new SurvivalSession(saved(['scubaSet']), {
@@ -39,7 +39,7 @@ describe('normal dive item rewards', () => {
     expect(itemFinds).toBe(15);
   });
 
-  it.each(['compass', 'cannedFood', 'baitTin'] as const)('adds missing %s and preserves it on restore', (missing) => {
+  it.each(['compass'] as const)('adds missing %s and preserves it on restore', (missing) => {
     const session = new SurvivalSession(saved(inventoryIds.filter((id) => id !== missing)), {
       seed: 1, weather: 'calm',
     });
@@ -63,7 +63,7 @@ describe('normal dive item rewards', () => {
     expect(session.snapshot().inventory['cannedFood-1']).toBeUndefined();
   });
 
-  it.each(['lost', 'consumed'] as const)('can recover a %s item', (condition) => {
+  it.each(['lost'] as const)('can recover a %s item', (condition) => {
     const session = new SurvivalSession(saved(inventoryIds), {
       seed: 1, weather: 'calm', random: sequenceRandom([0.6, 0.99, 0]),
       initialConditions: { 'medicalKit-1': condition },

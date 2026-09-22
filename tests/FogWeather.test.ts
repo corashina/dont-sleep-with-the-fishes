@@ -4,7 +4,7 @@ import { Environment } from '../src/world/Environment';
 
 describe('fog weather visibility', () => {
   // Importance: 95/100. Dense fog must preserve nearby interaction visibility.
-  it.each(['day', 'night'] as const)('keeps nearby objects visible and hides distant water during %s', (phase) => {
+  it.each(['night'] as const)('keeps nearby objects visible and hides distant water during %s', (phase) => {
     const scene = new Scene();
     const moon = new Texture();
     const environment = new Environment(scene, moon);

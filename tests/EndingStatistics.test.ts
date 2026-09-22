@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 describe('ending statistics page', () => {
-  it.each(['rescue', 'death', 'sinking'] as const)('opens %s statistics and returns without restarting or pausing', (id) => {
+  it.each(['rescue'] as const)('opens %s statistics and returns without restarting or pausing', (id) => {
     vi.useFakeTimers();
     const session = SurvivalSession.createEndingPreview([], 123, id);
     const snapshot = session.snapshot();

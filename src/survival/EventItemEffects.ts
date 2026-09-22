@@ -112,7 +112,8 @@ export class EventItemEffects {
       this.flare,
       this.chain,
     ];
-    this.root.add(...this.effects, this.flashlight, this.shotgun, this.heldFillLight);
+    // Keep lights outside hidden effect groups so preparation sees the animation's light count.
+    this.root.add(...this.effects, this.flashlight, this.shotgun, this.heldFillLight, this.flareLight);
     this.clear();
   }
 
@@ -160,8 +161,7 @@ export class EventItemEffects {
   }
 
   private applyHeldFill(sample: Readonly<EventItemUseSample>, enabled: boolean): void {
-    this.heldFillLight.visible = enabled && sample.cameraSpaceBlend > 0 && sample.itemVisible;
-    this.heldFillLight.intensity = this.heldFillLight.visible
+    this.heldFillLight.intensity = enabled && sample.itemVisible
       ? clamp01Unchecked(sample.cameraSpaceBlend) * 3.4
       : 0;
   }
@@ -183,7 +183,10 @@ export class EventItemEffects {
     this.flare.position.copy(this.flarePosition).sub(this.actorPosition);
     this.flare.quaternion.setFromUnitVectors(FLARE_FORWARD, this.flareDirection);
     this.flare.scale.setScalar(0.94 + Math.sin(sample.effectTravel * Math.PI * 32) * 0.06);
-    this.flareLight.intensity = 7.2 + Math.sin(sample.effectTravel * Math.PI * 38);
+    this.flareLight.position.copy(this.flare.position);
+    this.flareLight.intensity = primary > 0
+      ? 7.2 + Math.sin(sample.effectTravel * Math.PI * 38)
+      : 0;
   }
 
   clear(): void {
@@ -208,10 +211,7 @@ export class EventItemEffects {
     this.flashlight.hide();
     this.shotgun.visible = false;
     if (this.flareLight) this.flareLight.intensity = 0;
-    if (this.heldFillLight) {
-      this.heldFillLight.visible = false;
-      this.heldFillLight.intensity = 0;
-    }
+    if (this.heldFillLight) this.heldFillLight.intensity = 0;
   }
 
   private captureFlareTrajectory(actor: Object3D): void {
@@ -353,7 +353,7 @@ export class EventItemEffects {
 
     const light = new PointLight(0xff5c27, 0, 7.5, 2);
     light.name = 'event-item-flare-light';
-    flare.add(halo, flame, core, light);
+    flare.add(halo, flame, core);
     return [flare, light];
   }
 

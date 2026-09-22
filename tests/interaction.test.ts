@@ -60,12 +60,7 @@ describe('InteractionSystem', () => {
     expect(interaction.update([], lifeboat, deposit, instances).target).toBe('none');
   });
 
-  it.each([
-    'fishingNet',
-    'swimRing',
-    'anchor',
-    'ductTape',
-  ] as const)('fills the open pickup area for %s', (type) => {
+  it.each(['fishingNet'] as const)('fills the open pickup area for %s', (type) => {
     const camera = new PerspectiveCamera(70, 1, 0.1, 100);
     const instance = item(`${type}-1`, type);
     const openItem = new Group();

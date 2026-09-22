@@ -140,6 +140,12 @@ function expectEventEffectRootsCleared(scene: Object3D): void {
   const itemEffects = scene.getObjectByName('event-item-effects');
   expect(itemEffects, 'event-item-effects exists').toBeDefined();
   itemEffects!.children.forEach((effect) => {
+    // Importance: 95/100. Idle lights must remain prepared without lighting the scene.
+    if (effect instanceof PointLight) {
+      expect(effect.visible, `${effect.name} prepared`).toBe(true);
+      expect(effect.intensity, `${effect.name} inactive`).toBe(0);
+      return;
+    }
     if (effect.name === 'event-item-flashlight-beam') {
       expect(
         effect.getObjectByName('event-item-flashlight-cone')!.visible,

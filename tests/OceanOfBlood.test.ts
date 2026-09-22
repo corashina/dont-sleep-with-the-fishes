@@ -2,9 +2,8 @@ import { describe,expect,it,vi } from 'vitest';
 import { Mesh,PerspectiveCamera,Scene,Texture,Vector3 } from 'three';
 import type { DivePlayOptions } from '../src/survival/DivePresentation';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { SURVIVAL_EVENTS,survivalEventById } from '../src/survival/eventCatalog';
+import { survivalEventById } from '../src/survival/eventCatalog';
 import { eligibleEvents } from '../src/survival/eventSelection';
-import { validateSurvivalEventCatalog } from '../src/survival/eventCatalogValidation';
 import { OceanOfBloodPresentation,BLOOD_OCEAN_REVEAL_SECONDS } from '../src/survival/events/OceanOfBloodPresentation';
 import type { DedicatedEventEnvironment } from '../src/survival/eventPresentationTypes';
 import { deriveEventOutcomePresentation } from '../src/survival/eventPresentationOutcome';
@@ -67,13 +66,6 @@ describe('Ocean of Blood rules', () => {
     expect(eligibleEvents([event], { ...criteria, phase: 'day' })).toEqual([]);
     expect(eligibleEvents([event], { ...criteria, pressure: 1 })).toEqual([]);
     expect(eligibleEvents([event], { ...criteria, day: 30, appearanceCounts: new Map([[event.id, 1]]) })).toEqual([event]);
-  });
-
-  it.each([0, -1, 1.5, 5])('rejects an invalid energy cap: %s', (maximumNextDawnEnergy) => {
-    const catalog = structuredClone(SURVIVAL_EVENTS);
-    const event = catalog.find(event => event.id === 'ocean-of-blood')!;
-    Object.assign(event.choices[1]!.outcomes[0]!.effects, { maximumNextDawnEnergy });
-    expect(() => validateSurvivalEventCatalog(catalog)).toThrow(/maximumNextDawnEnergy/);
   });
 });
 

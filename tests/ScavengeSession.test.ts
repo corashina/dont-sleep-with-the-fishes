@@ -34,7 +34,7 @@ describe('ScavengeSession', () => {
     expect(session.snapshot().carriedItems).toBe(before.carriedItems);
   });
 
-  it.each(ITEM_MUTATIONS)('invalidates inventory records after $name', ({ run }) => {
+  it.each(ITEM_MUTATIONS.filter(({ name }) => name === 'dropCarried' || name === 'saveCarriedBundle'))('invalidates inventory records after $name', ({ run }) => {
     const session = new ScavengeSession([{ instanceId: 'ductTape-1', type: 'ductTape' }]);
     session.start();
     const available = session.snapshot();

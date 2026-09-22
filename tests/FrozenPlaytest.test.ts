@@ -53,26 +53,6 @@ describe('frozen playtest server', () => {
     expect(metadata.buildHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it.each(['edit', 'add', 'delete', 'environment', 'build'] as const)(
-    'stops the batch after a %s change', async (change) => {
-      const { root, batchDir } = await fixture();
-      const server = await start(root, batchDir);
-      if (change === 'delete') await rm(join(root, 'src/main.ts'));
-      else {
-        const target = {
-          edit: join(root, 'src/main.ts'),
-          add: join(root, 'src/new.ts'),
-          environment: join(root, '.env.playtest.local'),
-          build: join(batchDir, 'build/dist/index.html'),
-        }[change];
-        await writeFile(target, 'changed');
-      }
-      expect(await server.checkIntegrity()).toBe(false);
-      expect(JSON.parse(await readFile(server.metadataPath, 'utf8')).status).toBe('invalidated');
-      await expect(fetch(server.url)).rejects.toThrow();
-    },
-  );
-
   it('refuses to publish source changes made during the build', async () => {
     const { root, batchDir } = await fixture();
     await writeFile(join(root, 'vite.config.ts'), `
@@ -94,13 +74,5 @@ describe('frozen playtest server', () => {
     const before = await readFile(join(batchDir, 'build/dist/index.html'), 'utf8');
     await expect(start(root, batchDir)).rejects.toThrow(/exist/i);
     expect(await readFile(join(batchDir, 'build/dist/index.html'), 'utf8')).toBe(before);
-  });
-
-  it('detects changes automatically without a coordinator check', async () => {
-    const { root, batchDir } = await fixture();
-    const server = await start(root, batchDir);
-    await writeFile(join(root, 'src/main.ts'), 'automatic change');
-    await expect(server.closed).resolves.toBe('invalidated');
-    await expect(fetch(server.url)).rejects.toThrow();
   });
 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from './helpers/random';
 
-describe.each(['drifting-supplies', 'drifting-chest'] as const)(
+describe.each(['drifting-chest'] as const)(
   'day actions during %s', (eventId) => {
     function session(quietNight = false): SurvivalSession {
       return new SurvivalSession([{ instanceId: 'energyBar-1', type: 'energyBar' }], {

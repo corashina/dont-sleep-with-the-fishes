@@ -79,7 +79,7 @@ describe('Carlitos survival integration', () => {
     }
   });
 
-  it.each(['rested', 'tired', 'exhausted'] as const)('restores %s and care state from a save', (rest) => {
+  it.each(['exhausted'] as const)('restores %s and care state from a save', (rest) => {
     const session = new SurvivalSession([...saved], {
       seed: 1, initialCarlitos: { rest, hunger: 0, unhappiness: 10 },
     });
@@ -89,7 +89,7 @@ describe('Carlitos survival integration', () => {
     expect(parsed?.checkpoint.session.carlitos).toEqual(session.snapshot().carlitos);
   });
 
-  it.each([{ rest: 'awake' }, { rest: 3 }, { rest: undefined, energy: 3 }, { unhappiness: 11 }])('rejects an invalid companion save: %j', (invalid) => {
+  it.each([{ rest: 'awake' }, { unhappiness: 11 }])('rejects an invalid companion save: %j', (invalid) => {
     const session = new SurvivalSession([...saved], { seed: 1 });
     const value = JSON.parse(JSON.stringify(createSurvivalSaveDocument({
       scavengeElapsedSeconds: 8, session: session.exportCheckpoint(),

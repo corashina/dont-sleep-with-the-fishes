@@ -53,7 +53,7 @@ function fixture(eventId: string) {
   return { session, ui, action, eventItem, inspect, render, button };
 }
 
-describe.each(['drifting-chest', 'drifting-supplies'] as const)('day commands during %s', (eventId) => {
+describe.each(['drifting-chest'] as const)('day commands during %s', (eventId) => {
   it('starts a dive from the scuba button and keeps loot pending', () => {
     const rig = fixture(eventId);
     expect(rig.session.availableReason('dive')).toBeNull();

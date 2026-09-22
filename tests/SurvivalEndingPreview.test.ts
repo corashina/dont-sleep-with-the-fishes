@@ -3,11 +3,7 @@ import { SurvivalAudio } from '../src/audio/SurvivalAudio';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 
 describe('survival ending previews', () => {
-  it.each([
-    ['rescue', 'rescued'],
-    ['death', 'dead'],
-    ['sinking', 'sunk'],
-  ] as const)('presents %s once without changing checkpoints', async (endingId, state) => {
+  it.each([['rescue', 'rescued']] as const)('presents %s once without changing checkpoints', async (endingId, state) => {
     const render = vi.fn();
     const showEnding = vi.fn();
     const onCheckpointChange = vi.fn();

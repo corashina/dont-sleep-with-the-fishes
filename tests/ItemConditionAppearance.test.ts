@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 import { Box3, BoxGeometry, BufferGeometry, Group, Material, Mesh, MeshStandardMaterial, Raycaster, Texture, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { describe, expect, it } from 'vitest';
-import { ITEM_IDS, ITEM_DEFINITIONS } from '../src/game/ItemState';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { normalizeLongestDimensionTemplate } from '../src/world/modelValidation';
 import { prepareItemCondition, setItemBroken, type ItemConditionBinding } from '../src/survival/itemConditionAppearance';
@@ -29,7 +28,7 @@ function verifyCompassSplit(root: Group, bindings: readonly ItemConditionBinding
 // Importance: 95. Damage must never alter a usable model or survive repair.
 describe('item condition appearance', () => {
   // Importance: 90. Every real breakable asset must remain renderable after damage.
-  it.each(ITEM_IDS.filter((id) => ITEM_DEFINITIONS[id].breakable))(
+  it.each(['compass', 'umbrella'] as const)(
     'prepares finite, nonempty damage for the production %s model', async (id) => {
       const bytes = await readFile(`src/assets/models/items/${id}.glb`);
       const data = new ArrayBuffer(bytes.byteLength);

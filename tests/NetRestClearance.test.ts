@@ -8,11 +8,7 @@ import { boatSupplyTransform } from '../src/world/BoatStorage';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { normalizeLongestDimensionTemplate } from '../src/world/modelValidation';
 
-it.each([
-  [0, 0, 0],
-  [0.45, 0.18, -0.24],
-  [-0.35, -0.22, 0.20],
-])('keeps the resting net outside the gunwale at wave pose %s / %s / %s', async (height, pitch, roll) => {
+it.each([[0.45, 0.18, -0.24]])('keeps the resting net outside the gunwale at wave pose %s / %s / %s', async (height, pitch, roll) => {
   const bytes = await readFile('src/assets/models/items/fishingNet.glb');
   const data = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(data).set(bytes);

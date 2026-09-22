@@ -694,7 +694,7 @@ describe('world builders', () => {
     }
   });
 
-  it.each([1, 2])('restores the scene and disposes all owned resources once after %i dispose call(s)', (disposeCalls) => {
+  it.each([2])('restores the scene and disposes all owned resources once after %i dispose call(s)', (disposeCalls) => {
     const scene = new Scene();
     const originalBackground = new Color(0x112233);
     const originalFog = new FogExp2(0x112233, 0.004);

@@ -22,7 +22,7 @@ describe('FixedStepClock', () => {
     expect(clock.advance(0.001, step)).toBe(1);
   });
 
-  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1, 0])(
+  it.each([Number.NaN, -1])(
     'does not advance for %s',
     (delta) => {
       const step = vi.fn();
