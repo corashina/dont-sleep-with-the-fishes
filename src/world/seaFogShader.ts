@@ -40,10 +40,11 @@ export const seaFogShader = /* glsl */`
       vec3 flow = position - drift;
       float bank = seaFogNoise(flow * vec3(0.085, 0.19, 0.085));
       float wisp = seaFogNoise(flow * vec3(0.42, 0.55, 0.42) + bank * 1.7);
-      float heightDensity = exp(-max(position.y - 0.6, 0.0) * 0.48);
+      // Keep a shallow sea-level bank and let silhouettes clear above it.
+      float heightDensity = exp(-max(position.y - 0.25, 0.0) * 0.85);
       float density = (0.28 + smoothstep(0.24, 0.78, bank) * 1.5)
         * mix(0.62, 1.25, wisp) * heightDensity;
-      float lowBank = 1.0 + 0.8 * (1.0 - smoothstep(0.5, 3.5, position.y));
+      float lowBank = 1.0 + 2.0 * (1.0 - smoothstep(0.15, 1.8, position.y));
       float extinction = density * lowBank * 0.24 * smoothstep(1.5, 7.0, distanceAlongRay);
       float stepTransmission = exp(-extinction * stepLength);
       float lightAccess = exp(-density * 0.85);
