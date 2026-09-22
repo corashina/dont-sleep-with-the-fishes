@@ -45,11 +45,6 @@ import { ItemAnimationLabCameraControls } from './ItemAnimationLabCameraControls
 import { createItemAnimationLabJournal } from './ItemAnimationLabJournal';
 import type { JournalEntry } from './journalRecords';
 import {
-  FocusedEventFlow,
-  type FocusedEventUiPort,
-  type FocusedEventWorldPort,
-} from './FocusedEventFlow';
-import {
   SurvivalFishingFlow,
   type FishingSessionPort,
   type FishingUiPort,
@@ -242,7 +237,6 @@ export class SurvivalPhase implements GamePhase {
   private viewportHeight = 1;
   private fishingFlow!: SurvivalFishingFlow;
   private dayActionFlow!: SurvivalDayActionFlow;
-  private focusedEventFlow!: FocusedEventFlow;
   private eventFlow!: SurvivalEventFlow;
   private itemAnimationLabFlow!: ItemAnimationLabFlow;
   private visibilityController: SurvivalVisibilityController | null = null;
@@ -491,7 +485,7 @@ export class SurvivalPhase implements GamePhase {
     this.context.camera.updateProjectionMatrix();
     this.eventFlow.sync(this.session.snapshot());
     this.fishingFlow.resize(width, height);
-    this.focusedEventFlow.syncTarget(width, height);
+    this.eventFlow.resize(width, height);
   }
 
   async prepare(): Promise<void> {
@@ -570,7 +564,7 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     if (isInspectableEventId(this.session.snapshot().pendingEventId ?? '')) {
-      void this.focusedEventFlow.choose({ id: choiceId, instanceId });
+      void this.eventFlow.chooseFocused({ id: choiceId, instanceId });
       return;
     }
     this.eventFlow.resolveItem(choiceId, instanceId);
@@ -678,7 +672,6 @@ export class SurvivalPhase implements GamePhase {
     runCleanupSteps([
       () => this.itemAnimationLabFlow.dispose(),
       () => this.eventFlow.clear(),
-      () => this.focusedEventFlow.dispose(),
       () => this.dayActionFlow.settleForVisibilityChange(),
       () => this.dayActionFlow.dispose(),
       () => this.visibilityController?.cancelResumeWaiters(),
@@ -693,7 +686,6 @@ export class SurvivalPhase implements GamePhase {
     runCleanupSteps([
       () => this.itemAnimationLabFlow.dispose(),
       () => this.eventFlow.dispose(),
-      () => this.focusedEventFlow.dispose(),
       () => this.dayActionFlow.dispose(),
       () => this.visibilityController?.cancelResumeWaiters(),
       () => this.fishingFlow.dispose(),
@@ -759,25 +751,12 @@ export class SurvivalPhase implements GamePhase {
       advanceLifecycleGeneration: () => ++this.lifecycleGeneration,
       isLifecycleGenerationCurrent: (generation) => this.isContinuationActive(generation),
     });
-    this.focusedEventFlow = new FocusedEventFlow({
-      world: world as FocusedEventWorldPort,
-      ui: ui as FocusedEventUiPort,
-      audio: this.audio,
-      setBusy: (busy) => this.setBusy(busy),
-      setEventResolutionActive: (active) => this.eventFlow.setFocusedResolutionActive(active),
-      isPendingEvent: (eventId) => this.eventFlow.isPendingEvent(eventId),
-      resolveChoice: (choice) => this.eventFlow.resolveFocusedEventChoice(choice),
-      waitForVisibilityResume: (generation) => this.waitForVisibilityResume(generation),
-      captureLifecycleGeneration: () => this.lifecycleGeneration,
-      isLifecycleGenerationCurrent: (generation) => this.isContinuationActive(generation),
-    });
     this.eventFlow = new SurvivalEventFlow({
       session: session as EventSessionPort,
       world: world as EventWorldPort,
       ui: ui as EventUiPort,
       audio: this.audio,
       bundles: eventBundles,
-      focused: this.focusedEventFlow,
       renderSnapshot: () => this.renderSnapshot(false, false),
       renderAndSettleCoveredScene: (generation) => (
         this.renderAndSettleCoveredScene(generation)
@@ -880,10 +859,10 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onFishingViewExit = () => this.fishingFlow.exitView();
     this.ui.onFocusedEventSelect = (eventId) => { void this.eventFlow.focusEvent(eventId); };
     this.ui.onFocusedEventChoice = (choice) => {
-      this.reportFocusedError(this.focusedEventFlow.choose(choice));
+      this.reportFocusedError(this.eventFlow.chooseFocused(choice));
     };
     this.ui.onFocusedEventBack = () => {
-      this.reportFocusedError(this.focusedEventFlow.back());
+      this.reportFocusedError(this.eventFlow.backFocused());
     };
     this.ui.onCameraTurn = () => this.handleCameraTurn();
   }

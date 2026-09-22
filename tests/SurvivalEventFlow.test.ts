@@ -110,6 +110,8 @@ function createRig(
     })),
   };
   const world = {
+    exitFocusedEventView: vi.fn(async (): Promise<void> => undefined),
+    projectEventInteractionBounds: vi.fn(() => null),
     hasEventPassed: vi.fn(() => false),
     returnEventItemUse: vi.fn(async () => undefined),
     enterFocusedEventView: vi.fn(async (): Promise<void> => undefined),
@@ -149,6 +151,7 @@ function createRig(
     delegateDriftingItem: vi.fn(async () => undefined),
   };
   const ui = {
+    showFocusedEvent: vi.fn(), hideFocusedEvent: vi.fn(), updateFocusedEventTarget: vi.fn(),
     beginEventPresentation: vi.fn(() => calls.push('begin-ui')),
     showEventReveal: vi.fn(async () => { calls.push('caption'); }),
     hideEventReveal: vi.fn(),
@@ -201,15 +204,6 @@ function createRig(
     releaseActive: vi.fn(() => calls.push('release-bundle')),
   };
   const bundles = (bundleManager ?? defaultBundles) as typeof defaultBundles;
-  const focused = {
-    enter: vi.fn(async (
-      _eventId?: string,
-      _choices?: readonly unknown[],
-    ): Promise<void> => undefined),
-    choose: vi.fn(async (_choiceId?: string): Promise<void> => undefined),
-    clear: vi.fn(() => calls.push('clear-drifting')),
-    settleForVisibilityChange: vi.fn(),
-  };
   const onInvariantError = vi.fn();
   const onFatalError = vi.fn();
   const setBusy = vi.fn((busy: boolean) => calls.push(busy ? 'busy' : 'ready'));
@@ -224,7 +218,6 @@ function createRig(
     ui,
     audio,
     bundles,
-    focused,
     renderSnapshot,
     renderAndSettleCoveredScene: vi.fn(async () => {
       calls.push('settle');
@@ -251,7 +244,6 @@ function createRig(
     ui,
     audio,
     bundles,
-    focused,
     setBusy,
     renderSnapshot,
     presentTerminal,
@@ -1045,11 +1037,13 @@ describe('SurvivalEventFlow', () => {
     const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-supplies' });
     const rig = createRig(pending);
     const firstEntry = deferred();
-    rig.focused.enter.mockReturnValueOnce(firstEntry.promise);
+    rig.world.enterFocusedEventView.mockReturnValueOnce(firstEntry.promise);
     await rig.flow.revealPending(pending);
 
     const first = rig.flow.focusEvent('drifting-supplies');
-    await vi.waitFor(() => expect(rig.focused.enter).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(rig.world.enterFocusedEventView).toHaveBeenCalledOnce());
+    rig.flow.clear();
+    await rig.flow.revealPending(pending);
     await rig.flow.focusEvent('drifting-supplies');
     rig.onFatalError.mockClear();
     rig.setBusy.mockClear();
@@ -1061,28 +1055,96 @@ describe('SurvivalEventFlow', () => {
     expect(rig.setBusy).not.toHaveBeenCalled();
   });
 
-  it('makes returned focused callbacks inert after a same-lifecycle replacement', async () => {
+  // Importance: 98/100. Stale camera work must not change a replacement event.
+  it('makes a focused camera return inert after a same-lifecycle replacement', async () => {
     const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-supplies' });
     const rig = createRig(pending);
+    const camera = deferred();
     await rig.flow.revealPending(pending);
     await rig.flow.focusEvent('drifting-supplies');
-    rig.flow.setFocusedResolutionActive(true);
-    const resolution = rig.flow.resolveFocusedEventChoice({ id: 'sleep', instanceId: null });
-    if (resolution === undefined || !resolution.accepted) throw new Error('Expected resolution.');
-    const staleResolution = resolution;
+    rig.world.exitFocusedEventView.mockReturnValueOnce(camera.promise);
+    const work = rig.flow.chooseFocused({ id: 'sleep', instanceId: null });
+    await vi.waitFor(() => expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce());
     rig.flow.clear();
     await rig.flow.revealPending(pending);
-    rig.world.clearEvent.mockClear();
-    rig.renderSnapshot.mockClear();
-    rig.presentTerminal.mockClear();
-
-    staleResolution.clearEvent(true);
-    staleResolution.renderSnapshot();
-    staleResolution.presentTerminal();
-
+    rig.world.clearEvent.mockClear(); rig.renderSnapshot.mockClear(); rig.presentTerminal.mockClear();
+    rig.setBusy.mockClear();
+    camera.resolve(); await work;
     expect(rig.world.clearEvent).not.toHaveBeenCalled();
     expect(rig.renderSnapshot).not.toHaveBeenCalled();
     expect(rig.presentTerminal).not.toHaveBeenCalled();
+    expect(rig.setBusy).not.toHaveBeenCalled();
+  });
+
+  it.each(['drifting-supplies', 'drifting-chest'] as const)('returns from %s without resolving or clearing it', async (eventId) => {
+    const rig = createRig(snapshot({ state: 'dayEvent', pendingEventId: eventId }));
+    await rig.flow.revealPending(rig.session.snapshot());
+    await rig.flow.focusEvent(eventId);
+    await rig.flow.backFocused();
+    expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce();
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    expect(rig.world.clearEvent).not.toHaveBeenCalled();
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+    expect(rig.ui.restoreCommandFocus).toHaveBeenCalled();
+    await rig.flow.focusEvent(eventId);
+    expect(rig.ui.showFocusedEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects an ID and instance pair that was not rendered', async () => {
+    const rig = createRig(snapshot({ state: 'dayEvent', pendingEventId: 'drifting-supplies' }));
+    await rig.flow.revealPending(rig.session.snapshot());
+    await rig.flow.focusEvent('drifting-supplies');
+    await rig.flow.chooseFocused({ id: 'retrieve', instanceId: 'scubaSet-1' });
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+  });
+
+  it('waits for visibility before resolving a focused choice', async () => {
+    const resume = deferred<boolean>();
+    const wait = vi.fn(async () => true);
+    const rig = createRig(snapshot({ state: 'dayEvent', pendingEventId: 'drifting-supplies' }), undefined,
+      { waitForVisibilityResume: wait });
+    await rig.flow.revealPending(rig.session.snapshot());
+    await rig.flow.focusEvent('drifting-supplies');
+    wait.mockReturnValueOnce(resume.promise);
+    const work = rig.flow.chooseFocused({ id: 'sleep', instanceId: null });
+    await Promise.resolve();
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    resume.resolve(true); await work;
+    expect(rig.session.resolveEvent).toHaveBeenCalledOnce();
+  });
+
+  it('does not restore controls after disposal during camera return', async () => {
+    const rig = createRig(snapshot({ state: 'dayEvent', pendingEventId: 'drifting-supplies' }));
+    const camera = deferred();
+    await rig.flow.revealPending(rig.session.snapshot());
+    await rig.flow.focusEvent('drifting-supplies');
+    rig.world.exitFocusedEventView.mockReturnValueOnce(camera.promise);
+    const work = rig.flow.backFocused();
+    rig.flow.dispose();
+    const calls = rig.ui.restoreCommandFocus.mock.calls.length;
+    camera.resolve(); await work;
+    expect(rig.ui.restoreCommandFocus).toHaveBeenCalledTimes(calls);
+  });
+
+  it('does not unlock a new entry after stale entry cleanup', async () => {
+    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-supplies' });
+    const rig = createRig(pending);
+    const entry = deferred(), staleExit = deferred(), newEntry = deferred();
+    await rig.flow.revealPending(pending);
+    rig.world.enterFocusedEventView.mockReturnValueOnce(entry.promise);
+    rig.world.exitFocusedEventView.mockReturnValueOnce(staleExit.promise);
+    const stale = rig.flow.focusEvent('drifting-supplies');
+    rig.setSnapshot(snapshot()); entry.resolve();
+    await vi.waitFor(() => expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce());
+    rig.flow.clear(); rig.setSnapshot(pending); await rig.flow.revealPending(pending);
+    rig.world.enterFocusedEventView.mockReturnValueOnce(newEntry.promise);
+    rig.setBusy.mockClear(); rig.ui.showFocusedEvent.mockClear();
+    const newer = rig.flow.focusEvent('drifting-supplies');
+    staleExit.resolve(); await stale;
+    expect(rig.setBusy).toHaveBeenCalledExactlyOnceWith(true);
+    expect(rig.ui.showFocusedEvent).not.toHaveBeenCalled();
+    newEntry.resolve(); await newer;
+    expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
   });
 
   it.each(['drifting-supplies', 'drifting-chest'] as const)(
@@ -1095,16 +1157,7 @@ describe('SurvivalEventFlow', () => {
       }));
       await rig.flow.revealPending(rig.realSession.snapshot());
       await rig.flow.focusEvent(eventId);
-      rig.flow.setFocusedResolutionActive(true);
-
-      const resolution = rig.flow.resolveFocusedEventChoice({
-        id: 'sleep',
-        instanceId: null,
-      });
-      if (resolution === undefined || !resolution.accepted) {
-        throw new Error('Expected Let It Drift to resolve.');
-      }
-      resolution.clearEvent(true);
+      await rig.flow.chooseFocused({ id: 'sleep', instanceId: null });
 
       expect(rig.world.clearEvent).not.toHaveBeenCalled();
       expect(rig.bundles.releaseActive).not.toHaveBeenCalled();
@@ -1133,7 +1186,6 @@ describe('SurvivalEventFlow', () => {
     rig.flow.clear();
 
     expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(firstError);
-    expect(rig.focused.clear).toHaveBeenCalledOnce();
     expect(rig.bundles.cancelPendingActivation).toHaveBeenCalledOnce();
     expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
     expect(rig.calls).toContain('weather:calm');

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { SurvivalPhase } from '../src/survival/SurvivalPhase';
+import { createTestSurvivalPhase } from './helpers/survivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 import type { FocusedEventFocusView } from '../src/ui/SurvivalUiViewModel';
@@ -46,7 +46,7 @@ describe('focused event dismiss actions', () => {
         settleCoveredScene: vi.fn(async () => {}),
         showEventReveal: vi.fn(async () => {}),
       };
-      const phase = SurvivalPhase.forTest({
+      const phase = createTestSurvivalPhase({
         session, ui,
         world: {
           stageEvent: vi.fn(), revealEvent: vi.fn(async () => {}),

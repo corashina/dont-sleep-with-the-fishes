@@ -10,6 +10,7 @@ import {
 import type { FishingCastPoint } from '../src/survival/FishingSession';
 import { formatDiveResult } from '../src/survival/SurvivalDayActionFlow';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
+import { createTestSurvivalPhase } from './helpers/survivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type {
   SurvivalInventorySnapshot,
@@ -66,7 +67,7 @@ describe('survival checkpoints', () => {
         setSleepCovered: vi.fn(() => Promise.resolve()),
         showEventReveal: vi.fn(() => Promise.resolve()),
       };
-      const phase = SurvivalPhase.forTest({
+      const phase = createTestSurvivalPhase({
         session,
         world: {
           stageEvent: vi.fn(),
@@ -106,7 +107,7 @@ describe('survival checkpoints', () => {
       chest: { state: 'closed', acquiredDay: 1 },
     });
     const render = vi.fn();
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: {
         snapshot: vi.fn(() => current),
         availableReason: vi.fn((action) => (
@@ -136,7 +137,7 @@ describe('survival checkpoints', () => {
 
   it('opens the journal during a busy action presentation', () => {
     const showJournal = vi.fn();
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: { snapshot: vi.fn(() => snapshot()) },
       world: {},
       ui: { showJournal },
@@ -394,7 +395,7 @@ function createFishingRig(options: FishingRigOptions = {}) {
       for (const handle of animations.fade) handle.resolve();
     }),
   };
-  const phase = SurvivalPhase.forTest({
+  const phase = createTestSurvivalPhase({
     session,
     world,
     ui,
@@ -454,7 +455,7 @@ describe('SurvivalPhase orchestration', () => {
       initialChest: { state: 'closed', acquiredDay: 1 },
     });
     const setAvailableDayActions = vi.fn();
-    const phase = SurvivalPhase.forTest({ session, world: { setAvailableDayActions }, ui: {} });
+    const phase = createTestSurvivalPhase({ session, world: { setAvailableDayActions }, ui: {} });
     phase.start();
     const internals = phase as unknown as { renderSnapshot(openPendingEvent: boolean): void };
     expect(session.perform('eat').accepted).toBe(true);
@@ -487,7 +488,7 @@ describe('SurvivalPhase orchestration', () => {
       setBusy: vi.fn(),
       dispose: vi.fn(),
     };
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: {
         snapshot: vi.fn(realSession.snapshot.bind(realSession)),
         resolveEvent: vi.fn(realSession.resolveEvent.bind(realSession)),
@@ -538,7 +539,7 @@ describe('SurvivalPhase orchestration', () => {
       setBusy: vi.fn(),
       dispose: vi.fn(),
     };
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: realSession,
       world: {
         stageEvent: vi.fn(),
@@ -594,7 +595,7 @@ describe('SurvivalPhase orchestration', () => {
         restoreCommandFocus,
         dispose: vi.fn(),
       };
-      const phase = SurvivalPhase.forTest({
+      const phase = createTestSurvivalPhase({
         session: {
           snapshot: vi.fn(() => current),
           resolveEvent: vi.fn(() => {
@@ -649,7 +650,7 @@ describe('SurvivalPhase orchestration', () => {
       const restoreCommandFocus = vi.fn();
       const onRestart = vi.fn();
       const clearEvent = vi.fn(() => reveal.resolve());
-      const phase = SurvivalPhase.forTest({
+      const phase = createTestSurvivalPhase({
         session: {
           snapshot: vi.fn(realSession.snapshot.bind(realSession)),
           perform: vi.fn(realSession.perform.bind(realSession)),
@@ -874,7 +875,7 @@ describe('SurvivalPhase orchestration', () => {
       current = snapshot({ state: 'nightEvent', pendingEventId: event.id });
       return accepted({ code: 'event-opened', cue: 'nightfall', deltas: {} });
     });
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: { snapshot: vi.fn(() => current), perform },
       world: {
         scene: new Scene(),
@@ -936,7 +937,7 @@ describe('SurvivalPhase orchestration', () => {
   it('starts event loading before cover and holds black until activation', async () => {
     const loading = deferred();
     const calls: string[] = [];
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: {
         snapshot: vi.fn(() => snapshot({
           state: 'nightEvent',
@@ -997,7 +998,7 @@ describe('SurvivalPhase orchestration', () => {
     const onFatalError = vi.fn();
     const setSleepCovered = vi.fn(async () => undefined);
     const stageEvent = vi.fn();
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: {
         snapshot: vi.fn(() => snapshot({
           state: 'nightEvent',
@@ -1039,7 +1040,7 @@ describe('SurvivalPhase orchestration', () => {
     });
     const calls: string[] = [];
     const releaseActive = vi.fn(() => calls.push('release'));
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session,
       eventBundles: {
         beginLoad: vi.fn(() => undefined),
@@ -1144,7 +1145,7 @@ describe('SurvivalPhase orchestration', () => {
       restoreCommandFocus: vi.fn(),
       dispose: vi.fn(),
     };
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: {
         snapshot: vi.fn(() => current),
         resolveEvent: vi.fn(() => {
@@ -1338,7 +1339,7 @@ describe('SurvivalPhase orchestration', () => {
       restoreCommandFocus: vi.fn(),
       dispose: vi.fn(),
     };
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: {
         snapshot: vi.fn(() => current),
         resolveEvent: vi.fn(() => {
@@ -1555,7 +1556,7 @@ describe('SurvivalPhase orchestration', () => {
       restoreCommandFocus,
       dispose: vi.fn(),
     };
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: {
         snapshot: vi.fn(() => current),
         resolveEvent: vi.fn(() => {
@@ -1677,7 +1678,7 @@ describe('SurvivalPhase orchestration', () => {
         clearEventPresentation: vi.fn(),
         dispose: vi.fn(),
       };
-      const phase = SurvivalPhase.forTest({
+      const phase = createTestSurvivalPhase({
         session: {
           snapshot: vi.fn(() => current),
           resolveEvent: vi.fn(() => {
@@ -1743,7 +1744,7 @@ describe('SurvivalPhase orchestration', () => {
       clearEventPresentation: vi.fn(),
       dispose: vi.fn(),
     };
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: {
         snapshot: vi.fn(() => snapshot({
           state: 'dayEvent',
@@ -1817,7 +1818,7 @@ describe('SurvivalPhase orchestration', () => {
       message: 'The rocks damage the boat.',
       deltas: { hull: -7 },
     });
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: {
         snapshot: vi.fn(() => current),
         resolveEvent: vi.fn(() => {
@@ -1923,7 +1924,7 @@ describe('SurvivalPhase orchestration', () => {
         return covered ? cover.promise : uncover.promise;
       });
       const onRestart = vi.fn();
-      const phase = SurvivalPhase.forTest({
+      const phase = createTestSurvivalPhase({
         session: {
           snapshot: vi.fn(() => current),
           resolveEvent: vi.fn(() => {
@@ -2029,7 +2030,7 @@ describe('SurvivalPhase orchestration', () => {
       clearEventPresentation: vi.fn(),
       dispose: vi.fn(),
     };
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: {
         snapshot: vi.fn(() => current),
         resolveEvent: vi.fn(() => {
@@ -2074,7 +2075,7 @@ describe('SurvivalPhase orchestration', () => {
       const setEventSelection = vi.fn();
       const clearEvent = vi.fn();
       const onRestart = vi.fn();
-      const phase = SurvivalPhase.forTest({
+      const phase = createTestSurvivalPhase({
         session: {
           snapshot: vi.fn(() => snapshot({ state: 'nightEvent', pendingEventId: event.id })),
         },
@@ -2116,7 +2117,7 @@ describe('SurvivalPhase orchestration', () => {
       const showEventReveal = vi.fn(() => Promise.resolve());
       const setEventSelection = vi.fn();
       const onRestart = vi.fn();
-      const phase = SurvivalPhase.forTest({
+      const phase = createTestSurvivalPhase({
         session: {
           snapshot: vi.fn(() => snapshot({ state: 'dayEvent', pendingEventId: event.id })),
         },
@@ -2151,7 +2152,7 @@ describe('SurvivalPhase orchestration', () => {
       const itemUse = deferred();
       const resolveEvent = vi.fn();
       const onRestart = vi.fn();
-      const phase = SurvivalPhase.forTest({
+      const phase = createTestSurvivalPhase({
         session: {
           snapshot: vi.fn(() => snapshot({
             state: 'nightEvent',
@@ -2205,7 +2206,7 @@ describe('SurvivalPhase orchestration', () => {
     const update = vi.fn();
     const updateAmbient = vi.fn();
     const setPaused = vi.fn();
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: { snapshot: vi.fn(() => snapshot()) },
       world: {
         update,
@@ -2242,7 +2243,7 @@ describe('SurvivalPhase orchestration', () => {
     const setDocumentHidden = vi.fn((hidden: boolean) => {
       if (hidden) reveal.resolve();
     });
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: {
         snapshot: vi.fn(() => snapshot({
           state: 'nightEvent',
@@ -2321,7 +2322,7 @@ describe('SurvivalPhase orchestration', () => {
       setPaused: vi.fn(),
       dispose: vi.fn(),
     };
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: {
         snapshot: vi.fn(() => current),
         resolveEvent,
@@ -2404,7 +2405,7 @@ describe('SurvivalPhase orchestration', () => {
       clearEventPresentation: vi.fn(),
       dispose: vi.fn(),
     };
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: {
         snapshot: vi.fn(() => current),
         resolveEvent: vi.fn(() => {
@@ -2514,7 +2515,7 @@ describe('SurvivalPhase orchestration', () => {
       expect(syncInventory).not.toHaveBeenCalledWith(current);
       return reaction.promise;
     });
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: { snapshot: vi.fn(() => current), resolveEvent },
       world: {
         revealEvent: vi.fn(() => Promise.resolve()),
@@ -2601,7 +2602,7 @@ describe('SurvivalPhase orchestration', () => {
       const setDocumentHidden = vi.fn((hidden: boolean) => {
         if (hidden) itemUse.resolve();
       });
-      const phase = SurvivalPhase.forTest({
+      const phase = createTestSurvivalPhase({
         session: { snapshot: vi.fn(() => current), resolveEvent },
         world: {
           stageEvent: vi.fn(),
@@ -2650,7 +2651,7 @@ describe('SurvivalPhase orchestration', () => {
     const worldDispose = vi.fn();
     const uiDispose = vi.fn();
     const setBusy = vi.fn();
-    const phase = SurvivalPhase.forTest({
+    const phase = createTestSurvivalPhase({
       session: { snapshot: vi.fn(() => snapshot()), perform: vi.fn(() => accepted()) },
       world: { play: vi.fn(() => cue.promise), dispose: worldDispose },
       ui: { setBusy, render: vi.fn(), dispose: uiDispose },

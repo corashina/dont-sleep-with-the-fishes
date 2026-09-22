@@ -12,10 +12,7 @@ import type {
   FocusedEventChoiceView,
 } from '../ui/SurvivalUiViewModel';
 import type { BoatWorld } from './BoatWorld';
-import type {
-  FocusedEventChoiceResolution,
-  FocusedEventFlow,
-} from './FocusedEventFlow';
+import { FocusedEventView } from './FocusedEventView';
 import type { EventChoicePresentation } from './FocusedEventPresentation';
 import {
   isDriftingItemEventId,
@@ -76,6 +73,8 @@ export type EventWorldPort = Pick<
   | 'delegateDriftingItem'
   | 'play'
   | 'enterFocusedEventView'
+  | 'exitFocusedEventView'
+  | 'projectEventInteractionBounds'
   | 'hasEventPassed'
   | 'returnEventItemUse'
 >;
@@ -98,6 +97,9 @@ export type EventUiPort = Pick<
   | 'setAnchors'
   | 'restoreCommandFocus'
   | 'showRewardResult'
+  | 'showFocusedEvent'
+  | 'hideFocusedEvent'
+  | 'updateFocusedEventTarget'
 >;
 
 export type EventAudioPort = Pick<
@@ -122,10 +124,6 @@ export type EventAudioPort = Pick<
   | 'action'
 >;
 
-export type EventFocusedEventPort = Pick<
-  FocusedEventFlow,
-  'enter' | 'choose' | 'clear' | 'settleForVisibilityChange'
->;
 
 export interface EventBundleManagerLike {
   beginLoad(eventId: SurvivalEventId): Promise<unknown> | undefined;
@@ -140,7 +138,6 @@ export interface SurvivalEventFlowDependencies {
   readonly ui: EventUiPort;
   readonly audio: EventAudioPort;
   readonly bundles: EventBundleManagerLike;
-  readonly focused: EventFocusedEventPort;
   readonly renderSnapshot: () => SurvivalSnapshot;
   readonly renderAndSettleCoveredScene: (generation: number) => Promise<boolean>;
   readonly presentTerminal: (snapshot: SurvivalSnapshot, allowBusy?: boolean) => void;
@@ -199,6 +196,13 @@ interface FocusedChoiceContext {
   readonly operation: number;
   readonly skipDriftingAnimation: boolean;
 }
+
+interface FocusedChoiceResolution {
+  readonly context: FocusedChoiceContext;
+  readonly state: FocusedChoiceResolutionState;
+}
+
+type FocusState = 'idle' | 'entering' | 'choosing' | 'resolving' | 'returning';
 
 interface FocusedChoiceResolutionState {
   terminalSnapshot: SurvivalSnapshot | null;
@@ -395,10 +399,9 @@ export class SurvivalEventFlow {
   private preparedEventId: SurvivalEventId | null = null;
   private initialEventResultId: string | undefined;
   private operationGeneration = 0;
-  private activeFocusedOperation: {
-    readonly generation: number;
-    readonly operation: number;
-  } | null = null;
+  private readonly focusedView: FocusedEventView;
+  private focusState: FocusState = 'idle';
+  private focusedEventId: InspectableEventId | null = null;
   private ownsBusyState = false;
   private flybyChoiceWindowRemaining: number | null = null;
   private disposed = false;
@@ -406,6 +409,7 @@ export class SurvivalEventFlow {
 
   constructor(private readonly dependencies: SurvivalEventFlowDependencies) {
     this.initialEventResultId = dependencies.initialEventResultId;
+    this.focusedView = new FocusedEventView(dependencies.world, dependencies.ui);
   }
 
   seagullGrab(): void {
@@ -499,25 +503,160 @@ export class SurvivalEventFlow {
 
   async focusEvent(eventId: InspectableEventId): Promise<void> {
     const generation = this.dependencies.captureLifecycleGeneration();
-    if (!this.isPendingEvent(eventId) || !this.isLifecycleCurrent(generation)) return;
+    if (this.focusState !== 'idle' || !this.isPendingEvent(eventId) || !this.isLifecycleCurrent(generation)) return;
     const operation = this.beginOperation();
-    this.activeFocusedOperation = { generation, operation };
-    const snapshot = this.dependencies.session.snapshot();
-    const event = survivalEventById(eventId);
-    if (event === undefined) return;
+    this.focusedEventId = eventId;
+    this.focusState = 'entering';
+    this.setBusy(true);
     try {
-      await this.dependencies.focused.enter(
-        eventId,
-        focusedChoicesFor(event, snapshot),
-      );
-    } catch (error) {
-      if (!this.isCurrent(generation, operation)) return;
-      try {
-        this.dependencies.onFatalError(error);
-      } finally {
-        this.releaseBusyDuringRecovery(generation, operation);
+      await this.dependencies.world.enterFocusedEventView(eventId);
+      if (!this.isCurrentFocus(eventId, 'entering', generation, operation)) return;
+      if (!this.isPendingEvent(eventId)) {
+        await this.dependencies.world.exitFocusedEventView();
+        if (this.isCurrentFocus(eventId, 'entering', generation, operation)) {
+          this.clearFocus();
+          this.setBusy(false);
+        }
+        return;
       }
+      this.focusState = 'choosing';
+      this.showFocus();
+      this.setBusy(false);
+    } catch (error) {
+      if (!this.isCurrentFocus(eventId, 'entering', generation, operation)) return;
+      try { await this.dependencies.world.exitFocusedEventView(); } catch { /* Keep the entry error. */ }
+      if (!this.isCurrentFocus(eventId, 'entering', generation, operation)) return;
+      this.ignoreFocusError(() => this.clearFocus());
+      this.ignoreFocusError(() => this.dependencies.ui.setEventSelection(new Map(), []));
+      this.ignoreFocusError(() => this.setBusy(false));
+      this.ignoreFocusError(() => this.dependencies.ui.restoreCommandFocus());
+      this.dependencies.onFatalError(error);
     }
+  }
+
+  async chooseFocused(choice: FocusedEventChoiceSelection): Promise<void> {
+    const eventId = this.focusedEventId;
+    const generation = this.dependencies.captureLifecycleGeneration();
+    if (eventId === null || !this.canChooseFocused(eventId, generation, choice)) return;
+    const operation = this.beginOperation();
+    let resolution: FocusedChoiceResolution | null | undefined;
+    try {
+      this.dependencies.audio.confirm();
+      this.focusState = 'resolving';
+      this.presentation = 'resolving';
+      this.setBusy(true);
+      await this.dependencies.ui.playEventChoiceBeat(choice.id);
+      if (!await this.resumeFocus(eventId, 'resolving', generation, operation)) return;
+      resolution = this.resolveFocusedEventChoice(choice, generation, operation);
+      if (!this.isCurrentFocus(eventId, 'resolving', generation, operation) || resolution === undefined) return;
+      if (resolution === null) { this.restoreFocusChoice(); return; }
+      await this.finishFocusedChoice(eventId, resolution, generation, operation);
+    } catch (error) {
+      if (this.isCurrent(generation, operation)) {
+        if (resolution != null) await this.recoverFocusedResolution(resolution, generation, operation);
+        else this.ignoreFocusError(() => this.restoreFocusChoice());
+      }
+      throw error;
+    }
+  }
+
+  private canChooseFocused(eventId: InspectableEventId, generation: number, choice: FocusedEventChoiceSelection): boolean {
+    return this.focusState === 'choosing' && this.isPendingEvent(eventId)
+      && this.isLifecycleCurrent(generation) && this.focusedView.accepts(choice);
+  }
+
+  private async finishFocusedChoice(eventId: InspectableEventId, resolution: FocusedChoiceResolution,
+    generation: number, operation: number): Promise<void> {
+      this.focusedView.hide();
+      await this.playFocusedChoiceAnimation(resolution.context);
+      if (!await this.resumeFocus(eventId, 'resolving', generation, operation)) return;
+      await this.afterFocusedChoiceAnimation(resolution.context);
+      if (!await this.resumeFocus(eventId, 'resolving', generation, operation)) return;
+      this.focusState = 'returning';
+      await this.dependencies.world.exitFocusedEventView();
+      if (!await this.resumeFocus(eventId, 'returning', generation, operation)) return;
+      this.clearFocusedChoiceEvent(resolution.context, true);
+      if (!this.isCurrent(generation, operation)) return;
+      const terminal = this.renderFocusedChoiceSnapshot(resolution.context, resolution.state);
+      if (!this.isCurrent(generation, operation)) return;
+      this.setBusy(false);
+      if (terminal) this.presentFocusedChoiceTerminal(resolution.context, resolution.state);
+      else this.dependencies.ui.restoreCommandFocus();
+  }
+
+  async backFocused(): Promise<void> {
+    const eventId = this.focusedEventId;
+    const generation = this.dependencies.captureLifecycleGeneration();
+    if (eventId === null || this.focusState !== 'choosing' || !this.isPendingEvent(eventId)
+      || !this.isLifecycleCurrent(generation)) return;
+    const operation = this.beginOperation();
+    this.focusState = 'returning';
+    this.setBusy(true);
+    this.focusedView.hide();
+    try {
+      await this.dependencies.world.exitFocusedEventView();
+    } catch (error) {
+      if (this.isCurrentFocus(eventId, 'returning', generation, operation)) this.restoreFocusChoice();
+      throw error;
+    }
+    if (!await this.resumeFocus(eventId, 'returning', generation, operation)) return;
+    this.clearFocus();
+    this.setBusy(false);
+    this.dependencies.ui.restoreCommandFocus();
+  }
+
+  resize(width: number, height: number): void {
+    if (!this.disposed) this.focusedView.resize(width, height);
+  }
+
+  private showFocus(): void {
+    if (this.focusedEventId === null) return;
+    const event = survivalEventById(this.focusedEventId);
+    if (event !== undefined) this.focusedView.show(this.focusedEventId,
+      focusedChoicesFor(event, this.dependencies.session.snapshot()));
+  }
+
+  private clearFocus(): void {
+    this.focusedEventId = null;
+    this.focusState = 'idle';
+    this.focusedView.hide();
+  }
+
+  private restoreFocusChoice(): void {
+    this.presentation = 'choosing';
+    this.focusState = 'choosing';
+    this.ignoreFocusError(() => this.showFocus());
+    this.setBusy(false);
+  }
+
+  private isCurrentFocus(eventId: InspectableEventId, state: FocusState, generation: number, operation: number): boolean {
+    return this.focusedEventId === eventId && this.focusState === state && this.isCurrent(generation, operation);
+  }
+
+  private async resumeFocus(eventId: InspectableEventId, state: FocusState, generation: number, operation: number): Promise<boolean> {
+    if (!this.isCurrentFocus(eventId, state, generation, operation)) return false;
+    if (!await this.dependencies.waitForVisibilityResume(generation)) return false;
+    return this.isCurrentFocus(eventId, state, generation, operation);
+  }
+
+  private async recoverFocusedResolution(resolution: FocusedChoiceResolution, generation: number, operation: number): Promise<void> {
+    this.focusState = 'returning';
+    try { await this.dependencies.world.exitFocusedEventView(); } catch { /* Keep the action error. */ }
+    if (!this.isCurrent(generation, operation)) return;
+    this.ignoreFocusError(() => this.clearFocusedChoiceEvent(resolution.context, false));
+    if (!this.isCurrent(generation, operation)) return;
+    let rendered = false;
+    let terminal = false;
+    try { terminal = this.renderFocusedChoiceSnapshot(resolution.context, resolution.state); rendered = true; } catch { /* Keep the action error. */ }
+    if (!this.isCurrent(generation, operation)) return;
+    this.ignoreFocusError(() => this.setBusy(false));
+    if (!rendered) return;
+    if (terminal) this.ignoreFocusError(() => this.presentFocusedChoiceTerminal(resolution.context, resolution.state));
+    else this.ignoreFocusError(() => this.dependencies.ui.restoreCommandFocus());
+  }
+
+  private ignoreFocusError(work: () => void): void {
+    try { work(); } catch { /* Keep the first focus error. */ }
   }
 
   beginNightTransition(snapshot: SurvivalSnapshot, opensEvent: boolean): boolean {
@@ -659,30 +798,12 @@ export class SurvivalEventFlow {
     return snapshot.pendingEventId === eventId && !isTerminal(snapshot.state);
   }
 
-  setFocusedResolutionActive(active: boolean): void {
-    const focused = this.activeFocusedOperation;
-    if (
-      focused === null
-      || !this.isCurrent(focused.generation, focused.operation)
-    ) return;
-    if (active && this.presentation === 'choosing') this.presentation = 'resolving';
-    else if (!active && this.presentation === 'resolving') {
-      this.presentation = 'choosing';
-    }
-  }
-
-  resolveFocusedEventChoice(
+  private resolveFocusedEventChoice(
     choice: FocusedEventChoiceSelection,
-  ): FocusedEventChoiceResolution | undefined {
-    const focused = this.activeFocusedOperation;
-    if (
-      focused === null
-      || this.presentation !== 'resolving'
-      || !this.isCurrent(focused.generation, focused.operation)
-    ) {
-      return undefined;
-    }
-    const { generation, operation } = focused;
+    generation: number,
+    operation: number,
+  ): FocusedChoiceResolution | null | undefined {
+    if (this.presentation !== 'resolving' || !this.isCurrent(generation, operation)) return undefined;
     const pending = this.dependencies.session.snapshot();
     const eventId = pending.pendingEventId;
     if (eventId === null || !isInspectableEventId(eventId)) return undefined;
@@ -695,7 +816,7 @@ export class SurvivalEventFlow {
     if (!outcome.accepted) {
       this.cancelDeferredPresentationSync(generation);
       this.rejectFocusedChoice();
-      return { accepted: false };
+      return null;
     }
     this.clearFocusedChoiceSelection();
     const context = this.createFocusedChoiceContext(
@@ -709,17 +830,7 @@ export class SurvivalEventFlow {
     const state: FocusedChoiceResolutionState = {
       terminalSnapshot: null,
     };
-    return {
-      accepted: true,
-      playAnimation: () => this.playFocusedChoiceAnimation(context),
-      afterAnimation: () => this.afterFocusedChoiceAnimation(context),
-      clearEvent: (reportCleanupErrors) => this.clearFocusedChoiceEvent(
-        context,
-        reportCleanupErrors,
-      ),
-      renderSnapshot: () => this.renderFocusedChoiceSnapshot(context, state),
-      presentTerminal: () => this.presentFocusedChoiceTerminal(context, state),
-    };
+    return { context, state };
   }
 
   private resolveFocusedChoiceOutcome(
@@ -849,7 +960,7 @@ export class SurvivalEventFlow {
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    this.dependencies.focused.settleForVisibilityChange();
+    // BoatWorld settles camera and item promises.
   }
 
   clear(preserveDeferredSync = false): void {
@@ -2149,6 +2260,7 @@ export class SurvivalEventFlow {
     operation: number,
     alreadyCovered: boolean,
   ): Promise<boolean> {
+    this.clearFocus();
     this.choiceCheckpointReady = false;
     if (this.preparedEventId !== event.id && !this.beginEventBundleLoad(event.id)) return false;
     this.preparedEventId = null;
@@ -2681,12 +2793,11 @@ export class SurvivalEventFlow {
     this.islandConfirmationOpen = false;
     this.cancelDeferredPresentationSync();
     this.preparedEventId = null;
-    this.activeFocusedOperation = null;
     this.eligibility.clear();
     this.presentation = 'idle';
     this.choiceCheckpointReady = false;
     const steps: readonly (() => void)[] = [
-      () => this.dependencies.focused.clear(),
+      () => this.clearFocus(),
       () => this.dependencies.audio.clearEvent(),
       () => this.dependencies.world.setEventSelectedItem?.(null),
       () => this.dependencies.world.setEventEligibleItems?.(null),
@@ -2718,12 +2829,11 @@ export class SurvivalEventFlow {
     this.islandConfirmationOpen = false;
     if (!preserveDeferredSync) this.cancelDeferredPresentationSync();
     this.preparedEventId = null;
-    this.activeFocusedOperation = null;
     this.eligibility.clear();
     this.presentation = 'idle';
     this.choiceCheckpointReady = false;
     const steps: readonly (() => void)[] = [
-      () => this.dependencies.focused.clear(),
+      () => this.clearFocus(),
       () => this.dependencies.audio.clearEvent(),
       () => this.dependencies.world.setEventSelectedItem?.(null),
       () => this.dependencies.world.setEventEligibleItems?.(null),
