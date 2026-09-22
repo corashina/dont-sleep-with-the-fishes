@@ -19,7 +19,7 @@ import {
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { addTransformedMesh as addMesh } from '../rendering/addTransformedMesh';
-import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
+import { collectMeshResources, disposeResourceSets, runCleanupSteps } from '../world/SceneResources';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import {
   eventItemUseDuration,
@@ -555,7 +555,10 @@ export class SupernaturalEventAnimator {
   }
 
   clear(): void {
-    if (this.disposed) return;
+    if (!this.disposed) this.clearPresentation();
+  }
+
+  private clearPresentation(): void {
     this.cancelActive();
     this.stagedEventId = null;
     this.ghostLoopVisible = false;
@@ -570,10 +573,12 @@ export class SupernaturalEventAnimator {
 
   dispose(): void {
     if (this.disposed) return;
-    this.clear();
     this.disposed = true;
-    this.worldRoot.removeFromParent();
-    disposeResourceSets(this.ownedGeometries, this.ownedMaterials, this.ownedTextures);
+    runCleanupSteps([
+      () => this.clearPresentation(),
+      () => this.worldRoot.removeFromParent(),
+      () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials, this.ownedTextures),
+    ]);
   }
 
   private updateReveal(eventId: string, progress: number): void {

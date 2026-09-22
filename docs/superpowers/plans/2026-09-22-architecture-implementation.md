@@ -10,7 +10,7 @@
 
 **Spec:** [Architecture review](../specs/2026-09-22-architecture-review-design.md).
 
-**Status:** Tasks 1–6 implemented. Final review is in progress.
+**Status:** Tasks 1–6 implemented. Review fixes and final verification complete. Browser limits are recorded in the implementation report.
 
 **Baseline:** `af3b1ce6d77c7f0a3ce35752709c3da0b04eeb58`.
 
@@ -747,18 +747,20 @@ Expected: no removed construction path remains. Do not retain aliases for the ol
 
 ## Final verification and handoff
 
-- [ ] Run the full tests and build from the implementation worktree.
-- [ ] Check the diff for accidental assets, package changes, and unrelated Heart of the Sea edits.
-- [ ] Verify affected scenes in a browser after reading the project playtest instructions.
-- [ ] Check Leak item use, a focused event, weather, supernatural events, hidden-page resume, restart, and the rescue ending.
-- [ ] Confirm no duplicated disposal and no missing interaction roots.
-- [ ] Record commands, results, and any unverified browser behavior in the final handoff.
+- [x] Run the full tests and build from the implementation worktree.
+- [x] Check the diff for accidental assets, package changes, and unrelated Heart of the Sea edits.
+- [x] Verify affected scenes in a browser after reading the project playtest instructions.
+- [x] Check Leak, focused events, weather, supernatural events, restart, and rescue in the browser. Verify hidden-page resume through automated tests.
+- [x] Confirm no duplicated disposal and no missing interaction roots.
+- [x] Record commands, results, and any unverified browser behavior in the final handoff.
 
 No broad SurvivalSession rewrite, new save format, gameplay change, or visual redesign belongs in this plan.
 No browser test batch is authorized or started merely by writing this plan.
 
 ## Plan review record
 
-Source and test references were checked against the baseline. This document proposes future edits only.
+Source and test references were checked against the baseline. Implementation and review are complete.
 The retained design travels with this plan in the same worktree.
 The docs/superpowers directory is ignored by the repository. Force-add only these two planning files when tracking this plan.
+
+Implementation results: [Final report](../reports/2026-09-22-architecture-implementation.md).

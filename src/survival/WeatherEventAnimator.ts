@@ -13,7 +13,7 @@ import {
 import type { ItemInstanceId } from '../game/ItemState';
 import { LightningBolt } from '../world/LightningBolt';
 import { FogMonster } from './FogMonster';
-import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
+import { collectMeshResources, disposeResourceSets, runCleanupSteps } from '../world/SceneResources';
 import { clamp01, pulse, smoothstep } from './animationMath';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
@@ -369,7 +369,10 @@ export class WeatherEventAnimator {
   }
 
   clear(): void {
-    if (this.disposed) return;
+    if (!this.disposed) this.clearPresentation();
+  }
+
+  private clearPresentation(): void {
     this.cancelActive();
     this.stagedEventId = null;
     this.hideTransientEffects();
@@ -383,12 +386,14 @@ export class WeatherEventAnimator {
 
   dispose(): void {
     if (this.disposed) return;
-    this.clear();
     this.disposed = true;
-    this.worldRoot.removeFromParent();
-    this.boatRoot.removeFromParent();
-    this.monster?.dispose();
-    disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
+    runCleanupSteps([
+      () => this.clearPresentation(),
+      () => this.worldRoot.removeFromParent(),
+      () => this.boatRoot.removeFromParent(),
+      () => this.monster?.dispose(),
+      () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
+    ]);
   }
 
   private updateReveal(eventId: string, progress: number): void {

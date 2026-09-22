@@ -1318,3 +1318,19 @@ it.each([false, true])('shows grave gains only after dawn and waits for close, d
     rig.flow.dispose();
   }
 });
+
+// Importance: 98/100. Failed focus display must not lock controls or suppress the first error.
+it.each(['projection', 'display'] as const)('recovers a focused %s error', async (source) => {
+  const rig = createRig(snapshot({ state: 'dayEvent', pendingEventId: 'drifting-supplies' }));
+  await rig.flow.revealPending(rig.session.snapshot());
+  const failure = new Error('focus display failed');
+  const target = source === 'projection' ? rig.world.projectEventInteractionBounds : rig.ui.showFocusedEvent;
+  target.mockImplementationOnce(() => { throw failure; });
+  await rig.flow.focusEvent('drifting-supplies');
+  expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce();
+  expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(failure);
+  expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+  expect(rig.flow.isStableChoice()).toBe(true);
+  await rig.flow.focusEvent('drifting-supplies');
+  expect(rig.world.enterFocusedEventView).toHaveBeenCalledTimes(2);
+});

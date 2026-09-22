@@ -462,15 +462,20 @@ export class SurvivalEventFlow {
       this.showFocus();
       this.setBusy(false);
     } catch (error) {
-      if (!this.isCurrentFocus(eventId, 'entering', generation, operation)) return;
-      try { await this.dependencies.world.exitFocusedEventView(); } catch { /* Keep the entry error. */ }
-      if (!this.isCurrentFocus(eventId, 'entering', generation, operation)) return;
-      this.ignoreFocusError(() => this.clearFocus());
-      this.ignoreFocusError(() => this.dependencies.ui.setEventSelection(new Map(), []));
-      this.ignoreFocusError(() => this.setBusy(false));
-      this.ignoreFocusError(() => this.dependencies.ui.restoreCommandFocus());
-      this.dependencies.onFatalError(error);
+      await this.recoverFocusEntry(eventId, generation, operation, error);
     }
+  }
+
+  private async recoverFocusEntry(eventId: InspectableEventId, generation: number,
+    operation: number, error: unknown): Promise<void> {
+    if (this.focusedEventId !== eventId || !this.isCurrent(generation, operation)) return;
+    try { await this.dependencies.world.exitFocusedEventView(); } catch { /* Keep the entry error. */ }
+    if (this.focusedEventId !== eventId || !this.isCurrent(generation, operation)) return;
+    this.ignoreFocusError(() => this.clearFocus());
+    this.ignoreFocusError(() => this.dependencies.ui.setEventSelection(new Map(), []));
+    this.ignoreFocusError(() => this.setBusy(false));
+    this.ignoreFocusError(() => this.dependencies.ui.restoreCommandFocus());
+    this.dependencies.onFatalError(error);
   }
 
   async chooseFocused(choice: FocusedEventChoiceSelection): Promise<void> {
