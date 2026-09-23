@@ -305,7 +305,6 @@ const fragmentShader = `
       * moonSample.a
       * uMoonVisibility
       * moonClarity
-      * mix(1.0, 2.2, uFogVolume)
       * (1.0 - cloud.a);
     float moonHalo = exp(
       -moonRadialDistance * moonRadialDistance * 1.65
@@ -354,8 +353,6 @@ const fragmentShader = `
     if (uFogVolume > 0.001) {
       vec3 fogLightDirection = uMoonVisibility > 0.0 ? moonDirection : sunDirection;
       vec3 fogLightColor = uMoonColor * uMoonVisibility + uSunColor * uSunVisibility;
-      float moonGlow = exp(-moonRadialDistance * moonRadialDistance * 0.08);
-      color += uMoonColor * uMoonVisibility * moonGlow * 0.075 * uFogVolume;
       vec4 fog = seaFog(cameraPosition, direction, 110.0, uFogTime,
         uFogColor, fogLightColor, fogLightDirection);
       color = mix(color, color * fog.a + fog.rgb, uFogVolume);

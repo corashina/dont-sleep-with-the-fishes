@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FogExp2, Scene, Texture, Vector3 } from 'three';
+import { FogExp2, Scene, Texture, Vector3, type Color } from 'three';
 import { Skybox } from '../src/world/Skybox';
 import { Environment } from '../src/world/Environment';
 
@@ -20,6 +20,11 @@ describe('fog weather visibility', () => {
       expect(transmission(24)).toBeLessThan(0.05);
       expect(environment.atmosphere.starVisibility).toBe(0);
       expect(environment.atmosphere.fogVolume).toBe(1);
+      // Importance: 92/100. A uniform grey sky erases the visible height separation.
+      const luminance = (color: Color) => color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722;
+      const palette = environment.atmosphere;
+      expect(luminance(palette.horizonColor)).toBeGreaterThan(luminance(palette.zenithColor) * 2);
+      expect(luminance(palette.upperColor)).toBeLessThan(luminance(palette.horizonColor) * 0.8);
       if (phase === 'night') expect(environment.atmosphere.moonVisibility).toBeGreaterThan(0.5);
       expect(scene.getObjectByName('weather-mist')!.visible).toBe(false);
 
