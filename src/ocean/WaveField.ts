@@ -1,3 +1,5 @@
+import { WAVE_MODULATION as modulation } from './waveModulation';
+
 export interface WaveComponent {
   direction: readonly [number, number];
   amplitude: number;
@@ -78,16 +80,31 @@ export function sampleWaveFieldInto(
     const dx = wave.direction[0] / directionLength;
     const dz = wave.direction[1] / directionLength;
     const waveNumber = (Math.PI * 2) / wave.wavelength;
-    const amplitude = wave.amplitude * amplitudeScale;
-    const theta = waveNumber * (dx * x + dz * z) + wave.speed * timeSeconds + wave.phase;
+    const baseAmplitude = wave.amplitude * amplitudeScale;
+    const bendGradientX = waveNumber * (dx * modulation.bendAlong - dz * modulation.bendAcross);
+    const bendGradientZ = waveNumber * (dz * modulation.bendAlong + dx * modulation.bendAcross);
+    const groupGradientX = waveNumber * (dx * modulation.groupAlong - dz * modulation.groupAcross);
+    const groupGradientZ = waveNumber * (dz * modulation.groupAlong + dx * modulation.groupAcross);
+    const bend = bendGradientX * x + bendGradientZ * z
+      + wave.speed * timeSeconds * modulation.bendSpeed + wave.phase * modulation.bendPhase;
+    const group = groupGradientX * x + groupGradientZ * z
+      + wave.speed * timeSeconds * modulation.groupSpeed + wave.phase * modulation.groupPhase;
+    const theta = waveNumber * (dx * x + dz * z) + wave.speed * timeSeconds + wave.phase
+      + modulation.bendStrength * Math.sin(bend);
+    const bendDerivative = modulation.bendStrength * Math.cos(bend);
+    const phaseGradientX = waveNumber * dx + bendDerivative * bendGradientX;
+    const phaseGradientZ = waveNumber * dz + bendDerivative * bendGradientZ;
+    const packet = 0.5 + 0.5 * Math.sin(group);
+    const amplitude = baseAmplitude * (modulation.groupMinimum + modulation.groupRange * packet * packet);
+    const amplitudeDerivative = baseAmplitude * modulation.groupRange * packet * Math.cos(group);
     const sine = Math.sin(theta);
     const cosine = Math.cos(theta);
 
     height += amplitude * sine;
     displacementX += wave.steepness * amplitude * dx * cosine;
     displacementZ += wave.steepness * amplitude * dz * cosine;
-    derivativeX += amplitude * waveNumber * dx * cosine;
-    derivativeZ += amplitude * waveNumber * dz * cosine;
+    derivativeX += amplitudeDerivative * groupGradientX * sine + amplitude * phaseGradientX * cosine;
+    derivativeZ += amplitudeDerivative * groupGradientZ * sine + amplitude * phaseGradientZ * cosine;
   }
 
   if (vortex !== undefined && vortex.strength !== 0) {

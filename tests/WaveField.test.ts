@@ -90,43 +90,77 @@ describe('WaveField', () => {
     expect(sample.normal.z).toBeCloseTo(0, 10);
   });
 
-  it('matches an analytic single-wave sample with a non-unit direction', () => {
+  // Importance: 95/100. Boat tilt must follow the changing water slope.
+  it('matches height derivatives across positions, times, and weather strengths', () => {
+    const epsilon = 0.0001;
+    for (const time of [0, 8.25, 73]) {
+      for (const [x, z] of [[0, 0], [7, -11], [-38, 62]]) {
+        for (const scale of [0, 0.65, 1, 1.8]) {
+          const sample = sampleWaveField(DEFAULT_WAVES, time, x!, z!, scale);
+          const slopeX = (
+            sampleWaveField(DEFAULT_WAVES, time, x! + epsilon, z!, scale).height
+            - sampleWaveField(DEFAULT_WAVES, time, x! - epsilon, z!, scale).height
+          ) / (2 * epsilon);
+          const slopeZ = (
+            sampleWaveField(DEFAULT_WAVES, time, x!, z! + epsilon, scale).height
+            - sampleWaveField(DEFAULT_WAVES, time, x!, z! - epsilon, scale).height
+          ) / (2 * epsilon);
+          expect(-sample.normal.x / sample.normal.y).toBeCloseTo(slopeX, 7);
+          expect(-sample.normal.z / sample.normal.y).toBeCloseTo(slopeZ, 7);
+        }
+      }
+    }
+  });
+
+  // Importance: 95/100. Wave direction length must not change buoyancy.
+  it('normalizes non-unit wave directions', () => {
     const wave: WaveComponent = {
-      direction: [3, 4],
-      amplitude: 0.6,
-      wavelength: 8,
-      speed: 0.7,
-      steepness: 0.45,
-      phase: 0.35,
+      direction: [3, 4], amplitude: 0.6, wavelength: 8,
+      speed: 0.7, steepness: 0.45, phase: 0.35,
     };
-    const timeSeconds = 1.75;
-    const x = 2.5;
-    const z = -1.25;
-    const amplitudeScale = 1.3;
+    const normalized = { ...wave, direction: [0.6, 0.8] as const };
+    expect(sampleWaveField([wave], 1.75, 2.5, -1.25, 1.3))
+      .toEqual(sampleWaveField([normalized], 1.75, 2.5, -1.25, 1.3));
+  });
 
-    const sample = sampleWaveField([wave], timeSeconds, x, z, amplitudeScale);
-
-    const directionX = 3 / 5;
-    const directionZ = 4 / 5;
-    const scaledAmplitude = 0.6 * amplitudeScale;
-    const waveNumber = (Math.PI * 2) / 8;
-    const theta = waveNumber * (directionX * x + directionZ * z) + 0.7 * timeSeconds + 0.35;
-    const expectedHeight = scaledAmplitude * Math.sin(theta);
-    const expectedDisplacementX = 0.45 * scaledAmplitude * directionX * Math.cos(theta);
-    const expectedDisplacementZ = 0.45 * scaledAmplitude * directionZ * Math.cos(theta);
-    const derivativeX = scaledAmplitude * waveNumber * directionX * Math.cos(theta);
-    const derivativeZ = scaledAmplitude * waveNumber * directionZ * Math.cos(theta);
-    const normalLength = Math.hypot(-derivativeX, 1, -derivativeZ);
-    const expectedNormalX = -derivativeX / normalLength;
-    const expectedNormalY = 1 / normalLength;
-    const expectedNormalZ = -derivativeZ / normalLength;
-
-    expect(sample.height).toBeCloseTo(expectedHeight, 10);
-    expect(sample.displacementX).toBeCloseTo(expectedDisplacementX, 10);
-    expect(sample.displacementZ).toBeCloseTo(expectedDisplacementZ, 10);
-    expect(sample.normal.x).toBeCloseTo(expectedNormalX, 10);
-    expect(sample.normal.y).toBeCloseTo(expectedNormalY, 10);
-    expect(sample.normal.z).toBeCloseTo(expectedNormalZ, 10);
+  // Importance: 90/100. Prevent the evenly spaced wave pattern from returning.
+  it('breaks repeated crests along and across each wave without changing average energy substantially', () => {
+    for (const wave of DEFAULT_WAVES) {
+      const length = Math.hypot(...wave.direction);
+      const dx = wave.direction[0] / length;
+      const dz = wave.direction[1] / length;
+      let acrossDifference = 0;
+      let repeatDifference = 0;
+      let energy = 0;
+      let smallWaves = 0;
+      let largeWaves = 0;
+      const samples = 1024;
+      for (let i = 0; i < samples; i += 1) {
+        const x = (i % 32) * 3.71;
+        const z = Math.floor(i / 32) * 4.13;
+        const sample = sampleWaveField([wave], 17, x, z);
+        const across = sampleWaveField([wave], 17, x - dz * 9, z + dx * 9);
+        const repeat = sampleWaveField([wave], 17, x + dx * wave.wavelength, z + dz * wave.wavelength);
+        acrossDifference += (sample.height - across.height) ** 2;
+        repeatDifference += (sample.height - repeat.height) ** 2;
+        energy += sample.height ** 2;
+        const relativeAmplitude = Math.hypot(
+          sample.height,
+          Math.hypot(sample.displacementX, sample.displacementZ) / wave.steepness,
+        ) / wave.amplitude;
+        if (relativeAmplitude < 0.4) smallWaves += 1;
+        if (relativeAmplitude > 1.65) largeWaves += 1;
+        expect(relativeAmplitude).toBeGreaterThanOrEqual(0.25 - 1e-10);
+        expect(relativeAmplitude).toBeLessThanOrEqual(1.85 + 1e-10);
+      }
+      expect(Math.sqrt(acrossDifference / samples)).toBeGreaterThan(wave.amplitude * 0.15);
+      expect(Math.sqrt(repeatDifference / samples)).toBeGreaterThan(wave.amplitude * 0.15);
+      expect(smallWaves).toBeGreaterThan(samples * 0.15);
+      expect(largeWaves).toBeGreaterThan(samples * 0.1);
+      const relativeEnergy = energy / samples / (wave.amplitude ** 2 / 2);
+      expect(relativeEnergy).toBeGreaterThan(0.8);
+      expect(relativeEnergy).toBeLessThan(1.2);
+    }
   });
 
   it('rejects wave counts that cannot match the four-wave shader', () => {

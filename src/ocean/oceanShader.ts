@@ -1,4 +1,5 @@
 import { seaFogShader } from '../world/seaFogShader';
+import { MODULATED_WAVE_GLSL } from './waveModulation';
 import {
   Color,
   type IUniform,
@@ -116,6 +117,8 @@ export const OCEAN_VERTEX_SHADER = `
   varying vec2 vOceanPosition;
   varying vec3 vWorldPosition;
 
+  ${MODULATED_WAVE_GLSL}
+
   void main() {
     vec3 displaced = position;
     vec2 worldXZ = position.xz + uOrigin;
@@ -127,18 +130,12 @@ export const OCEAN_VERTEX_SHADER = `
     );
     float height = 0.0;
     for (int i = 0; i < 4; i++) {
-      vec2 direction = normalize(uDirections[i]);
       float wavelength = uParameters[i].y;
       float resolvedGeometryWave = smoothstep(4.0, 11.0, wavelength);
       float geometryWeight = mix(1.0, resolvedGeometryWave, geometryLod);
-      float amplitude = uParameters[i].x * uAmplitudeScale * geometryWeight;
-      float waveNumber = 6.28318530718 / wavelength;
-      float theta = waveNumber * dot(direction, worldXZ) + uParameters[i].z * uTime + uPhases[i];
-      float waveSin = sin(theta);
-      float waveCos = cos(theta);
-      height += amplitude * waveSin;
-      displaced.x += uParameters[i].w * amplitude * direction.x * waveCos;
-      displaced.z += uParameters[i].w * amplitude * direction.y * waveCos;
+      OceanWaveSample wave = sampleOceanWave(i, worldXZ);
+      height += wave.height * geometryWeight;
+      displaced.xz += wave.displacement * geometryWeight;
     }
     if (uVortexStrength != 0.0) {
       vec2 vortexDelta = worldXZ - uVortexCenter;
@@ -201,6 +198,8 @@ export const OCEAN_FRAGMENT_SHADER = `
   varying vec2 vOceanPosition;
   varying vec3 vWorldPosition;
 
+  ${MODULATED_WAVE_GLSL}
+
   void applyVortexDepression(
     vec2 worldPosition,
     inout float height,
@@ -235,15 +234,9 @@ export const OCEAN_FRAGMENT_SHADER = `
     height = 0.0;
     derivative = vec2(0.0);
     for (int i = 0; i < 4; i++) {
-      vec2 direction = normalize(uDirections[i]);
-      float amplitude = uParameters[i].x * uAmplitudeScale;
-      float waveNumber = 6.28318530718 / uParameters[i].y;
-      float theta = waveNumber * dot(direction, worldPosition)
-        + uParameters[i].z * uTime
-        + uPhases[i];
-      float waveCos = cos(theta);
-      height += amplitude * sin(theta);
-      derivative += amplitude * waveNumber * direction * waveCos;
+      OceanWaveSample wave = sampleOceanWave(i, worldPosition);
+      height += wave.height;
+      derivative += wave.slope;
     }
     applyVortexDepression(worldPosition, height, derivative);
   }

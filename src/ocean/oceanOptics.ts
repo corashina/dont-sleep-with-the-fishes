@@ -44,16 +44,11 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
     float geometryLod = smoothstep(55.0, 140.0, vViewDepth);
     for (int i = 0; i < 4; i++) {
       vec2 d = normalize(uDirections[i]);
-      float k = 6.28318530718 / uParameters[i].y;
-      float a = uParameters[i].x * uAmplitudeScale;
       float weight = mix(1.0, smoothstep(4.0, 11.0, uParameters[i].y), geometryLod);
-      float phase = k * dot(d, vOceanPosition) + uParameters[i].z * uTime + uPhases[i];
-      float vertical = a * k * cos(phase);
-      float waveSin = sin(phase);
-      height += a * waveSin;
-      float horizontal = uParameters[i].w * a * k * waveSin * weight;
-      tangentX += vec3(-horizontal * d.x * d.x, vertical * d.x * weight, -horizontal * d.x * d.y);
-      tangentZ += vec3(-horizontal * d.x * d.y, vertical * d.y * weight, -horizontal * d.y * d.y);
+      OceanWaveSample wave = sampleOceanWave(i, vOceanPosition);
+      height += wave.height;
+      tangentX += vec3(d.x * wave.horizontalSlope.x, wave.slope.x, d.y * wave.horizontalSlope.x) * weight;
+      tangentZ += vec3(d.x * wave.horizontalSlope.y, wave.slope.y, d.y * wave.horizontalSlope.y) * weight;
     }
     vec2 vortexDerivative = vec2(0.0);
     applyVortexDepression(vOceanPosition, height, vortexDerivative);
