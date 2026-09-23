@@ -1,3 +1,4 @@
+import { WEATHER_PARTICLE_LAYER } from './rendering/renderLayers';
 import type { Clock, PerspectiveCamera, WebGLRenderer } from 'three';
 import type { GameRuntimeDependencies } from './app/GameRuntimeDependencies';
 import type { GamePhase, PhaseContext, MenuPhaseContext, ShipPhaseContext, SurvivalPhaseContext } from './app/GamePhase';
@@ -136,6 +137,7 @@ export class Game {
     this.renderer = renderer;
     this.sceneRenderer = sceneRenderer;
     this.camera = camera;
+    this.camera.layers.enable(WEATHER_PARTICLE_LAYER);
     this.clock = clock;
     this.resources = resources;
     this.systemTuning = systemTuning;

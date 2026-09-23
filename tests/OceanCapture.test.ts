@@ -1,5 +1,9 @@
 // Importance: 10/10. Protects water capture state, sizing, and reflection projection.
 import {
+  BoxGeometry,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
   Camera,
   Matrix4,
   Object3D,
@@ -11,6 +15,9 @@ import {
 } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OceanCapture } from '../src/ocean/OceanCapture';
+import { WEATHER_PARTICLE_LAYER } from '../src/rendering/renderLayers';
+import { WeatherEffects } from '../src/world/WeatherEffects';
+import { BoatRainEffects } from '../src/world/BoatRainEffects';
 
 type RenderRecord = {
   camera: Camera;
@@ -118,12 +125,13 @@ describe('OceanCapture', () => {
     expect(capture.colorTexture.image).toMatchObject({ width: 1024, height: 576 });
     expect(capture.depthTexture.image).toMatchObject({ width: 1024, height: 576 });
     expect(capture.reflectionTexture.image).toMatchObject({ width: 1024, height: 576 });
-    expect(capture.reflectionDepthTexture.image).toMatchObject({ width: 1024, height: 576 });
     expect(testRenderer.records).toHaveLength(2);
     expect(testRenderer.records[0]).toMatchObject({ camera, waterVisible: false });
     expect(testRenderer.records[1]!.camera).not.toBe(camera);
+    expect(testRenderer.records[1]!.camera.userData.hideSkyClouds).toBe(true);
+    expect(camera.userData.hideSkyClouds).toBeUndefined();
     expect(testRenderer.records[1]!.camera.layers.mask).toBe(camera.layers.mask);
-    expect(testRenderer.records[1]!.target!.depthTexture).toBe(capture.reflectionDepthTexture);
+    expect(testRenderer.records[1]!.target!.depthBuffer).toBe(true);
     expect(testRenderer.records.every((record) => record.shadowNeedsUpdate === false)).toBe(true);
     expect(capture.viewport.toArray()).toEqual([0, 0, 3840, 2160]);
     expectMatrixClose(capture.inverseProjection, camera.projectionMatrixInverse);
@@ -140,6 +148,48 @@ describe('OceanCapture', () => {
       .multiply(camera.projectionMatrix)
       .multiply(testRenderer.records[1]!.camera.matrixWorldInverse);
     expectMatrixClose(capture.reflectionMatrix, expectedReflection);
+    capture.dispose();
+  });
+
+
+  // Importance: 95/100. Keep weather visible while excluding its extra reflection draws.
+  it('excludes weather particles from reflections but preserves the main view and lightning', () => {
+    const capture = new OceanCapture();
+    const testRenderer = createRenderer();
+    const { scene, water, camera } = createSceneInput();
+    camera.layers.set(0);
+    camera.layers.enable(WEATHER_PARTICLE_LAYER);
+    const originalMask = camera.layers.mask;
+    const weather = new WeatherEffects(scene, () => 0.5);
+    weather.setWeather('thunderstorm');
+    const boat = new Group();
+    const hull = new Mesh(new BoxGeometry(3, 1, 5), new MeshBasicMaterial());
+    boat.add(hull);
+    scene.add(boat);
+    const boatRain = new BoatRainEffects(boat);
+    boatRain.setIntensity(1);
+    const names = ['weather-rain', 'weather-rain-far', 'weather-mist',
+      'weather-impacts', 'weather-spray', 'boat-rain-splashes'];
+    const effects = names.map((name) => scene.getObjectByName(name)!);
+    testRenderer.setWater(water);
+    capture.update(testRenderer.renderer, scene, camera, water);
+    const refraction = testRenderer.records[0]!.camera;
+    const reflection = testRenderer.records[1]!.camera;
+    for (const effect of effects) {
+      expect(effect.visible, effect.name).toBe(true);
+      expect(camera.layers.test(effect.layers), effect.name).toBe(true);
+      expect(refraction.layers.test(effect.layers), effect.name).toBe(true);
+      expect(reflection.layers.test(effect.layers), effect.name).toBe(false);
+    }
+    for (const object of [hull, scene.getObjectByName('weather-lightning-light')!,
+      scene.getObjectByName('weather-lightning-fill')!, scene.getObjectByName('weather-lightning-bolt-1')!]) {
+      expect(reflection.layers.test(object.layers), object.name).toBe(true);
+    }
+    expect(camera.layers.mask).toBe(originalMask);
+    boatRain.dispose();
+    weather.dispose();
+    hull.geometry.dispose();
+    hull.material.dispose();
     capture.dispose();
   });
 

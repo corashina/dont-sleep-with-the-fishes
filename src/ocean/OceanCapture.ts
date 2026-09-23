@@ -1,3 +1,4 @@
+import { WEATHER_PARTICLE_LAYER } from '../rendering/renderLayers';
 import {
   DepthTexture,
   HalfFloatType,
@@ -24,7 +25,6 @@ export class OceanCapture {
   readonly colorTexture: Texture;
   readonly depthTexture: DepthTexture;
   readonly reflectionTexture: Texture;
-  readonly reflectionDepthTexture: DepthTexture;
   readonly reflectionMatrix = new Matrix4();
   readonly inverseProjection = new Matrix4();
   readonly cameraWorld = new Matrix4();
@@ -64,12 +64,10 @@ export class OceanCapture {
       multisample: 0,
     });
     this.reflector.name = 'ocean-reflection-capture';
+    this.reflector.camera.userData.hideSkyClouds = true;
     this.reflector.rotateX(-Math.PI / 2);
     this.reflector.updateMatrixWorld(true);
     this.reflectionTexture = this.reflector.getRenderTarget().texture;
-    this.reflectionDepthTexture = new DepthTexture(1, 1, UnsignedIntType);
-    this.reflectionDepthTexture.name = 'ocean-reflection-depth';
-    this.reflector.getRenderTarget().depthTexture = this.reflectionDepthTexture;
     this.reflectionTexture.name = 'ocean-reflection';
     this.reflectionTexture.colorSpace = LinearSRGBColorSpace;
     this.reflectorTextureMatrix = (
@@ -119,6 +117,7 @@ export class OceanCapture {
       renderer.render(scene, camera);
 
       this.reflector.camera.layers.mask = camera.layers.mask;
+      this.reflector.camera.layers.disable(WEATHER_PARTICLE_LAYER);
       this.reflector.visible = true;
       this.reflector.forceUpdate = true;
       this.reflector.onBeforeRender(
@@ -175,7 +174,5 @@ export class OceanCapture {
     this.depthTexture.image.width = width;
     this.depthTexture.image.height = height;
     this.reflector.getRenderTarget().setSize(width, height);
-    this.reflectionDepthTexture.image.width = width;
-    this.reflectionDepthTexture.image.height = height;
   }
 }

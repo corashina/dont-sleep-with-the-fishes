@@ -28,8 +28,6 @@ export interface OceanShaderUniforms {
   uWaterColor: IUniform<Texture | null>;
   uWaterDepth: IUniform<Texture | null>;
   uWaterReflection: IUniform<Texture | null>;
-  uWaterReflectionDepth: IUniform<Texture | null>;
-  uWaterReflectionSky: IUniform<Color>;
   uWaterOpenRadiance: IUniform<Color>;
   uWaterReflectionMatrix: IUniform<Matrix4>;
   uWaterInverseProjection: IUniform<Matrix4>;
@@ -460,8 +458,6 @@ export function createOceanShaderDefinition(quality: WaterQuality): Readonly<{
     uWaterColor: { value: null },
     uWaterDepth: { value: null },
     uWaterReflection: { value: null },
-    uWaterReflectionDepth: { value: null },
-    uWaterReflectionSky: { value: new Color() },
     uWaterOpenRadiance: { value: new Color() },
     uWaterReflectionMatrix: { value: new Matrix4() },
     uWaterInverseProjection: { value: new Matrix4() },

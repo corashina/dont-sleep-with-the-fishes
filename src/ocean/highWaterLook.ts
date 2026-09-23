@@ -6,7 +6,6 @@ export const HIGH_WATER_LOOK = {
   day: {
     fogColor: new Color('#173d4a'),
     skyColor: new Color('#8bb8bd'),
-    reflectionColor: new Color('#78a7b0'),
     sunColor: new Color('#ffe0a2'),
     fogDensity: 0.006,
     lightStrength: 1,
@@ -16,7 +15,6 @@ export const HIGH_WATER_LOOK = {
   night: {
     fogColor: new Color('#0b2333'),
     skyColor: new Color('#173d5e'),
-    reflectionColor: new Color('#071523'),
     sunColor: new Color('#8ab3d9'),
     fogDensity: 0.012,
     lightStrength: 0.25,
@@ -35,6 +33,5 @@ export function applyHighWaterLook(
   uniforms.uSkyColor.value.copy(look.skyColor);
   uniforms.uSunColor.value.copy(look.sunColor);
   uniforms.uDirectLightStrength.value = look.lightStrength;
-  uniforms.uWaterReflectionSky.value.copy(look.reflectionColor);
   uniforms.uWaterOpenRadiance.value.copy(look.openRadiance);
 }

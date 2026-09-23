@@ -59,6 +59,8 @@ const vertexShader = `
   void main() {
     vSkyDirection = normalize(position);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    // The sky is infinitely distant, outside the water's oblique clip plane.
+    gl_Position.z = gl_Position.w;
   }
 `;
 
@@ -456,6 +458,14 @@ export class Skybox {
     sceneSeaFogUniforms.set(scene, this.material.uniforms);
     this.mesh = new Mesh(new SphereGeometry(80, 48, 24), this.material);
     this.mesh.name = 'procedural-skybox';
+    this.mesh.onBeforeRender = (_renderer, _scene, camera) => {
+      this.material.uniforms.uCloudCoverage!.value = camera.userData.hideSkyClouds === true
+        ? 0 : this.bloodPalette.cloudCoverage;
+      this.material.uniformsNeedUpdate = true;
+      // Reflections render through a second camera below the water plane.
+      this.mesh.position.setFromMatrixPosition(camera.matrixWorld);
+      this.mesh.updateMatrixWorld();
+    };
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = -1000;
     scene.add(this.mesh);

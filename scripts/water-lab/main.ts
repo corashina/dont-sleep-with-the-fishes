@@ -1,3 +1,7 @@
+import { WEATHER_PARTICLE_LAYER } from '../../src/rendering/renderLayers';
+import { WeatherEffects } from '../../src/world/WeatherEffects';
+import { BoatRainEffects } from '../../src/world/BoatRainEffects';
+import { checkReflections } from './reflectionChecks';
 import {
   AmbientLight,
   BoxGeometry,
@@ -14,28 +18,34 @@ import {
   Vector3,
 } from 'three';
 import { OceanRenderer, type OceanAtmosphere } from '../../src/ocean/OceanRenderer';
+import { SkyAssets } from '../../src/world/SkyAssets';
+import { Skybox } from '../../src/world/Skybox';
 import { HIGH_WATER_LOOK } from '../../src/ocean/highWaterLook';
 import { createWaterLabHull } from './hull';
 import { DEFAULT_WAVES, createWaveSample, sampleWaveFieldInto } from '../../src/ocean/WaveField';
 import type { WaterQuality } from '../../src/rendering/waterQuality';
 import { PostProcessingPipeline } from '../../src/rendering/PostProcessingPipeline';
-import type { SceneVisualState } from '../../src/rendering/SceneRenderer';
+import type { SurvivalVisualState } from '../../src/rendering/SceneRenderer';
 
 const stage = document.querySelector<HTMLElement>('#stage')!;
 const diagnostics = document.querySelector<HTMLElement>('#diagnostics')!;
 const errorBox = document.querySelector<HTMLElement>('#error')!;
 const scene = new Scene();
 const camera = new PerspectiveCamera(48, 1, 0.1, 1600);
+camera.layers.enable(WEATHER_PARTICLE_LAYER);
 const renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.info.autoReset = false;
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setClearColor('#102d3a');
 stage.append(renderer.domElement);
 
+const skyAssets = await SkyAssets.load();
+const skyState = { weather: 'calm' as const, phase: 'day' as 'day' | 'night', severity: 0 };
+const sky = new Skybox(scene, skyState, skyAssets.moonTexture);
 const ocean = new OceanRenderer('high');
 let pipeline: PostProcessingPipeline | null = null;
 let useComposer = false;
-const visualState: SceneVisualState = { kind: 'survival', elapsedSeconds: 0, phase: 'day', weather: 'calm' };
+const visualState: SurvivalVisualState = { kind: 'survival', elapsedSeconds: 0, phase: 'day', weather: 'calm' };
 scene.add(ocean.mesh);
 scene.fog = new Fog('#173d4a', 35, 170);
 const horizonColor = new Color('#8bb8bd');
@@ -51,7 +61,7 @@ floor.position.y = -3.4;
 scene.add(floor);
 
 const markerMaterial = [new MeshStandardMaterial({ color: '#d06a45', roughness: .62 }), new MeshStandardMaterial({ color: '#e4c35d', roughness: .55 }), new MeshStandardMaterial({ color: '#b8e0d2', roughness: .5 })];
-for (const [index, [x, z]] of [[-7, -8], [4, -12], [10, -5]].entries()) {
+for (const [index, [x, z]] of ([[-7, -8], [4, -12], [10, -5]] as const).entries()) {
   const marker = new Mesh(new BoxGeometry(1.1, 5.8, 1.1), markerMaterial[index % markerMaterial.length]!);
   marker.position.set(x, -1.2, z);
   scene.add(marker);
@@ -64,15 +74,23 @@ for (const [x, z, y] of [[-4, -3, -1], [3, -7, -2], [8, -11, -2.7]] as const) {
 
 const { hull, body: hullBody, exclusion: hullExclusion } = createWaterLabHull();
 scene.add(hull);
+const storm = new URLSearchParams(location.search).has('storm');
+const weather = new WeatherEffects(scene, () => 0.5);
+weather.setWeather(storm ? 'thunderstorm' : 'calm');
+weather.setLightningView(camera);
+const boatRain = new BoatRainEffects(hull);
+boatRain.setIntensity(storm ? 1 : 0);
+
 
 let quality: WaterQuality = 'high';
-let amplitudeScale = 1;
+let amplitudeScale = .62;
 let lightMode: 'day' | 'night' = 'day';
 let cameraMode: 'near' | 'horizon' | 'top' = 'near';
 let moving = true;
-let paused = false;
+const fixedTime = new URLSearchParams(location.search).get('time');
+let paused = fixedTime !== null;
 let hullHeight = 0;
-let time = 0;
+let time = Number.isFinite(Number(fixedTime)) ? Math.max(0, Number(fixedTime)) : 0;
 let lastFrame = performance.now();
 let cpuMs = 0;
 let lastErrorPoll = 0;
@@ -81,7 +99,7 @@ let lastFrameInterval = 0;
 const errorLogs: string[] = [];
 const sample = createWaveSample();
 const exclusions = [hullExclusion] as const;
-const atmosphere: OceanAtmosphere = { phase: lightMode, fogColor: (scene.fog as Fog).color, horizonColor, skyColor, sunColor: sun.color, sunVisibility: 1 };
+const atmosphere: OceanAtmosphere = { phase: lightMode, fogVolume: 0, fogTime: 0, fogLightColor: new Color(), fogColor: (scene.fog as Fog).color, horizonColor, skyColor, sunColor: sun.color, sunVisibility: 1 };
 renderer.debug.onShaderError = (gl, program, vertexShader, fragmentShader) => {
   shaderErrors += 1;
   const details = [
@@ -105,7 +123,8 @@ function updateCamera(): void {
 function updateAtmosphere(): void {
   const night = lightMode === 'night';
   const look = HIGH_WATER_LOOK[lightMode];
-  scene.background = look.reflectionColor.clone();
+  skyState.phase = lightMode;
+  sky.settleTransition(skyState, camera.position);
   scene.fog = new Fog(look.fogColor, 35, 170);
   horizonColor.copy(look.skyColor);
   skyColor.copy(horizonColor);
@@ -124,6 +143,9 @@ function frame(now: number): void {
   hull.position.y = sample.height + .18 + hullHeight;
   hull.rotation.z = sample.normal.x * -.22;
   hull.rotation.x = sample.normal.z * .22;
+  sky.update(paused ? 0 : delta, skyState, camera.position);
+  weather.update(time, paused ? 0 : delta, camera.position);
+  boatRain.update(time, paused ? 0 : delta);
   ocean.follow(camera.position.x, camera.position.z);
   hullBody.updateWorldMatrix(true, false);
   hullExclusion.worldToLocal.copy(hullBody.matrixWorld).invert();
@@ -135,6 +157,7 @@ function frame(now: number): void {
   const start = performance.now();
   renderer.info.reset();
   visualState.elapsedSeconds = time;
+  visualState.phase = lightMode;
   if (useComposer) pipeline!.render(scene, camera, visualState);
   else renderer.render(scene, camera);
   cpuMs = performance.now() - start;
@@ -161,5 +184,13 @@ setPressed('[data-quality]', quality); setPressed('[data-state]', 'calm'); setPr
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight, false); pipeline?.resize(window.innerWidth, window.innerHeight, renderer.getPixelRatio()); });
 window.addEventListener('error', (event) => { errorLogs.push(`runtime: ${event.message}`); errorBox.textContent = event.message; errorBox.style.display = 'block'; });
 window.addEventListener('unhandledrejection', (event) => { const message = event.reason instanceof Error ? event.reason.message : String(event.reason); errorLogs.push(`runtime: ${message}`); errorBox.textContent = message; errorBox.style.display = 'block'; });
+document.querySelector<HTMLButtonElement>('#pause')!.textContent = paused ? 'Resume' : 'Pause';
 window.dispatchEvent(new Event('resize'));
+if (new URLSearchParams(location.search).has('checks')) {
+  const report = document.createElement('pre');
+  report.id = 'reflection-checks';
+  report.style.cssText = 'position:fixed;right:16px;top:16px;background:#102d3a;padding:16px;color:white';
+  report.textContent = checkReflections(renderer);
+  document.body.append(report);
+}
 try { requestAnimationFrame(frame); } catch (cause) { errorBox.textContent = cause instanceof Error ? cause.message : String(cause); errorBox.style.display = 'block'; }

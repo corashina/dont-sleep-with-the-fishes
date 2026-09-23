@@ -1,3 +1,4 @@
+import { WEATHER_PARTICLE_LAYER } from '../rendering/renderLayers';
 import {
   Color, DoubleSide, Float32BufferAttribute, InstancedBufferAttribute,
   InstancedBufferGeometry, Mesh, ShaderMaterial, Vector3,
@@ -76,6 +77,7 @@ export class RainField extends Mesh<InstancedBufferGeometry, ShaderMaterial> {
       transparent: true, depthWrite: false, side: DoubleSide, toneMapped: false,
     }));
     this.name = name;
+    this.layers.set(WEATHER_PARTICLE_LAYER);
     this.frustumCulled = false;
     this.visible = false;
   }
