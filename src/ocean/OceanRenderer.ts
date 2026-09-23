@@ -278,7 +278,6 @@ export class OceanRenderer {
     this.uniforms.uWaterColor.value = capture.colorTexture;
     this.uniforms.uWaterDepth.value = capture.depthTexture;
     this.uniforms.uWaterReflection.value = capture.reflectionTexture;
-    this.uniforms.uWaterReflectionDepth.value = capture.reflectionDepthTexture;
   }
 
   private readonly prepareWater = (
@@ -317,7 +316,6 @@ export class OceanRenderer {
     this.uniforms.uWaterColor.value = null;
     this.uniforms.uWaterDepth.value = null;
     this.uniforms.uWaterReflection.value = null;
-    this.uniforms.uWaterReflectionDepth.value = null;
     capture?.dispose();
   }
 

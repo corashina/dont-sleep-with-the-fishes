@@ -1,11 +1,23 @@
+export const OCEAN_REFLECTION_FUNCTIONS = /* glsl */ `
+  vec3 projectWaterReflection(vec3 position, vec3 normal) {
+    // Distort in world space before projection so camera rotation and aspect
+    // affect the wave offset and the captured scene in the same way.
+    vec3 samplePosition = position + vec3(normal.x, 0.0, normal.z) * 0.48;
+    vec4 projected = uWaterReflectionMatrix * vec4(samplePosition, 1.0);
+    return vec3(projected.xy / max(projected.w, 0.001), projected.w);
+  }
+  vec3 sampleWaterReflection(vec2 uv) {
+    // Sky and transparent effects contribute color even without depth writes.
+    return texture2D(uWaterReflection, uv).rgb;
+  }
+`;
+
 /** High water optics. All colors and captured scene textures use linear light. */
 export const OCEAN_OPTICS_UNIFORMS = /* glsl */ `
   #ifdef HIGH_QUALITY_WATER
   uniform sampler2D uWaterColor;
   uniform sampler2D uWaterDepth;
   uniform sampler2D uWaterReflection;
-  uniform sampler2D uWaterReflectionDepth;
-  uniform vec3 uWaterReflectionSky;
   uniform vec3 uWaterOpenRadiance;
   uniform mat4 uWaterReflectionMatrix;
   uniform mat4 uWaterInverseProjection;
@@ -101,12 +113,7 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
     return distribution * visibility * fresnel * nl;
   }
 
-  vec3 sampleWaterReflection(vec2 uv) {
-    // Sky and clouds do not write depth. Use the same reflected environment as
-    // the lab while retaining real ship, hull, and prop reflections.
-    float sky = step(0.99999, texture2D(uWaterReflectionDepth, uv).r);
-    return mix(texture2D(uWaterReflection, uv).rgb, uWaterReflectionSky, sky);
-  }
+  ${OCEAN_REFLECTION_FUNCTIONS}
 
   vec3 shadeHighWater() {
     float height;
@@ -170,12 +177,11 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
         body = mix(body, openWater, smoothstep(20.0, 40.0, pathLength));
       }
 
-      vec4 projected = uWaterReflectionMatrix * vec4(vWorldPosition, 1.0);
-      vec2 reflectedUv = projected.xy / max(projected.w, 0.001);
-      reflectedUv += n.xz * 0.024 / max(1.0, vViewDepth * 0.025);
+      vec3 projected = projectWaterReflection(vWorldPosition, n);
+      vec2 reflectedUv = projected.xy;
       vec2 edgeDistance = min(reflectedUv, vec2(1.0) - reflectedUv);
       float reflectionCoverage = smoothstep(0.0, 0.06, min(edgeDistance.x, edgeDistance.y))
-        * step(0.001, projected.w);
+        * step(0.001, projected.z);
       vec2 blur = vec2(0.001 + roughness * roughness * 0.009);
       vec2 safeUv = clamp(reflectedUv, vec2(0.015), vec2(0.985));
       vec3 sceneReflection = sampleWaterReflection(safeUv) * 0.4;

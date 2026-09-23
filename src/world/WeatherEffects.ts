@@ -1,3 +1,4 @@
+import { WEATHER_PARTICLE_LAYER } from '../rendering/renderLayers';
 import {
   AmbientLight,
   BufferAttribute,
@@ -141,6 +142,7 @@ function createPool(
   });
   const points = new Points(geometry, material);
   points.name = name;
+  points.layers.set(WEATHER_PARTICLE_LAYER);
   points.frustumCulled = false;
   points.visible = false;
 

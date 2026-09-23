@@ -1,3 +1,4 @@
+import { WEATHER_PARTICLE_LAYER } from '../rendering/renderLayers';
 import {
   DoubleSide, Float32BufferAttribute, Group, InstancedBufferAttribute,
   InstancedBufferGeometry, Mesh, MeshStandardMaterial, Raycaster, ShaderMaterial, Vector3,
@@ -102,6 +103,7 @@ export class BoatRainEffects {
       transparent: true, depthWrite: false, side: DoubleSide, toneMapped: false,
     }));
     this.splashes.name = 'boat-rain-splashes';
+    this.splashes.layers.set(WEATHER_PARTICLE_LAYER);
     this.splashes.frustumCulled = false;
     this.splashes.visible = false;
     boat.add(this.splashes);
