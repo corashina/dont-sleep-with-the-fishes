@@ -1,3 +1,4 @@
+import { CONSTELLATION_COUNT, STARRY_NIGHT_ITEMS } from './starryNight';
 import type { ItemId } from '../game/ItemState';
 import { weightedEventDrawWeight } from './RunPressure';
 import type {
@@ -54,6 +55,8 @@ function matchesEventInventory(
   eventEntry: SurvivalEventDefinition,
   criteria: EventEligibility,
 ): boolean {
+  if (eventEntry.id === 'starry-night'
+    && STARRY_NIGHT_ITEMS.filter((id) => !criteria.inventoryItemIds.has(id)).length < CONSTELLATION_COUNT) return false;
   if ((criteria.food ?? 0) < (eventEntry.minimumFood ?? 0)) return false;
   if (eventEntry.targetItemIds !== undefined
     && !eventEntry.targetItemIds.some((itemId) => criteria.targetableItemIds.has(itemId))) return false;

@@ -1,3 +1,6 @@
+import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
+import { constellationItems } from '../src/survival/starryNight';
+import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
 import { describe,expect,it,vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
 import type { EventBundle } from '../src/survival/EventBundle';
@@ -51,7 +54,6 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     recoveredFood: 0,
     recoveredBait: 0,
     rescueLead: 0,
-    rescueTraceFinds: 0,
     radioSignalAvailable: false,
     radioSignalsSent: 0,
     heartPieces: { flowers: false, blood: false, chest: false },
@@ -416,27 +418,30 @@ describe('event selection contracts', () => {
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });
 
-  it('anchors Starry Night to the constellation and restores both survivors at dawn', async () => {
+  it('anchors two constellations and grants the selected item once', async () => {
     const rig = createSessionRig(new SurvivalSession([
       { instanceId: 'carlitos-1', type: 'carlitos' },
     ], {
-      seed: 715, initial: { day: 4, health: 14, hunger: 95, energy: 0 },
+      seed: 715, initial: { day: 4, health: 80, hunger: 30, energy: 0 },
       initialCarlitos: { rest: 'exhausted', hunger: 0, unhappiness: 10 },
       initialEventId: 'starry-night',
     }));
     await rig.flow.revealPending(rig.realSession.snapshot());
+    const items = constellationItems(deriveEventVariantSeed(715, 4, 'starry-night'), new Set(['carlitos']));
+    expect(rig.world.stageEvent).toHaveBeenCalledWith(expect.objectContaining({ constellationItems: items }));
     expect(rig.ui.setEventSelection).toHaveBeenLastCalledWith(new Map(), [
-      expect.objectContaining({ id: 'wish', anchorId: 'starry-night:constellation' }),
+      ...items.map((id) => expect.objectContaining({ id, anchorId: 'starry-night:' + id })),
       expect.objectContaining({ id: 'sleep' }),
     ]);
-    rig.flow.resolveContextual('wish');
-    rig.flow.resolveContextual('wish');
+    rig.flow.resolveContextual(items[0]!);
+    rig.flow.resolveContextual(items[0]!);
     await vi.waitFor(() => expect(rig.session.beginDawn).toHaveBeenCalledTimes(1));
     expect(rig.session.resolveEvent).toHaveBeenCalledTimes(1);
-    expect(rig.realSession.snapshot()).toMatchObject({
-      health: 100, hunger: 0, energy: 4,
-      carlitos: { rest: 'rested', hunger: 5, unhappiness: 0 },
+    expect(Object.values(rig.realSession.snapshot().inventory)).toContainEqual({
+      instanceId: items[0] + '-1', type: items[0], condition: 'usable',
     });
+    expect(rig.realSession.snapshot().health).toBe(80 + SURVIVAL_BALANCE.dawn.healthRecovery);
+    expect(rig.onFatalError).not.toHaveBeenCalled();
     rig.flow.dispose();
   });
   it('offers the Radio to call a crew and routes its reply through the event flow', async () => {
@@ -1179,13 +1184,13 @@ describe('SurvivalEventFlow', () => {
     expect(rig.ui.showFocusedEvent).toHaveBeenCalledTimes(2);
   });
 
-  // Importance: 95/100. Both drifting event routes must reach completion audio exactly once.
-  it.each(['drifting-supplies', 'drifting-chest'] as const)('completes audio when leaving %s behind', async (eventId) => {
+  // Importance: 95/100. Deferring loot must not signal event completion.
+  it.each(['drifting-supplies', 'drifting-chest'] as const)('does not complete audio when leaving %s pending', async (eventId) => {
     const rig = createRig(snapshot({ state: 'dayEvent', pendingEventId: eventId }));
     await rig.flow.revealPending(rig.session.snapshot());
     await rig.flow.focusEvent(eventId);
     await rig.flow.chooseFocused({ id: 'sleep', instanceId: null });
-    expect(rig.audio.finishEventReaction).toHaveBeenCalledOnce();
+    expect(rig.audio.finishEventReaction).not.toHaveBeenCalled();
   });
 
   it('rejects an ID and instance pair that was not rendered', async () => {
@@ -1204,7 +1209,7 @@ describe('SurvivalEventFlow', () => {
     await rig.flow.revealPending(rig.session.snapshot());
     await rig.flow.focusEvent('drifting-supplies');
     wait.mockReturnValueOnce(resume.promise);
-    const work = rig.flow.chooseFocused({ id: 'sleep', instanceId: null });
+    const work = rig.flow.chooseFocused({ id: 'retrieve', instanceId: null });
     await Promise.resolve();
     expect(rig.session.resolveEvent).not.toHaveBeenCalled();
     resume.resolve(true); await work;
@@ -1245,7 +1250,8 @@ describe('SurvivalEventFlow', () => {
     expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
   });
 
-  it.each(['drifting-supplies'] as const)(
+  // Importance: 98/100. Deferred loot must stay available until nightfall.
+  it.each(['drifting-supplies', 'drifting-chest'] as const)(
     'keeps %s visible after Let It Drift, then clears it at night',
     async (eventId) => {
       const rig = createSessionRig(new SurvivalSession([], {
@@ -1259,13 +1265,39 @@ describe('SurvivalEventFlow', () => {
 
       expect(rig.world.clearEvent).not.toHaveBeenCalled();
       expect(rig.bundles.releaseActive).not.toHaveBeenCalled();
-      expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
-      expect(rig.flow.isIdle()).toBe(true);
+      expect(rig.realSession.snapshot().pendingEventId).toBe(eventId);
+      expect(rig.flow.isPendingEvent(eventId)).toBe(true);
+      await rig.flow.focusEvent(eventId);
+      expect(rig.ui.showFocusedEvent).toHaveBeenCalledTimes(2);
+      await rig.flow.chooseFocused({ id: 'sleep', instanceId: null });
 
+      expect(rig.realSession.endDay().accepted).toBe(true);
       rig.flow.beginNightTransition(rig.realSession.snapshot(), false);
 
       expect(rig.world.clearEvent).toHaveBeenCalledOnce();
       expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
+      rig.flow.dispose();
+    },
+  );
+
+  // Importance: 98/100. Reopened loot must still grant its reward exactly once.
+  it.each(['drifting-supplies', 'drifting-chest'] as const)(
+    'retrieves %s after Let It Drift', async (eventId) => {
+      const rig = createSessionRig(new SurvivalSession([], {
+        seed: 41, initial: { day: 4 }, initialEventId: eventId,
+      }));
+      await rig.flow.revealPending(rig.realSession.snapshot());
+      await rig.flow.focusEvent(eventId);
+      await rig.flow.chooseFocused({ id: 'sleep', instanceId: null });
+      await rig.flow.focusEvent(eventId);
+      expect(rig.ui.showFocusedEvent).toHaveBeenCalledTimes(2);
+      await rig.flow.chooseFocused({ id: 'retrieve', instanceId: null });
+
+      expect(rig.world.retrieveDriftingItem).toHaveBeenCalledExactlyOnceWith(eventId);
+      expect(rig.realSession.snapshot()).toMatchObject({ state: 'day', pendingEventId: null });
+      expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'choice', choiceId: 'retrieve' });
+      expect(rig.audio.finishEventReaction).toHaveBeenCalledOnce();
+      expect(rig.world.clearEvent).toHaveBeenCalledOnce();
       rig.flow.dispose();
     },
   );

@@ -98,6 +98,7 @@ import type { EventModelLibrary } from './EventModelLibrary';
 import {
   type EventChoicePresentation,
   type FocusedEventPresentationFactories,
+  type FocusedEventInteractionTarget,
 } from './FocusedEventPresentation';
 import type { EventPresentationCue } from './eventPresentationCue';
 import {
@@ -404,6 +405,7 @@ export class BoatWorld {
   private readonly focusedEventFactories: FocusedEventPresentationFactories;
   private chestState: SurvivalSnapshot['chest']['state'] = 'none';
   private readonly toolHoverOutline = new HoverOutline();
+  private highlightedEventTarget: FocusedEventInteractionTarget | null = null;
   private readonly fishingAvailableOutline = new HoverOutline();
   private readonly chestAvailableOutline = new HoverOutline();
   private readonly repairAvailableOutline = new HoverOutline();
@@ -1066,9 +1068,20 @@ export class BoatWorld {
         : anchorId;
       focusedRoot = this.eventPresentationHost.interactionRoot(interactionId);
     }
+    this.highlightEventTarget(focusedRoot);
     this.toolHoverOutline.setTarget(
       focusedRoot?.userData.disableHoverOutline === true ? null : focusedRoot,
     );
+  }
+
+  private highlightEventTarget(root: Object3D | null): void {
+    const target = root === null ? null : this.eventPresentationHost.interactionTargets()
+      .find((candidate) => candidate.root === root) ?? null;
+    if (target !== this.highlightedEventTarget) {
+      this.highlightedEventTarget?.setHighlighted?.(false);
+      this.highlightedEventTarget = target;
+      target?.setHighlighted?.(true);
+    }
   }
 
   setEventEligibleItems(
@@ -1494,8 +1507,8 @@ export class BoatWorld {
     this.fishingPresentation.showBite(point);
   }
 
-  updateFishingFight(view: import('./FishingSession').FishingAttemptView): void {
-    this.fishingPresentation.updateFight(view);
+  moveFishingBite(point: FishingCastPoint, offset: number): void {
+    this.fishingPresentation.moveBite(point, offset);
   }
 
   projectFishingBite(width: number, height: number): ProjectedBoatBounds {

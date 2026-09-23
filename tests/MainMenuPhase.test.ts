@@ -49,7 +49,7 @@ function createRig(
   };
   const context = {
     mount: document.createElement('main'),
-    renderer: { domElement: canvas },
+    renderer: { domElement: canvas, initTexture: vi.fn(), compileAsync: vi.fn().mockResolvedValue(undefined) },
     camera,
     sceneRenderer,
     menuModels: {},

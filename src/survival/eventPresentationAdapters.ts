@@ -299,7 +299,7 @@ export const createDedicatedAdapter: EventPresentationAdapterFactory = (
       stage: (context) => {
         clear();
         active = true;
-        presentation.stage({ eventId, targetInstanceId: context.targetInstanceId, variantSeed: context.variantSeed });
+        presentation.stage({ ...context, eventId });
       },
       reveal: () => active ? presentation.reveal() : noChoice(),
       playChoice: (choice) => active ? presentation.playChoice?.(choice.choiceId) ?? noChoice() : noChoice(),

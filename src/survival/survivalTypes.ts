@@ -116,7 +116,6 @@ export type EventInventoryMutation =
   | { readonly kind: 'loseEventTarget'; readonly quantity: 1 };
 export interface EventEffects {
   readonly grantHeartPiece?: HeartPieceId;
-  readonly restoreCrew?: true;
   readonly maximumNextDawnEnergy?: DawnEnergy;
   readonly resources?: readonly ResourceEffect[];
   readonly items?: readonly EventInventoryMutation[];
@@ -145,7 +144,7 @@ export interface EventChoiceDefinition {
 }
 
 export interface EventChoiceRequirement {
-  readonly resource: EventResource;
+  readonly resource: Exclude<EventResource, 'rescueLead'>;
   readonly minimum: number;
 }
 

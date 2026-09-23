@@ -3,7 +3,7 @@ import type { EventTextId } from './eventMessages';
 
 const situations: Record<string, readonly [string, string, string]> = {
   'seagull-theft': ['A few gulls crossed the morning sky, far from the boat.', 'Kilka mew przecinało poranne niebo, daleko od łodzi.', 'Unas gaviotas cruzaban el cielo de la mañana, lejos del bote.'],
-  'starry-night': ['I saw the stars form a great whale. I felt at ease watching it.', 'Zobaczyłem, jak gwiazdy układają się w wieloryba. Patrząc na niego, czułem spokój.', 'Vi las estrellas formar una gran ballena. Sentí calma al mirarla.'],
+  'starry-night': ["Two constellations formed familiar objects above the sea. I could choose one gift.","Dwie konstelacje utworzyły znajome przedmioty nad morzem. Mogłem wybrać jeden dar.","Dos constelaciones formaron objetos conocidos sobre el mar. Podía elegir un regalo."],
   'flying-saucer': ['A low hum rolled across the sea. A disc moved across the stars, its lights searching the water.', 'Niski pomruk niósł się nad morzem. Dysk sunął pośród gwiazd, a jego światła przeszukiwały wodę.', 'Un zumbido grave recorría el mar. Un disco cruzaba las estrellas; sus luces registraban el agua.'],
   'something-under-us': ['Something larger than the boat circled us. I heard a low groan and saw pale eyes beneath the water.', 'Coś większego od łodzi krążyło wokół nas. Usłyszałem niski jęk i zobaczyłem blade oczy pod wodą.', 'Algo más grande que el bote nos rodeaba. Oí un gemido grave y vi unos ojos pálidos bajo el agua.'],
   'ocean-of-blood': ['The sea turned red. Drifting bodies turned their heads toward me.', 'Morze zrobiło się czerwone. Dryfujące ciała obracały głowy w moją stronę.', 'El mar se volvió rojo. Los cuerpos que flotaban giraban la cabeza hacia mí.'],
@@ -47,6 +47,7 @@ const needsAction = new Set<EventTextId>([
   'eventText142', 'eventText152', 'eventText165', 'eventText171', 'eventText180', 'eventText181', 'eventText184',
 ]);
 const attempts: Record<string, readonly [string, string, string]> = {
+  'face-on-the-moon.bucket': ['I put the bucket over my head to hide the moon and tried to sleep.', 'Założyłem wiadro na głowę, żeby zasłonić księżyc, i próbowałem zasnąć.', 'Me puse el balde en la cabeza para tapar la luna e intenté dormir.'],
   'dangerous-waters.map': ['I searched the map for a safe passage.', 'Szukałem na mapie bezpiecznego przejścia.', "Busqué un paso seguro en el mapa."],
   'dangerous-waters.compass': ['I tried to keep a safe bearing with the compass.', 'Próbowałem utrzymać bezpieczny kurs według kompasu.', "Intenté mantener un rumbo seguro con la brújula."],
   'leak.bucket': ['I tried to bail the rising water with the bucket.', 'Próbowałem wybierać napływającą wodę wiadrem.', "Intenté sacar con el balde el agua que entraba."],

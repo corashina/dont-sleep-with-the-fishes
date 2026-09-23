@@ -52,7 +52,6 @@ function resolvedEffects(
 ): WeightedEventOutcome['effects'] {
   return {
     ...(selected.effects.grantHeartPiece === undefined ? {} : { grantHeartPiece: selected.effects.grantHeartPiece }),
-    ...(selected.effects.restoreCrew === true ? { restoreCrew: true } : {}),
     ...(selected.effects.resources
       ? { resources: selected.effects.resources.map((effect) => resolveEffect(effect, random)) }
       : {}),

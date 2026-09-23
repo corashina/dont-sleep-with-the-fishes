@@ -56,8 +56,6 @@ export class SurvivalUI {
   onRadioPauseChange: (paused: boolean) => void = () => undefined;
   onFishingCast: ((point: { readonly x: number; readonly y: number } | null) => boolean) | null = null;
   onFishingReel: (() => boolean) | null = null;
-  onFishingCounterPull: ((movementX: number) => void) | null = null;
-  onFishingControlActive: ((active: boolean) => void) | null = null;
   onFishingResultContinue: (() => void) | null = null;
   onFishingViewExit: (() => void) | null = null;
   onFocusedEventSelect: ((eventId: InspectableEventId) => void) | null = null;
@@ -211,12 +209,6 @@ export class SurvivalUI {
     this.fishingView.onReel = () => (
       this.disposed ? false : this.onFishingReel?.() ?? false
     );
-    this.fishingView.onCounterPull = (movementX) => {
-      if (!this.disposed) this.onFishingCounterPull?.(movementX);
-    };
-    this.fishingView.onControlActive = (active) => {
-      this.onFishingControlActive?.(active);
-    };
     this.fishingView.onContinue = () => {
       if (!this.disposed) this.onFishingResultContinue?.();
     };
@@ -654,8 +646,6 @@ export class SurvivalUI {
       () => { this.onRadioPauseChange = () => undefined; },
       () => { this.onFishingCast = null; },
       () => { this.onFishingReel = null; },
-      () => { this.onFishingCounterPull = null; },
-      () => { this.onFishingControlActive = null; },
       () => { this.onFishingResultContinue = null; },
       () => { this.onFishingViewExit = null; },
       () => { this.onFocusedEventSelect = null; },

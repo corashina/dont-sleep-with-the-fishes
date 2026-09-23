@@ -24,6 +24,7 @@ import { FlashlightBeam } from './FlashlightBeam';
 import { ShotgunBlast } from './ShotgunBlast';
 import {
   LIFEBOAT_GUNWALE_SURFACE_Y,
+  LIFEBOAT_PLAYER_BENCH_Z,
   lifeboatHullHalfWidthAt,
 } from '../world/Lifeboat';
 import type { EventItemUseSample } from './eventItemUseChoreography';
@@ -40,14 +41,47 @@ const FLARE_WATER_Y = 0.04;
 const FLARE_FORWARD = new Vector3(1, 0, 0);
 const CHAIN_LINK_AXIS = new Vector3(0, 1, 0);
 const CHAIN_FALLBACK_EDGE_OFFSET = new Vector3(1.35, -0.22, -0.25);
-const CHAIN_BOAT_ATTACHMENT_LOCAL = new Vector3(0, 0.29, 0.88);
+const CHAIN_BOAT_ATTACHMENT_LOCAL = new Vector3(0, 0.29, LIFEBOAT_PLAYER_BENCH_Z);
+const CHAIN_ANCHOR_SINK_DEPTH = 3;
 const CHAIN_GUNWALE_Z = -0.85;
 const CHAIN_GUNWALE_X = lifeboatHullHalfWidthAt(CHAIN_GUNWALE_Z) ?? 1.63;
-const CHAIN_SEGMENT_SPLIT = 0.44;
 const CHAIN_LINK_CAPACITY = 256;
 const CHAIN_LINK_PITCH = 0.056;
 const CHAIN_PATH_SEGMENTS = 128;
+const CHAIN_SPAN_SEGMENTS = CHAIN_PATH_SEGMENTS / 2;
+const CHAIN_SAG_WEIGHTS = Float64Array.from(
+  { length: CHAIN_SPAN_SEGMENTS + 1 },
+  (_, index) => Math.sin(Math.PI * index / CHAIN_SPAN_SEGMENTS),
+);
 const CHAIN_LINK_SCALE = new Vector3(1, 1, 1);
+const CHAIN_GRAVITY = new Vector3(0, -1, 0);
+
+function chainSpanLength(start: Vector3, end: Vector3, sag: number, direction = CHAIN_GRAVITY): number {
+  const stepX = (end.x - start.x) / CHAIN_SPAN_SEGMENTS;
+  const stepY = (end.y - start.y) / CHAIN_SPAN_SEGMENTS;
+  const stepZ = (end.z - start.z) / CHAIN_SPAN_SEGMENTS;
+  let length = 0;
+  for (let index = 1; index <= CHAIN_SPAN_SEGMENTS; index += 1) {
+    const sagStep = (CHAIN_SAG_WEIGHTS[index]! - CHAIN_SAG_WEIGHTS[index - 1]!) * sag;
+    length += Math.hypot(
+      stepX + sagStep * direction.x, stepY + sagStep * direction.y, stepZ + sagStep * direction.z,
+    );
+  }
+  return length;
+}
+
+function chainSagForLength(start: Vector3, end: Vector3, length: number, direction: Vector3): number {
+  if (start.distanceTo(end) >= length) return 0;
+  let low = 0;
+  let high = length;
+  // Fixed work and no frame history: boat motion changes slack without adding links.
+  for (let iteration = 0; iteration < 16; iteration += 1) {
+    const sag = (low + high) / 2;
+    if (chainSpanLength(start, end, sag, direction) < length) low = sag;
+    else high = sag;
+  }
+  return (low + high) / 2;
+}
 
 /** Owns the short-lived visual cues for survival item use. */
 export class EventItemEffects {
@@ -82,10 +116,20 @@ export class EventItemEffects {
   );
   private readonly chainGunwaleWorld = new Vector3();
   private readonly chainAnchorWorld = new Vector3();
+  private readonly chainImpactWorld = new Vector3();
+  private readonly chainOutwardWorld = new Vector3();
+  private readonly chainOuterSagDirection = new Vector3();
+  private chainLanded = false;
+  private chainDeployedLength = 0;
+  private chainDeployedCount = 0;
   private readonly chainPoint = new Vector3();
+  private readonly chainBefore = new Vector3();
+  private readonly chainAfter = new Vector3();
   private readonly chainPath = Array.from({ length: CHAIN_PATH_SEGMENTS + 1 }, () => new Vector3());
   private readonly chainDistances = new Float64Array(CHAIN_PATH_SEGMENTS + 1);
   private readonly chainTangent = new Vector3();
+  private readonly chainPreviousTangent = new Vector3();
+  private readonly chainTransportRotation = new Quaternion();
   private readonly chainTwist = new Quaternion();
   private readonly chainRotation = new Quaternion();
   private readonly chainMatrix = new Matrix4();
@@ -145,7 +189,7 @@ export class EventItemEffects {
       case 'chain':
         this.root.quaternion.identity();
         this.show(this.chain, primary);
-        this.updateChain(actor, secondary);
+        this.updateChain(actor, secondary, sample.effectTravel);
         break;
       case 'flashlight':
         this.flashlight.apply(actor, primary, secondary);
@@ -190,6 +234,9 @@ export class EventItemEffects {
   }
 
   clear(): void {
+    this.chainLanded = false;
+    this.chainDeployedLength = 0;
+    this.chainDeployedCount = 0;
     this.hideEffects();
     this.shotgun.reset();
     this.flashlight.setTarget(null);
@@ -378,12 +425,18 @@ export class EventItemEffects {
     return [chain, links];
   }
 
-  private updateChain(actor: Object3D, travel: number): void {
+  private updateChain(actor: Object3D, travel: number, sink: number): void {
     const parent = actor.parent;
     actor.updateWorldMatrix(true, false);
     actor.getWorldPosition(this.actorPosition);
-    this.chainAnchorWorld.set(0, 0.22, 0).applyMatrix4(actor.matrixWorld);
+    if (travel < 1 || !this.chainLanded) {
+      this.chainImpactWorld.set(0, 0.22, 0).applyMatrix4(actor.matrixWorld);
+      this.chainLanded = travel >= 1;
+    }
+    this.chainAnchorWorld.copy(this.chainImpactWorld);
+    this.chainAnchorWorld.y -= CHAIN_ANCHOR_SINK_DEPTH * sink;
     if (parent === null) {
+      this.chainOutwardWorld.set(1, 0, 0);
       this.chainBoatWorld.copy(this.actorPosition);
       this.chainGunwaleWorld
         .copy(this.chainBoatWorld)
@@ -394,42 +447,75 @@ export class EventItemEffects {
         .copy(CHAIN_BOAT_ATTACHMENT_LOCAL)
         .applyMatrix4(parent.matrixWorld);
       this.chainGunwaleWorld.copy(this.chainGunwaleLocal).applyMatrix4(parent.matrixWorld);
+      this.chainOutwardWorld.setFromMatrixColumn(parent.matrixWorld, 0);
+      this.chainOutwardWorld.y = 0;
+      this.chainOutwardWorld.normalize();
     }
 
-    this.updateChainPath(travel);
+    // Water drag bows the submerged chain outward, without curling its tail upward.
+    this.chainOuterSagDirection.copy(this.chainOutwardWorld).multiplyScalar(sink);
+    this.chainOuterSagDirection.y = sink - 1;
+    this.chainOuterSagDirection.normalize();
+    this.updateChainPath(travel, sink);
     this.placeChainLinks();
   }
 
-  private updateChainPath(travel: number): void {
-    const half = CHAIN_PATH_SEGMENTS / 2;
-    for (let index = 0; index <= CHAIN_PATH_SEGMENTS; index += 1) {
-      // Include the gunwale bend exactly in the distance table.
-      const progress = index <= half
-        ? CHAIN_SEGMENT_SPLIT * index / half
-        : CHAIN_SEGMENT_SPLIT + (1 - CHAIN_SEGMENT_SPLIT) * (index - half) / half;
-      this.sampleChainPoint(progress, travel, this.chainPath[index]!);
+  private updateChainPath(travel: number, sink: number): void {
+    let outerSag = 0.08 + travel * 0.22;
+    if (this.chainLanded && this.chainDeployedLength > 0) {
+      const innerLength = chainSpanLength(this.chainBoatWorld, this.chainGunwaleWorld, 0.055);
+      outerSag = chainSagForLength(
+        this.chainGunwaleWorld, this.chainAnchorWorld, this.chainDeployedLength - innerLength,
+        this.chainOuterSagDirection,
+      );
+    }
+    this.writeChainSpan(this.chainBoatWorld, this.chainGunwaleWorld, 0.055, 0);
+    this.writeChainSpan(
+      this.chainGunwaleWorld, this.chainAnchorWorld, outerSag, CHAIN_SPAN_SEGMENTS, this.chainOuterSagDirection,
+    );
+    if (sink >= 1 && this.chainDeployedLength === 0) {
+      this.chainDeployedLength = this.chainDistances[CHAIN_PATH_SEGMENTS]!;
+      this.chainDeployedCount = Math.min(
+        CHAIN_LINK_CAPACITY, Math.ceil(this.chainDeployedLength / CHAIN_LINK_PITCH) + 1,
+      );
+    }
+  }
+
+  private writeChainSpan(start: Vector3, end: Vector3, sag: number, offset: number, direction = CHAIN_GRAVITY): void {
+    for (let step = 0; step <= CHAIN_SPAN_SEGMENTS; step += 1) {
+      const index = offset + step;
+      const point = this.chainPath[index]!;
+      point.lerpVectors(start, end, step / CHAIN_SPAN_SEGMENTS);
+      point.addScaledVector(direction, CHAIN_SAG_WEIGHTS[step]! * sag);
       if (index > 0) {
         this.chainDistances[index] = this.chainDistances[index - 1]!
-          + this.chainPath[index]!.distanceTo(this.chainPath[index - 1]!);
+          + point.distanceTo(this.chainPath[index - 1]!);
       }
     }
   }
 
   private placeChainLinks(): void {
     const length = this.chainDistances[CHAIN_PATH_SEGMENTS]!;
-    const lastIndex = Math.min(CHAIN_LINK_CAPACITY - 1, Math.ceil(length / CHAIN_LINK_PITCH));
+    const lastIndex = this.chainDeployedCount > 0
+      ? this.chainDeployedCount - 1
+      : Math.min(CHAIN_LINK_CAPACITY - 1, Math.ceil(length / CHAIN_LINK_PITCH));
+    const stretch = this.chainDeployedLength > 0 ? length / this.chainDeployedLength : 1;
     this.chainLinks.count = lastIndex + 1;
-    let segment = 1;
     for (let index = 0; index <= lastIndex; index += 1) {
-      const distance = length * index / lastIndex;
-      while (segment < CHAIN_PATH_SEGMENTS && this.chainDistances[segment]! < distance) segment += 1;
-      const before = this.chainPath[segment - 1]!;
-      const after = this.chainPath[segment]!;
-      const segmentLength = this.chainDistances[segment]! - this.chainDistances[segment - 1]!;
-      const progress = segmentLength > 0 ? (distance - this.chainDistances[segment - 1]!) / segmentLength : 0;
-      this.chainPoint.lerpVectors(before, after, progress).sub(this.actorPosition);
-      this.chainTangent.subVectors(after, before).normalize();
-      this.chainRotation.setFromUnitVectors(CHAIN_LINK_AXIS, this.chainTangent);
+      const distance = index === lastIndex ? length : Math.min(length, index * CHAIN_LINK_PITCH * stretch);
+      this.sampleChainDistance(distance, this.chainPoint).sub(this.actorPosition);
+      // A link straddles the curve. Use its full length to turn smoothly over the gunwale.
+      this.sampleChainDistance(Math.max(0, distance - CHAIN_LINK_PITCH / 2), this.chainBefore);
+      this.sampleChainDistance(Math.min(length, distance + CHAIN_LINK_PITCH / 2), this.chainAfter);
+      this.chainTangent.subVectors(this.chainAfter, this.chainBefore).normalize();
+      if (index === 0) {
+        this.chainTransportRotation.setFromUnitVectors(CHAIN_LINK_AXIS, this.chainTangent);
+      } else {
+        this.chainTwist.setFromUnitVectors(this.chainPreviousTangent, this.chainTangent);
+        this.chainTransportRotation.premultiply(this.chainTwist);
+      }
+      this.chainPreviousTangent.copy(this.chainTangent);
+      this.chainRotation.copy(this.chainTransportRotation);
       if (index % 2 !== 0) {
         this.chainTwist.setFromAxisAngle(this.chainTangent, Math.PI / 2);
         this.chainRotation.premultiply(this.chainTwist);
@@ -440,16 +526,19 @@ export class EventItemEffects {
     this.chainLinks.instanceMatrix.needsUpdate = true;
   }
 
-  private sampleChainPoint(progress: number, travel: number, output: Vector3): void {
-    if (progress <= CHAIN_SEGMENT_SPLIT) {
-      const segmentProgress = progress / CHAIN_SEGMENT_SPLIT;
-      output.lerpVectors(this.chainBoatWorld, this.chainGunwaleWorld, segmentProgress);
-      output.y -= Math.sin(Math.PI * segmentProgress) * 0.055;
-      return;
+  private sampleChainDistance(distance: number, output: Vector3): Vector3 {
+    let low = 1;
+    let high = CHAIN_PATH_SEGMENTS;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (this.chainDistances[middle]! < distance) low = middle + 1;
+      else high = middle;
     }
-    const segmentProgress = (progress - CHAIN_SEGMENT_SPLIT) / (1 - CHAIN_SEGMENT_SPLIT);
-    output.lerpVectors(this.chainGunwaleWorld, this.chainAnchorWorld, segmentProgress);
-    output.y -= Math.sin(Math.PI * segmentProgress) * (0.08 + travel * 0.22);
+    const before = this.chainDistances[low - 1]!;
+    const span = this.chainDistances[low]! - before;
+    return output.lerpVectors(
+      this.chainPath[low - 1]!, this.chainPath[low]!, span > 0 ? (distance - before) / span : 0,
+    );
   }
 
 }

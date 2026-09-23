@@ -561,10 +561,10 @@ export const uiCatalog = {
     "pl": "ODPOWIEDZ PRZEZ RADIO",
     "es-AR": "RESPONDER POR RADIO"
   },
-  "rescueLead": {
-    "en": "IMPROVE RESCUE LEAD",
-    "pl": "ZWIĘKSZ SZANSĘ RATUNKU",
-    "es-AR": "MEJORAR LA POSIBILIDAD DE RESCATE"
+  "transmitPosition": {
+    "en": "TRANSMIT YOUR POSITION",
+    "pl": "NADAJ SWOJĄ POZYCJĘ",
+    "es-AR": "TRANSMITÍ TU POSICIÓN"
   },
   "eatBar": {
     "en": "EAT ENERGY BAR",

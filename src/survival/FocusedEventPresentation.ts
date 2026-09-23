@@ -29,6 +29,7 @@ export type FocusedEventInteractionTarget = {
   readonly description: string;
   readonly root: Object3D;
   readonly tooltip?: boolean;
+  readonly setHighlighted?: (highlighted: boolean) => void;
   readonly minimumHitWidth?: number;
   readonly minimumHitHeight?: number;
   readonly preciseHitTest?: boolean;

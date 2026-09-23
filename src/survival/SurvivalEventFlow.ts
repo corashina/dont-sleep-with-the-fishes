@@ -31,6 +31,7 @@ import {
   deriveEventOutcomePresentation,
   deriveEventVariantSeed,
 } from './eventPresentationOutcome';
+import { prepareStarryNightEvent } from './starryNight';
 import { prepareTradeEvent } from './tradeEvents';
 import { isEventPresentationRoute } from './eventPresentationRoutes';
 import type { EventOutcomePresentation } from './eventPresentationTypes';
@@ -228,7 +229,6 @@ interface MidnightTourRecoveryReason {
 }
 
 const FIXED_CHOICE_ANCHORS: Readonly<Record<string, string>> = {
-  'starry-night:wish': 'starry-night:constellation',
   'midnight-tour:visit': 'midnight-tour:island',
   'handyman:touch': 'handyman:hand',
   'flowers:sleep': 'event:flowers',
@@ -246,10 +246,11 @@ function pendingEventDefinition(snapshot: SurvivalSnapshot): SurvivalEventDefini
   if (snapshot.pendingEventId === null) return undefined;
   if (isTerminal(snapshot.state)) return undefined;
   const event = survivalEventById(snapshot.pendingEventId);
-  return event === undefined ? undefined : prepareTradeEvent(event, snapshot);
+  return event === undefined ? undefined : prepareStarryNightEvent(prepareTradeEvent(event, snapshot), snapshot);
 }
 
 function focusedChoiceAnchorId(eventId: string, choiceId: string): string | null {
+  if (eventId === 'starry-night' && choiceId !== 'sleep') return 'starry-night:' + choiceId;
   if (choiceId === 'delegate-carlitos') return 'carlitos';
   if (isDriftingItemEventId(eventId) && (choiceId === 'retrieve' || choiceId === 'search')) {
     return `event:${eventId}`;
@@ -327,7 +328,6 @@ export function focusedChoicesFor(
 
 export class SurvivalEventFlow {
   private presentation: EventPresentationState = 'idle';
-  private retainedWorldPresentation = false;
   private choiceCheckpointReady = false;
   private islandConfirmationOpen = false;
   private eligibility = new Map<ItemInstanceId, EventResponseId>();
@@ -483,6 +483,11 @@ export class SurvivalEventFlow {
     const eventId = this.focusedEventId;
     const generation = this.dependencies.captureLifecycleGeneration();
     if (eventId === null || !this.canChooseFocused(eventId, generation, choice)) return;
+    if (choice.id === 'sleep') {
+      this.dependencies.audio.confirm();
+      await this.backFocused();
+      return;
+    }
     const operation = this.beginOperation();
     let resolution: FocusedChoiceResolution | null | undefined;
     try {
@@ -521,7 +526,7 @@ export class SurvivalEventFlow {
       this.focusState = 'returning';
       await this.dependencies.world.exitFocusedEventView();
       if (!await this.resumeFocus(eventId, 'returning', generation, operation)) return;
-      this.clearFocusedChoiceEvent(resolution.context, true);
+      this.clearPresentation();
       if (!this.isCurrent(generation, operation)) return;
       const terminal = this.renderFocusedChoiceSnapshot(resolution.context, resolution.state);
       if (!this.isCurrent(generation, operation)) return;
@@ -589,7 +594,7 @@ export class SurvivalEventFlow {
     this.focusState = 'returning';
     try { await this.dependencies.world.exitFocusedEventView(); } catch { /* Keep the action error. */ }
     if (!this.isCurrent(generation, operation)) return;
-    this.ignoreFocusError(() => this.clearFocusedChoiceEvent(resolution.context, false));
+    this.ignoreFocusError(() => this.clearPresentation(false, false));
     if (!this.isCurrent(generation, operation)) return;
     let rendered = false;
     let terminal = false;
@@ -612,7 +617,6 @@ export class SurvivalEventFlow {
     try {
       if (
         this.presentation === 'choosing'
-        || this.retainedWorldPresentation
         || this.seagullOutcome !== null
       ) {
         this.clearPresentation(false, true, true);
@@ -869,18 +873,6 @@ export class SurvivalEventFlow {
     if (context.eventId !== 'drifting-supplies') return false;
     if (context.outcome.rewardSummary === undefined) return false;
     return context.choice.id === 'retrieve' || context.choice.id === 'delegate-carlitos';
-  }
-
-  private clearFocusedChoiceEvent(
-    context: FocusedChoiceContext,
-    reportCleanupErrors: boolean,
-  ): void {
-    if (!this.isCurrent(context.generation, context.operation)) return;
-    if (isDriftingItemEventId(context.eventId) && context.choice.id === 'sleep') {
-      this.retainFocusedWorldPresentation(reportCleanupErrors);
-      return;
-    }
-    this.clearPresentation(false, reportCleanupErrors);
   }
 
   private renderFocusedChoiceSnapshot(
@@ -2299,6 +2291,8 @@ export class SurvivalEventFlow {
         eventId: event.id,
         targetInstanceId: current.pendingEventTargetId,
         variantSeed,
+        ...(event.id === 'starry-night' ? { constellationItems: event.choices
+          .filter(({ id }) => id !== 'sleep').map(({ id }) => id as ItemId) } : {}),
       });
     } else {
       this.dependencies.world.stageEvent?.(event.id, variantSeed);
@@ -2695,44 +2689,11 @@ export class SurvivalEventFlow {
     this.dependencies.ui.clearEventPresentation?.();
   }
 
-  private retainFocusedWorldPresentation(reportCleanupErrors: boolean): void {
-    this.retainedWorldPresentation = true;
-    this.seagullOutcome = null;
-    this.islandConfirmationOpen = false;
-    this.cancelDeferredPresentationSync();
-    this.preparedEventId = null;
-    this.eligibility.clear();
-    this.presentation = 'idle';
-    this.choiceCheckpointReady = false;
-    const steps: readonly (() => void)[] = [
-      () => this.clearFocus(),
-      () => this.dependencies.audio.clearEvent(),
-      () => this.dependencies.world.setEventSelectedItem?.(null),
-      () => this.dependencies.world.setEventEligibleItems?.(null),
-      () => this.dependencies.ui.clearEventPresentation?.(),
-      () => this.dependencies.setAutomaticWeather(null),
-    ];
-    let firstError: unknown;
-    let failed = false;
-    for (const step of steps) {
-      try {
-        step();
-      } catch (error) {
-        if (!failed) {
-          firstError = error;
-          failed = true;
-        }
-      }
-    }
-    if (reportCleanupErrors && failed) this.dependencies.onFatalError(firstError);
-  }
-
   private clearPresentation(
     preserveDeferredSync = false,
     reportCleanupErrors = true,
     cancelPendingActivation = false,
   ): void {
-    this.retainedWorldPresentation = false;
     this.seagullOutcome = null;
     this.islandConfirmationOpen = false;
     if (!preserveDeferredSync) this.cancelDeferredPresentationSync();

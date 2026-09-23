@@ -50,7 +50,9 @@ export class SurvivalJournalView {
           <div class="journal-book__tabs" data-journal-tabs aria-hidden="true"><i data-journal-tab></i><i data-journal-tab></i><i data-journal-tab></i><i data-journal-tab></i></div>
           <article class="journal-page journal-page--day" aria-labelledby="journal-day-label">
             <p class="journal-page__weather ui-role-context" data-journal-weather></p>
-            <h2 id="journal-day-label" class="ui-role-display" data-journal-title tabindex="-1"></h2>
+            <header class="journal-page__header popup-header">
+              <h2 id="journal-day-label" class="ui-role-display" data-journal-title tabindex="-1"></h2>
+            </header>
             <div class="journal-page__story ui-role-narrative" data-journal-story>
               <p data-journal-day></p><ul class="journal-items" data-journal-day-items hidden></ul>
             </div>
@@ -58,9 +60,11 @@ export class SurvivalJournalView {
             <span class="journal-page__folio ui-role-numeral" data-journal-page-count data-ui-text="emptyPages">${uiText('emptyPages')}</span>
           </article>
           <article class="journal-page journal-page--night" aria-labelledby="journal-night-label">
-            <button type="button" class="journal-page__close ui-role-context" data-journal-close data-ui-aria="closeJournal" aria-label="${uiText('closeJournal')}">&times;</button>
             <p class="journal-page__weather ui-role-context" data-journal-night-weather></p>
-            <h2 id="journal-night-label" class="ui-role-display" data-journal-night-title></h2>
+            <header class="journal-page__header popup-header">
+              <h2 id="journal-night-label" class="ui-role-display" data-journal-night-title></h2>
+              <button type="button" class="popup-header__close" data-journal-close data-ui-aria="closeJournal" aria-label="${uiText('closeJournal')}"></button>
+            </header>
             <div class="journal-page__story ui-role-narrative" data-journal-night-story>
               <p data-journal-night></p><ul class="journal-items" data-journal-night-items hidden></ul>
             </div>

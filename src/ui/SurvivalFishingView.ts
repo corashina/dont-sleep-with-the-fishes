@@ -1,5 +1,4 @@
 import { onLanguageChange } from '../i18n/language';
-import { flowText } from '../i18n/flowMessages';
 import { refreshUiText } from './translatedText';
 import { uiText } from '../i18n/uiMessages';
 import { uiDynamic } from '../i18n/uiDynamicMessages';
@@ -17,7 +16,7 @@ import { returnArrowArtwork } from './uiArtwork';
 const FISHING_FADE_MS = 180;
 const requireElement = createElementRequirement('survival fishing view');
 
-export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'fighting' | 'result';
+export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result';
 
 export interface FishingUiState {
   readonly mode: FishingUiMode;
@@ -49,8 +48,6 @@ export class SurvivalFishingView {
 
   onCast: (point: { readonly x: number; readonly y: number } | null) => boolean = () => false;
   onReel: () => boolean = () => false;
-  onCounterPull: (movementX: number) => void = () => undefined;
-  onControlActive: (active: boolean) => void = () => undefined;
   onContinue: () => void = () => undefined;
   onExit: () => void = () => undefined;
   onInteractionShow: () => void = () => undefined;
@@ -79,8 +76,6 @@ export class SurvivalFishingView {
   private hasTarget = false;
   private castIssued = false;
   private reelIssued = false;
-  private lockPending = false;
-  private lockRequest = 0;
   private suppressClick = false;
   private paused = false;
   private announcementVersion = 0;
@@ -90,7 +85,6 @@ export class SurvivalFishingView {
   private refreshLanguage(): void {
     refreshUiText(...this.roots);
     if (this.currentState !== null) this.applyStateMessage(this.currentState);
-    if (this.currentMode === 'fighting') this.renderControlMessage();
     if (this.currentResult !== null) this.renderResult(this.currentResult);
   }
 
@@ -110,10 +104,10 @@ export class SurvivalFishingView {
         </button>
       </section>
       <div class="fishing-fade" data-fishing-fade aria-hidden="true"></div>
-      <section class="dive-result fishing-result" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="fishingResult" aria-label="${uiText('fishingResult')}" inert>
+      <section class="dive-result" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="fishingResult" aria-label="${uiText('fishingResult')}" inert>
         <div class="dive-result__paper fishing-result-card scuba-popup-paper">
-          <header class="fishing-result-header">
-            <button type="button" class="dive-result__close" data-fishing-result-close data-ui-aria="closeFishing" aria-label="${uiText('closeFishing')}"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="m3 3 10 10M13 3 3 13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></button>
+          <header class="popup-header">
+            <button type="button" class="popup-header__close" data-fishing-result-close data-ui-aria="closeFishing" aria-label="${uiText('closeFishing')}"></button>
             <h2 class="dive-result__title scuba-popup-title ui-role-display" data-ui-text="fishingResult">${uiText('fishingResult')}</h2>
           </header>
           <div class="dive-result__rewards fishing-result-items" data-fishing-result-items></div>
@@ -134,8 +128,6 @@ export class SurvivalFishingView {
     this.resultClose = requireElement(this.resultRoot, '[data-fishing-result-close]');
     this.interactionRoot.addEventListener('click', this.handleInteractionClick);
     this.interactionRoot.addEventListener('pointerup', this.handlePointerUp);
-    document.addEventListener('mousemove', this.handleMouseMove);
-    document.addEventListener('pointerlockchange', this.handlePointerLockChange);
     this.resultRoot.addEventListener('click', this.handleResultClick);
     this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
     this.refreshLanguage();
@@ -159,16 +151,10 @@ export class SurvivalFishingView {
     this.interactionRoot.dataset.mode = state.mode;
     if (messageChanged || modeChanged) this.applyStateMessage(state);
     if (targetChanged || modeChanged) this.renderTarget(state.biteTarget);
-    this.syncControlMode();
 
     if (state.mode === 'hidden') this.onInteractionHide();
     else this.onInteractionShow();
     return true;
-  }
-
-  private syncControlMode(): void {
-    if (this.currentMode === 'fighting') this.renderControlMessage();
-    else this.releaseControl();
   }
 
   private resetModeInput(): void {
@@ -189,10 +175,7 @@ export class SurvivalFishingView {
   }
 
   setPaused(paused: boolean): void {
-    if (this.disposed) return;
-    this.paused = paused;
-    if (paused) this.releaseControl();
-    if (this.currentMode === 'fighting') this.renderControlMessage();
+    if (!this.disposed) this.paused = paused;
   }
 
   updateBiteTarget(target: ProjectedBoatBounds | null): void {
@@ -299,7 +282,6 @@ export class SurvivalFishingView {
     event.preventDefault();
     if (this.currentMode === 'aiming') this.issueCast();
     else if (this.currentMode === 'bite') this.issueReel();
-    else void this.acquireControl();
     return true;
   }
 
@@ -311,7 +293,6 @@ export class SurvivalFishingView {
   beginDispose(): boolean {
     if (this.disposed) return false;
     this.disposed = true;
-    this.releaseControl();
     this.unsubscribeLanguage();
     return true;
   }
@@ -332,8 +313,6 @@ export class SurvivalFishingView {
     throwCleanupFailure(runCleanupSteps([
       () => this.interactionRoot.removeEventListener('click', this.handleInteractionClick),
       () => this.interactionRoot.removeEventListener('pointerup', this.handlePointerUp),
-      () => document.removeEventListener('mousemove', this.handleMouseMove),
-      () => document.removeEventListener('pointerlockchange', this.handlePointerLockChange),
       () => this.resultRoot.removeEventListener('click', this.handleResultClick),
     ]));
   }
@@ -342,8 +321,6 @@ export class SurvivalFishingView {
     throwCleanupFailure(runCleanupSteps([
       () => { this.onCast = () => false; },
       () => { this.onReel = () => false; },
-      () => { this.onCounterPull = () => undefined; },
-      () => { this.onControlActive = () => undefined; },
       () => { this.onContinue = () => undefined; },
       () => { this.onExit = () => undefined; },
       () => { this.onInteractionShow = () => undefined; },
@@ -431,65 +408,10 @@ export class SurvivalFishingView {
     if (this.currentMode !== 'bite' || this.reelIssued || this.paused) return;
     this.reelIssued = true;
     if (!this.onReel()) this.reelIssued = false;
-    else void this.acquireControl();
   }
-
-  private async acquireControl(): Promise<void> {
-    if (this.disposed || this.paused || this.lockPending || this.currentMode !== 'fighting') return;
-    if (document.pointerLockElement === this.interactionRoot) return;
-    this.lockPending = true;
-    const request = ++this.lockRequest;
-    try {
-      await this.interactionRoot.requestPointerLock();
-      if (request !== this.lockRequest) this.releaseControl();
-      else this.handlePointerLockChange();
-    } catch {
-      // Keep the attempt frozen until another explicit click acquires control.
-      if (!this.disposed && this.currentMode === 'fighting') {
-        this.onControlActive(false);
-        this.renderControlMessage();
-      }
-    } finally {
-      this.lockPending = false;
-    }
-  }
-
-  private releaseControl(): void {
-    this.lockRequest += 1;
-    this.onControlActive(false);
-    this.interactionRoot.style.cursor = '';
-    if (document.pointerLockElement === this.interactionRoot) document.exitPointerLock();
-  }
-
-  private renderControlMessage(): void {
-    const active = document.pointerLockElement === this.interactionRoot && !this.paused;
-    this.visibleMessage.textContent = flowText(active ? 'counterPull' : 'resumeFishing');
-    this.visibleMessage.hidden = false;
-  }
-
-  private readonly handlePointerLockChange = (): void => {
-    if (this.disposed) return;
-    const ownsLock = document.pointerLockElement === this.interactionRoot;
-    if (this.currentMode !== 'fighting' || this.paused) {
-      if (ownsLock) this.releaseControl();
-      return;
-    }
-    this.interactionRoot.style.cursor = ownsLock ? 'none' : '';
-    this.onControlActive(ownsLock);
-    this.renderControlMessage();
-  };
-
-  private readonly handleMouseMove = (event: MouseEvent): void => {
-    if (this.disposed || this.paused || this.currentMode !== 'fighting') return;
-    if (document.pointerLockElement === this.interactionRoot) this.onCounterPull(event.movementX);
-  };
 
   private readonly handleInteractionClick = (event: MouseEvent): void => {
     if (this.disposed || !this.canUseInteraction()) return;
-    if (this.currentMode === 'fighting') {
-      void this.acquireControl();
-      return;
-    }
     const target = event.target;
     if (!(target instanceof Element)) return;
     if (target.closest('[data-fishing-view-exit]') !== null) {

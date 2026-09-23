@@ -87,7 +87,6 @@ const freesoundSources = [
   ['deathEnding', 'SilverIllusionist', '693405'],
   ['sinkingEnding', 'Kodack', '257752'],
   ['midnightShovel', 'dr19', '353907'],
-  ['midnightMonsterRun', 'gabitomed', '514585'],
   ['midnightMonsterAttack', 'LucasDuff', '467701'],
   ['checkBackFish', 'kyles', '450830'],
   ['checkBackAnglerfish', 'ItsThatRoboGuy', '435683'],

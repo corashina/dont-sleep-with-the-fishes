@@ -43,11 +43,11 @@ describe('ordinary day action journal', () => {
   it.each([
     [0.1, { food: 1 }, 'something to eat'],
     [0.5, { bait: 1 }, 'bait for the next cast'],
-    [0.9, { rescueLead: 1 }, 'a clue'],
+    [0.9, { bait: 1 }, 'bait for the next cast'],
   ])('records a dive reward from roll %s and its energy cost', (roll, reward, text) => {
     const session = new SurvivalSession(saved('scubaSet'), {
       seed: 1,
-      random: sequenceRandom([0, 0.99, roll, ...(roll < 0.75 ? [0] : []), 0.99]),
+      random: sequenceRandom([0, 0.99, roll, 0, 0.99]),
       initial: { day: 2, energy: 3 },
     });
     const outcome = session.perform('dive');

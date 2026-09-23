@@ -18,6 +18,7 @@ import {
   survivalEventById,
 } from './eventCatalog';
 import { drawWeightedEvent } from './eventSelection';
+import { prepareStarryNightEvent } from './starryNight';
 import { prepareTradeEvent } from './tradeEvents';
 import { selectHandymanReward } from './tradeRules';
 import { drawMidnightGraveLoot } from './midnightGraveLoot';
@@ -150,7 +151,6 @@ export interface SurvivalSessionOptions {
   initialChest?: ChestSnapshot;
   initialAppearanceCounts?: Readonly<Record<string, number>>;
   initialCarlitos?: Partial<CarlitosSnapshot>;
-  readonly initialRescueTraceFinds?: number;
   readonly radioSignalsEnabled?: boolean;
 }
 
@@ -234,7 +234,6 @@ interface SessionInitialization {
   readonly energy: number;
   readonly hull: number;
   readonly rescueLead: RescueLead;
-  readonly rescueTraceFinds: 0 | 1 | 2;
   readonly heartPieces: HeartPieces;
   readonly chestState: ChestState;
   readonly chestAcquiredDay: number | null;
@@ -266,7 +265,6 @@ function checkpointInitialization(
     energy: checkpoint.energy,
     hull: checkpoint.hull,
     rescueLead: checkpoint.rescueLead,
-    rescueTraceFinds: checkpoint.rescueTraceFinds,
     heartPieces: checkpoint.heartPieces,
     chestState: checkpoint.chest.state,
     chestAcquiredDay: checkpoint.chest.acquiredDay,
@@ -301,13 +299,6 @@ function initialResources(options: SurvivalSessionOptions): {
   };
 }
 
-function initialRescueTraceFinds(options: SurvivalSessionOptions): 0 | 1 | 2 {
-  return Math.min(
-    2,
-    Math.max(0, Math.trunc(options.initialRescueTraceFinds ?? 0)),
-  ) as 0 | 1 | 2;
-}
-
 function initialChest(options: SurvivalSessionOptions, day: number): {
   readonly state: ChestState;
   readonly acquiredDay: number | null;
@@ -338,7 +329,6 @@ function newSessionInitialization(
     radioSignalsEnabled: options.radioSignalsEnabled ?? true,
     weather: options.weather ?? 'calm',
     ...resources,
-    rescueTraceFinds: initialRescueTraceFinds(options),
     heartPieces: Object.freeze({ ...(options.initialHeartPieces ?? EMPTY_HEART) }),
     chestState: chest.state,
     chestAcquiredDay: chest.acquiredDay,
@@ -378,7 +368,6 @@ export class SurvivalSession {
   private recoveredFood = 0;
   private recoveredBait = 0;
   private rescueLead: RescueLead;
-  private rescueTraceFinds: 0 | 1 | 2;
   private radioSignalAvailable = false;
   private radioSignalsSent = 0;
   private heartPieces: HeartPieces;
@@ -393,7 +382,6 @@ export class SurvivalSession {
   private pendingEvent: SurvivalEventDefinition | null = null;
   private pendingEventTargetId: ItemInstanceId | null = null;
   private nextDawnEnergyOverride: DawnEnergy | null = null;
-  private crewRestorationAtDawn = false;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private readonly appearanceCounts = new Map<string, number>();
@@ -428,7 +416,6 @@ export class SurvivalSession {
     this.energy = initialization.energy;
     this.hull = initialization.hull;
     this.rescueLead = initialization.rescueLead;
-    this.rescueTraceFinds = initialization.rescueTraceFinds;
     this.heartPieces = initialization.heartPieces;
     this.chestState = initialization.chestState;
     this.chestAcquiredDay = initialization.chestAcquiredDay;
@@ -502,7 +489,6 @@ export class SurvivalSession {
     if (this.pendingEvent !== null) this.pendingEvent = this.prepareEvent(this.pendingEvent);
     this.pendingEventTargetId = checkpoint.pendingEventTargetId;
     this.nextDawnEnergyOverride = checkpoint.nextDawnEnergyOverride;
-    this.crewRestorationAtDawn = checkpoint.crewRestorationAtDawn;
     this.lastEventId = checkpoint.lastEventId;
   }
 
@@ -586,7 +572,6 @@ export class SurvivalSession {
       recoveredFood: this.recoveredFood,
       recoveredBait: this.recoveredBait,
       rescueLead: this.rescueLead,
-      rescueTraceFinds: this.rescueTraceFinds,
       heartPieces: this.heartPieces,
       radioSignalAvailable: this.radioSignalAvailable,
       radioSignalsSent: this.radioSignalsSent,
@@ -601,7 +586,6 @@ export class SurvivalSession {
       pendingEventId: this.pendingEventId,
       pendingEventTargetId: this.pendingEventTargetId,
       nextDawnEnergyOverride: this.nextDawnEnergyOverride,
-      crewRestorationAtDawn: this.crewRestorationAtDawn,
       lastEventId: this.lastEventId,
       lastSeenDays: Object.fromEntries([...this.lastSeenDay].sort()),
       appearanceCounts: Object.fromEntries([...this.appearanceCounts].sort()),
@@ -644,7 +628,6 @@ export class SurvivalSession {
       recoveredFood: this.recoveredFood,
       recoveredBait: this.recoveredBait,
       rescueLead: this.rescueLead,
-      rescueTraceFinds: this.rescueTraceFinds,
       heartPieces: this.heartPieces,
       radioSignalAvailable: this.radioSignalAvailable,
       radioSignalsSent: this.radioSignalsSent,
@@ -1086,10 +1069,10 @@ export class SurvivalSession {
         ...drawMidnightGraveLoot(this.presentItemIds(), this.random),
       } };
     }
-    if ((resolved.resultId === 'tour-camp' || resolved.resultId === 'tour-camp-backpack')) {
+    if (resolved.resultId === 'tour-camp') {
       return { ...resolved, effects: {
         ...resolved.effects,
-        items: drawMidnightCampItems(this.presentItemIds(), this.random, resolved.resultId === 'tour-camp-backpack'),
+        items: drawMidnightCampItems(this.presentItemIds(), this.random),
       } };
     }
     return resolved;
@@ -1123,23 +1106,10 @@ export class SurvivalSession {
       inventoryMutations,
     );
     this.applyChestEffect(resolved.effects.chest);
-    if (resolved.effects.restoreCrew) this.restoreCrew();
     const piece = resolved.effects.grantHeartPiece;
     const grantedHeartPiece = piece !== undefined && !this.heartPieces[piece] ? piece : null;
     if (grantedHeartPiece !== null) this.heartPieces = collectHeartPiece(this.heartPieces, grantedHeartPiece);
     return { inventoryMutations, fallbackFoodGranted, grantedHeartPiece };
-  }
-
-  private restoreCrew(): void {
-    this.health = SURVIVAL_BALANCE.thresholds.maximum;
-    this.hunger = 0;
-    this.energy = SURVIVAL_BALANCE.actions.maximumStoredEnergy;
-    this.nextDawnEnergyOverride = SURVIVAL_BALANCE.actions.maximumStoredEnergy;
-    this.crewRestorationAtDawn = true;
-    if (this.carlitos === null) return;
-    this.carlitos.rest = 'rested';
-    this.carlitos.hunger = 5;
-    this.carlitos.unhappiness = 0;
   }
 
   private applyResolvedItemMutations(
@@ -1318,11 +1288,7 @@ export class SurvivalSession {
     this.actedToday = false;
     this.clearPendingEvent();
     this.state = 'day';
-    if (this.crewRestorationAtDawn) {
-      if (this.carlitos !== null) this.carlitos.pettedToday = false;
-    } else {
-      this.advanceCarlitosDawn();
-    }
+    this.advanceCarlitosDawn();
     this.weather = 'calm';
     return hullWear;
   }
@@ -1347,8 +1313,7 @@ export class SurvivalSession {
   }
 
   private dawnDeltas(hullWear: number): ResourceDelta {
-    const hungerIncrease = this.crewRestorationAtDawn ? 0 : this.dawnHungerIncrease(this.day - 1);
-    this.crewRestorationAtDawn = false;
+    const hungerIncrease = this.dawnHungerIncrease(this.day - 1);
     const hungerAfterDawn = Math.min(
       SURVIVAL_BALANCE.thresholds.maximum,
       this.hunger + hungerIncrease,
@@ -1499,21 +1464,15 @@ export class SurvivalSession {
   }
 
   private applyDiveReward(deltas: ResourceDelta): void {
-    const rewardRoll = this.random.next();
-    if (rewardRoll < 0.75) {
-      const resource = rewardRoll < 0.375 ? 'food' : 'bait';
-      const quantityRoll = this.random.next();
-      let boundary = 0;
-      for (const { quantity, chance } of SURVIVAL_BALANCE.diving.supplyAmounts) {
-        boundary += chance;
-        if (quantityRoll < boundary) {
-          deltas[resource] = quantity;
-          break;
-        }
+    const resource = this.random.next() < 0.5 ? 'food' : 'bait';
+    const quantityRoll = this.random.next();
+    let boundary = 0;
+    for (const { quantity, chance } of SURVIVAL_BALANCE.diving.supplyAmounts) {
+      boundary += chance;
+      if (quantityRoll < boundary) {
+        deltas[resource] = quantity;
+        break;
       }
-    } else if (this.rescueTraceFinds < 2) {
-      this.rescueTraceFinds = (this.rescueTraceFinds + 1) as 1 | 2;
-      deltas.rescueLead = 1;
     }
   }
 
@@ -1736,8 +1695,8 @@ export class SurvivalSession {
     grantedHeartPiece: HeartPieceId | null,
   ): RewardSummary | undefined {
     const trade = ['handyman', 'night-trader'].includes(eventId);
-    const grave = eventId === 'midnight-tour' && resultId === 'tour-grave';
-    if (![trade, grave, eventId === 'drifting-supplies', grantedHeartPiece !== null].includes(true) || choiceId === 'sleep') return undefined;
+    const islandLoot = eventId === 'midnight-tour' && (resultId === 'tour-grave' || resultId === 'tour-camp');
+    if (![trade, islandLoot, eventId === 'drifting-supplies', eventId === 'starry-night', grantedHeartPiece !== null].includes(true) || choiceId === 'sleep') return undefined;
     const rewards = this.gainedItemRewards(mutations);
     if (grantedHeartPiece !== null) rewards.push({ kind: 'heartPiece', id: grantedHeartPiece, quantity: 1 });
     if (trade) return rewards[0] === undefined ? undefined : Object.freeze(rewards[0]);
@@ -1829,7 +1788,8 @@ export class SurvivalSession {
   }
 
   private prepareEvent(event: SurvivalEventDefinition): SurvivalEventDefinition {
-    return prepareTradeEvent(event, { inventory: this.inventory.snapshot(), seed: this.seed, day: this.day });
+    const state = { inventory: this.inventory.snapshot(), seed: this.seed, day: this.day };
+    return prepareStarryNightEvent(prepareTradeEvent(event, state), state);
   }
 
   private clearPendingEvent(): void {

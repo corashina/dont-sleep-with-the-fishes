@@ -11,7 +11,8 @@ import type { SceneRenderer } from './rendering/SceneRenderer';
 import { PerformanceStats } from './ui/PerformanceStats';
 import { PostProcessingConsole } from './ui/PostProcessingConsole';
 import { SettingsMenu } from './ui/SettingsMenu';
-import { createSystemScreen, observeSystemScreenDownloads } from './ui/SystemScreen';
+import { createSystemScreen, observeSystemScreenLoading, updateSystemScreenProgress } from './ui/SystemScreen';
+import type { LoadingProgress } from './app/LoadingProgress';
 import type { SystemTuningPreference } from './ui/systemTuningPreference';
 import {
   clampPostProcessingSetting,
@@ -71,7 +72,7 @@ export class Game {
   private activeLease: ResourceLease<unknown> | null = null;
   private pendingPreparation: Promise<void> | null = null;
   private transitionScreen: HTMLElement | null = null;
-  private stopDownloadProgress: (() => void) | null = null;
+  private stopLoadingProgress: (() => void) | null = null;
   private preparing = false;
   private performanceStats: PerformanceStats | null = null;
   private settingsMenu: SettingsMenu | null = null;
@@ -348,6 +349,7 @@ export class Game {
     const generation = ++this.phaseGeneration;
     this.preparing = true;
     this.showTransitionScreen();
+    this.reportLoadingProgress(generation, { stage: 'loadingAssets' });
     return Promise.resolve().then(() => {
       if (!this.ownsGeneration(generation)) return null;
       this.settingsMenu?.close();
@@ -381,6 +383,7 @@ export class Game {
     previous: Promise<void> | null,
   ): Promise<void> {
     if (previous !== null) await previous;
+    this.reportLoadingProgress(generation, { stage: 'buildingScene' });
     // Let the cover paint before scene construction starts.
     await new Promise<void>(resolve => setTimeout(resolve, 0));
     if (!this.ownsGeneration(generation)) { lease.dispose(); return; }
@@ -399,6 +402,7 @@ export class Game {
       transferred = true;
       this.synchronizePresentationControls();
       if (this.started && this.ownsGeneration(generation)) phase.start();
+      this.reportLoadingProgress(generation, { stage: 'sceneReady' });
     } catch (error) {
       if (!transferred) {
         try { phase?.dispose(); } catch { /* Keep the preparation error. */ }
@@ -415,23 +419,31 @@ export class Game {
     if (!this.ownsGeneration(generation)) return;
     phase.resize(window.innerWidth, window.innerHeight);
     if (phase.prepare === undefined) return;
-    await phase.prepare();
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+    if (!this.ownsGeneration(generation)) return;
+    await phase.prepare(status => this.reportLoadingProgress(generation, status));
     // A resize can arrive while shader compilation runs.
     if (this.ownsGeneration(generation)) phase.resize(window.innerWidth, window.innerHeight);
+  }
+
+  private reportLoadingProgress(generation: number, status: LoadingProgress): void {
+    if (this.ownsGeneration(generation) && this.transitionScreen !== null) {
+      updateSystemScreenProgress(this.transitionScreen, status);
+    }
   }
 
   private showTransitionScreen(): void {
     if (this.transitionScreen !== null) return;
     const existing = this.context.mount.querySelector<HTMLElement>('.system-screen--loading');
     const screen = existing ?? createSystemScreen({ kind: 'loading' });
-    if (existing === null) this.stopDownloadProgress = observeSystemScreenDownloads(screen);
+    if (existing === null) this.stopLoadingProgress = observeSystemScreenLoading(screen);
     this.context.mount.append(screen);
     this.transitionScreen = screen;
   }
 
   private clearTransitionScreen(): void {
-    this.stopDownloadProgress?.();
-    this.stopDownloadProgress = null;
+    this.stopLoadingProgress?.();
+    this.stopLoadingProgress = null;
     this.transitionScreen?.remove();
     this.transitionScreen = null;
   }
@@ -491,6 +503,8 @@ export class Game {
     if (this.disposed) return;
     const option = EVENT_TEST_OPTIONS.find((candidate) => candidate.id === id);
     if (option === undefined) throw new Error(`Unknown event test scene: ${id}`);
+    this.systemTuning.set('weatherOverride', null);
+    this.weatherOverride = null;
     this.exitPointerLock();
     this.elapsed = 0;
     this.seed = option.phase !== 'ending' && option.seed !== undefined

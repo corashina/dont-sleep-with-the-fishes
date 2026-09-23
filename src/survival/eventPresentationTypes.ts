@@ -1,5 +1,5 @@
 import type { Group, Object3D, PerspectiveCamera } from 'three';
-import type { ItemInstanceId } from '../game/ItemState';
+import type { ItemId, ItemInstanceId } from '../game/ItemState';
 import type { WaveSample, VortexWaveState } from '../ocean/WaveField';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { BoatHeartDisplay } from './BoatHeartDisplay';
@@ -22,12 +22,14 @@ import type {
 } from './survivalTypes';
 
 export interface EventSceneContext {
+  readonly constellationItems?: readonly ItemId[];
   readonly eventId: DedicatedEventId;
   readonly targetInstanceId: ItemInstanceId | null;
   readonly variantSeed: number;
 }
 
 export interface EventPresentationContext {
+  readonly constellationItems?: readonly ItemId[];
   readonly eventId: SurvivalEventId;
   readonly targetInstanceId: ItemInstanceId | null;
   readonly variantSeed: number;

@@ -65,7 +65,6 @@ Downloaded on 2026-09-05. Font character maps were checked for `ąćęłńóśź
 | `src/assets/ship/room-painted-wood-{color,roughness,normal}.webp` | White Planks Clean / Poly Haven | https://polyhaven.com/a/white_planks_clean | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `scripts/fetch-ship-textures.ps1` verifies the official 1K JPEG maps and produces 512x512 WebP maps. Runtime SHA-256: color `6734ECCC799B2954C2F3D9EE8CB4D8343EB4BBC4175DE3E8A834E078E05DDC6F`; roughness `AD00EB72E24ABA99CB518FDA947C15713B809C88CB64A149056D7D296D478D98`; normal `56866DE8136A804DDEC4DF7C4B32135C8D47B4F5E951EB271F153B96DC287FCB`. | 2026-07-29 |
 
 | `src/assets/menu-sand/aerial-beach-01-diffuse.jpg` | Aerial Beach 01 / Rob Tuytel, Poly Haven | https://polyhaven.com/a/aerial_beach_01 | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Retained the official 1K JPEG diffuse map for the smooth near and middle terrain. Runtime SHA-256 `5B849983D08FDA1C6D28B95B55851C2227697598721B25FF2B85E57CF8B04FC4`. | 2026-08-17 |
-| `src/assets/menu-sand/sandy-gravel-diffuse.jpg` | Sandy Gravel / Charlotte Baglioni, Poly Haven | https://polyhaven.com/a/sandy_gravel | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Source file retained for attribution. The game does not load it. SHA-256 `38829E669DC246E86B7CE94C4141485709988450B13F82CFC4BC6067DD69ED48`. | 2026-08-17 |
 
 ## Runtime item and practical-light model ledger
 
@@ -149,9 +148,7 @@ provide secondary deck clutter.
 | crewNightStand | `crewNightStand.glb` | [Night Stand / Quaternius](https://poly.pizza/m/9LI73c5uFA) | `poly-pizza:deb08e3b-cd54-4252-b5b2-53f86f1c1d04` | 184 | 184 | 2026-07-28 |
 | crewDesk | `crewDesk.glb` | [Desk / CreativeTrio](https://poly.pizza/m/YJyJam67hJ) | `poly-pizza:b8d0347a-c711-4eb4-8b8b-cda390d3840f` | 166 | 166 | 2026-07-28 |
 | crewCabinet | `crewCabinet.glb` | [Cabinet / CreativeTrio](https://poly.pizza/m/wOiMrnUuhe) | `poly-pizza:57d9a5e8-3130-42eb-b436-28e1586facc0` | 324 | 324 | 2026-07-28 |
-| crewCeilingLight | `crewCeilingLight.glb` | [Ceiling Light / Quaternius](https://poly.pizza/m/sRNcgQFbLB) | `poly-pizza:7f5240a6-e02a-4084-b899-8b84784cd76d` | 196 | 196 | 2026-07-28 |
 | crewWallPainting | `crewWallPainting.glb` | [Wall painting / Poly by Google](https://poly.pizza/m/3dycV-ViQH-) | `poly-pizza:4ef69f1e-f03d-4e04-904c-0037b875306b` | 100 | 100 | 2026-07-28 |
-| crewWallArt | `crewWallArt.glb` | [Wall Art 06 / Jarlan Perez](https://poly.pizza/m/1U5roiXQZAM) | `poly-pizza:bcefd659-a484-47b4-a385-d35cefd55804` | 70 | 70 | 2026-07-28 |
 | crewTable | `crewTable.glb` | [Table / Zsky](https://poly.pizza/m/dwmBkQTulc) | `poly-pizza:7a32e3e5-316e-479a-a6cc-d6aab490be50` | 220 | 220 | 2026-07-28 |
 | wheelhouseCorkboard | `wheelhouseCorkboard.glb` | [Wall Corkboard / CreativeTrio](https://poly.pizza/m/U8yQZ9l0HZ) | `poly-pizza:09cf2ec1-8b2c-4543-b773-962fba13aac5` | 218 | 218 | 2026-07-28 |
 | workroomCardboardBox | `workroomCardboardBox.glb` | [Cardboard Box / Nick Slough](https://poly.pizza/m/j2u0dWIebu) | `poly-pizza:12b9bc45-0581-474d-87ad-0869c28e69ac` | 144 | 144 | 2026-07-28 |
@@ -178,9 +175,7 @@ Room source SHA-256 values: night stand
 `1C08A98905EA18850FC91932FAE9976A556AA30A564F7C45845C2F4F1BC5289A`;
 desk `C3C85D0A0848030DF3E6A5AA810066FCD8329E719726D1DBEF14C9A33CEF9717`;
 cabinet `E5226312183A51C5027F6E6C2E46873C0B0A7B3C9B4FF334C02CB03954B1B944`;
-ceiling light `5A429947D77AB820605844864C4E4C3177407CAACB373BC47359CAFD45812DD4`;
 painting `A5657C57B3406EB340E002B0E25419E46EAC0EAA703F42D6819E61311747B19D`;
-wall art `7D1D99021EC630FA1E6174DF92F7CEA59887702D89CED823F7BDAF14A17082B2`;
 table `33B58D3359CDC343AEB663534CBACE19EEB5BFB21D7CF93E33D13F9C2E57236E`;
 corkboard `251EF29E18DFAFF8D5ACA202AE21BB8DDD6D4D6CD601CC2AA09D394CF41ACA05`;
 cardboard box `81982A2F0CF2D04CB60B5194897D9CB76E688E01DB5A7F8FA757E5B55679D7C2`;
@@ -394,7 +389,6 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | sinkingEnding | `sinkingEnding.mp3` | [Wooden Ship Break / Kodack](https://freesound.org/people/Kodack/sounds/257752/) |
 | shipCrash | `sinkingEnding.mp3` | Reuses [Wooden Ship Break / Kodack](https://freesound.org/people/Kodack/sounds/257752/). |
 | midnightShovel | `midnightShovel.mp3` | [Freesound 353907 / dr19](https://freesound.org/people/dr19/sounds/353907/); runtime uses the six-second cutoff. |
-| midnightMonsterRun | `midnightMonsterRun.mp3` | [Freesound 514585 / gabitomed](https://freesound.org/people/gabitomed/sounds/514585/) |
 | midnightMonsterAttack | `midnightMonsterAttack.mp3` | [Freesound 467701 / LucasDuff](https://freesound.org/people/LucasDuff/sounds/467701/) |
 | checkBackFish | `checkBackFish.mp3` | [Freesound 450830 / kyles](https://freesound.org/people/kyles/sounds/450830/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | checkBackAnglerfish | `checkBackAnglerfish.mp3` | [Freesound 435683 / ItsThatRoboGuy](https://freesound.org/people/ItsThatRoboGuy/sounds/435683/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |

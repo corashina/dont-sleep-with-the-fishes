@@ -20,6 +20,7 @@ import type {
 import { EventItemEffects } from './EventItemEffects';
 import { StationaryEventCamera } from './StationaryEventCamera';
 import { NetAttackPose } from './NetAttackPose';
+import { UmbrellaWindFlight } from './UmbrellaWindFlight';
 import type { EventItemFlightTarget, EventItemUseSample } from './eventItemUseChoreography';
 import {
   eventItemMotionProfile,
@@ -51,6 +52,11 @@ const WATER_TARGETS = {
 } as const;
 const BUCKET_HELMET_COVERAGE_RADIUS = 0.48;
 const BUCKET_HELMET_COVERAGE_START = 0.9;
+// Face the dial toward the camera and keep the case-to-loop axis upright.
+const COMPASS_DIAL_FACING = new Quaternion().setFromUnitVectors(
+  new Vector3(0.29275, 0.22502, 0.92933).normalize(),
+  new Vector3(0, 0, 1),
+).premultiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), -0.0969289));
 export const BUCKET_HELMET_COVERAGE_NAME = 'bucket-helmet-interior-coverage';
 type CameraFacingSurface = 'none' | 'x' | 'y' | 'z';
 
@@ -62,11 +68,14 @@ interface InteriorMaterialBinding {
 /** Adapts sampled item-use poses to a borrowed supply actor. */
 export class EventItemUseAdapter {
   private readonly netAttackPose = new NetAttackPose();
+  private readonly umbrellaWindFlight = new UmbrellaWindFlight();
   private readonly cameraLook: StationaryEventCamera;
   private readonly storedActorPosition = new Vector3();
   private readonly cameraSpacePosition = new Vector3();
   private readonly actorParentPosition = new Vector3();
   private readonly targetWorldPosition = new Vector3();
+  private readonly anchorReleasePosition = new Vector3();
+  private readonly anchorWaterPosition = new Vector3();
   private readonly actorWorldPosition = new Vector3();
   private readonly actionOriginPosition = new Vector3();
   private readonly actionOriginOffset = new Vector3();
@@ -116,12 +125,14 @@ export class EventItemUseAdapter {
   private profile: EventItemMotionProfile | null = null;
   private aimTarget: Object3D | null = null;
   private flashlight = false;
+  private compass = false;
   private heldFill = true;
   private knifeAttack = false;
   private cameraFacingSurface: CameraFacingSurface = 'none';
   private lockItemToHeldCamera = false;
   private alignItemToCamera = false;
   private controlsCamera = true;
+  private anchorReleased = false;
   private readonly interiorMaterialBindings: InteriorMaterialBinding[] = [];
   private readonly interiorMaterials = new Set<Material>();
   private interiorCoverage: Mesh | null = null;
@@ -151,6 +162,7 @@ export class EventItemUseAdapter {
     this.profile = eventItemMotionProfile(itemId);
     this.aimTarget = aimTarget;
     this.flashlight = itemId === 'flashlight';
+    this.compass = itemId === 'compass';
     this.heldFill = itemId !== 'fishingNet';
     if (this.flashlight) this.effects.flashlight.setTarget(aimTarget);
     this.knifeAttack = itemId === 'knife';
@@ -193,6 +205,10 @@ export class EventItemUseAdapter {
           ? this.heldCameraWorldMatrix
           : this.cameraWorldMatrix,
       );
+
+    if (sample.windFlight) {
+      this.umbrellaWindFlight.apply(this.cameraSpacePosition, sample, this.cameraWorldMatrix, actor.root);
+    }
 
     const parent = actor.root.parent;
     this.actorParentPosition.copy(this.cameraSpacePosition);
@@ -254,10 +270,13 @@ export class EventItemUseAdapter {
     this.profile = null;
     this.aimTarget = null;
     this.flashlight = false;
+    this.compass = false;
     this.knifeAttack = false;
     this.cameraFacingSurface = 'none';
     this.lockItemToHeldCamera = false;
     this.alignItemToCamera = false;
+    this.anchorReleased = false;
+    this.umbrellaWindFlight.clear();
     this.active = false;
   }
 
@@ -432,6 +451,16 @@ export class EventItemUseAdapter {
     }
     if (sample.ballisticFlight) {
       this.targetWorldPosition.y = THROW_WATER_CONTACT_Y;
+    }
+    if (sample.flightTarget === 'starboard-water') {
+      if (!this.anchorReleased) {
+        this.anchorReleasePosition.copy(this.cameraSpacePosition);
+        this.anchorWaterPosition.copy(this.targetWorldPosition);
+        this.anchorReleased = true;
+      }
+      // Camera and boat motion must not steer the throw or drag its water endpoint.
+      this.cameraSpacePosition.copy(this.anchorReleasePosition);
+      this.targetWorldPosition.copy(this.anchorWaterPosition);
     }
     const horizontalDistance = Math.hypot(
       this.targetWorldPosition.x - this.cameraSpacePosition.x,
@@ -702,6 +731,7 @@ export class EventItemUseAdapter {
       );
     }
     this.facingTargetQuaternion.setFromRotationMatrix(this.facingBasis);
+    if (this.compass) this.facingTargetQuaternion.multiply(COMPASS_DIAL_FACING);
     const facingBlend = targetPlane || this.cameraFacingSurface === 'x'
       ? sample.aimBlend
       : sample.cameraSpaceBlend;

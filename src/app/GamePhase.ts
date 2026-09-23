@@ -21,6 +21,7 @@ import type { MenuSandAssets } from '../menu/MenuSandAssets';
 import type { SkyPhase } from '../world/skyPalette';
 import type { SurvivalRunCheckpoint } from '../survival/SurvivalCheckpoint';
 import type { SurvivalContent } from '../survival/SurvivalContent';
+import type { ReportLoadingProgress } from './LoadingProgress';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -59,7 +60,7 @@ export interface ShipPhaseContext extends PhaseContext, ShipPhaseAssets {}
 export interface SurvivalPhaseContext extends PhaseContext, SurvivalAssets {}
 
 export interface GamePhase {
-  prepare?(): Promise<void>;
+  prepare?(report?: ReportLoadingProgress): Promise<void>;
   start(): void;
   update(time: number, deltaSeconds: number): void;
   resize(width: number, height: number): void;

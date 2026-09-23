@@ -1,5 +1,7 @@
 import { Group, Object3D, PointLight, Vector3 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
+import { itemLabel } from '../../i18n/itemMessages';
+import { CONSTELLATION_COUNT } from '../starryNight';
 import { eventMessage } from '../../i18n/eventMessages';
 import { runCleanupSteps } from '../../world/SceneResources';
 import { SURVIVAL_CELESTIAL_DIRECTION } from '../../world/celestialLight';
@@ -10,9 +12,9 @@ import type {
 } from '../eventPresentationTypes';
 import { StarryNightGeometry } from './starryNightGeometry';
 
-type Beat = 'reveal' | 'blessing' | 'sleep';
-export const STARRY_NIGHT_REVEAL_SECONDS = 9;
-export const STARRY_NIGHT_BLESSING_SECONDS = 0.6;
+type Beat = 'reveal' | 'gift' | 'sleep';
+export const STARRY_NIGHT_REVEAL_SECONDS = 1;
+export const STARRY_NIGHT_GIFT_SECONDS = 1.8;
 const ease = (value: number): number => {
   const t = Math.min(1, Math.max(0, value));
   return t*t*(3-2*t);
@@ -29,7 +31,9 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
   private readonly animation = new TimedPresentationAnimation<Beat>(
     (kind, _time, progress) => this.sample(kind, progress),
   );
-  private readonly targets: readonly FocusedEventInteractionTarget[];
+  private targets: readonly FocusedEventInteractionTarget[] = [];
+  private selected = -1;
+  private flash = 0;
   private revealProgress = 0;
   private visibility = 1;
   private elapsed = 0;
@@ -39,20 +43,9 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
   constructor(private readonly environment: DedicatedEventEnvironment) {
     this.worldRoot.name = 'starry-night-world';
     this.boatRoot.name = 'starry-night-boat';
-    this.sky.constellation.scale.setScalar(2.2);
     this.light.position.set(0, 3, 0);
     this.boatRoot.add(this.light);
     this.worldRoot.add(this.sky.root, this.itemAimTarget);
-    this.targets = Object.freeze([{
-      id: 'starry-night:constellation',
-      get label() { return eventMessage('starry-night.target', 'starryNightTitle'); },
-      get description() { return eventMessage('starry-night.description', 'starryNightDescription'); },
-      root: this.sky.constellation,
-      choiceId: 'wish',
-      tooltip: false,
-      minimumHitWidth: 120,
-      minimumHitHeight: 72,
-    }]);
     this.worldRoot.visible = false;
   }
 
@@ -60,6 +53,24 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
     if (this.disposed) return;
     this.clear();
     if (context.eventId !== this.eventId) return;
+    const items = context.constellationItems;
+    if (items?.length !== CONSTELLATION_COUNT || new Set(items).size !== CONSTELLATION_COUNT) {
+      throw new Error('Starry Night requires two distinct constellation items.');
+    }
+    this.sky.setItems(items);
+    this.targets = items.map((item, index) => ({
+      id: 'starry-night:' + item,
+      get label() { return itemLabel(item); },
+      get description() { return eventMessage('starry-night.description', 'starryNightDescription'); },
+      root: this.sky.constellations[index]!,
+      choiceId: item,
+      tooltip: false,
+      setHighlighted: (highlighted: boolean) => this.sky.setHighlighted(index, highlighted),
+      minimumHitWidth: 72,
+      minimumHitHeight: 72,
+    }));
+    this.selected = -1;
+    this.flash = 0;
     this.staged = true;
     this.elapsed = 0;
     this.revealProgress = 0;
@@ -78,7 +89,7 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
   }
 
   interactionRoot(id: string): Object3D | null {
-    return id === 'starry-night:constellation' ? this.sky.constellation : null;
+    return this.targets.find((target) => target.id === id)?.root ?? null;
   }
 
   playItemUse(_choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
@@ -88,8 +99,9 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
   react(result: EventOutcomePresentation): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
     const choiceId = result.outcome.eventResult?.choiceId;
-    if (choiceId === 'wish') {
-      return this.animation.start('blessing', STARRY_NIGHT_BLESSING_SECONDS);
+    this.selected = this.targets.findIndex((target) => target.choiceId === choiceId);
+    if (this.selected >= 0) {
+      return this.animation.start('gift', STARRY_NIGHT_GIFT_SECONDS);
     }
     return this.animation.start('sleep', 1.5);
   }
@@ -108,6 +120,7 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
       this.light.intensity = ease(progress)*0.6;
     } else {
       this.visibility = 1-ease(progress);
+      this.flash = beat === 'gift' ? Math.sin(progress * Math.PI) : 0;
       this.light.intensity = this.visibility*0.6;
     }
   }
@@ -118,7 +131,8 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
     this.environment.camera?.getWorldPosition(this.sky.root.position);
     this.sky.root.position.add(this.moonOffset);
     this.itemAimTarget.position.copy(this.sky.root.position);
-    this.sky.update(this.elapsed, this.revealProgress, this.visibility);
+    this.sky.update(this.elapsed, this.revealProgress, this.visibility, this.selected, this.flash,
+      this.environment.camera?.aspect ?? 16/9);
   }
 
   skip(): void {
@@ -133,6 +147,7 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
 
   clear(): void {
     this.animation.cancel();
+    this.sky.clearHighlight();
     this.staged = false;
     this.worldRoot.visible = false;
     this.light.intensity = 0;

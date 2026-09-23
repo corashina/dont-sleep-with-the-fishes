@@ -24,7 +24,7 @@ async function loadModel(path: string): Promise<Group> {
   return (await loader.parseAsync(data, '')).scene;
 }
 
-it('keeps every production catch clear of the rod during reeling and reward display', async () => {
+it.each([40, 70, 110])('keeps every catch below the popup and clear of the fixed rod at FOV %s', async (fov) => {
   const rodModel = await loadModel('src/assets/models/items/fishingRod.glb');
   normalizeLongestDimensionTemplate(
     rodModel, LIFEBOAT_EQUIPMENT_MODEL_SPECS.fishingRod, (message) => new Error(message),
@@ -41,20 +41,21 @@ it('keeps every production catch clear of the rod during reeling and reward disp
   });
   const prepare = library.prepare.bind(library);
   const prepareCatch = vi.spyOn(FishingCatchLibrary.prototype, 'prepare');
-  const camera = new PerspectiveCamera(70, 16 / 9, 0.01, 100);
+  const camera = new PerspectiveCamera(fov, 16 / 9, 0.01, 100);
   const world = new BoatWorld(camera, models, ...createTestSkyTextures());
   const sightline = new Raycaster();
   const eye = new Vector3();
   const center = new Vector3();
   const catchBounds = new Box3();
+  const screenBounds = new Box3();
+  const screenVertex = new Vector3();
   const triangle = new Triangle();
   let time = 0;
   try {
     const entering = world.enterFishingView();
     world.update(time += 1.2, 1.2);
     await entering;
-    const catchRest = world.scene.getObjectByName('fishing-catch-rest');
-    expect(catchRest!.position.z).toBeLessThan(camera.position.z - 0.8);
+    const rodPosition = rod.parent!.position.clone();
     for (const definition of FISHING_CATCHES) {
       for (const x of [-2.7, 0, 2.7]) {
         world.clearFishingPresentation();
@@ -67,9 +68,16 @@ it('keeps every production catch clear of the rod during reeling and reward disp
         const reeling = world.playFishingReel(definition.id);
         await Promise.resolve();
         // Include the landed hold, when the rod used to return through the reward.
-        for (let frame = 0; frame < 90; frame += 1) {
+        for (let frame = 0; frame < 210; frame += 1) {
           world.update(time += 1 / 60, 1 / 60);
+          // Importance: 90/100. A catch reveal must not move the player's rod.
+          expect(rod.parent!.position.equals(rodPosition)).toBe(true);
           world.scene.updateMatrixWorld(true);
+          // Importance: 95/100. The lift and reveal must remain centered as the boat rolls.
+          if (frame >= 90) {
+            world.scene.getObjectByName('fishing-catch-display')!.getWorldPosition(screenVertex);
+            expect(Math.abs(screenVertex.project(camera).x), `Centered reward at frame ${frame}`).toBeLessThan(0.015);
+          }
           catchBounds.setFromObject(catchModel!, true);
           let intersects = false;
           rod.traverse((object) => {
@@ -102,10 +110,25 @@ it('keeps every production catch clear of the rod during reeling and reward disp
           .toBeGreaterThan(distance);
         const projected = world.projectFishingCatch(1280, 720);
         expect(projected?.visible, `${definition.id} reward must stay in view`).toBe(true);
-        // Importance: 90/100. Every catch must remain centered below the result popup.
-        expect(Math.abs(projected!.x - 640), definition.id).toBeLessThan(15);
-        expect(projected!.y - projected!.height / 2, definition.id).toBeGreaterThan(360);
-        expect(projected!.y + projected!.height / 2, definition.id).toBeLessThan(700);
+        // Importance: 90/100. Production catches must fit below the unchanged popup.
+        screenBounds.makeEmpty();
+        catchModel!.traverseVisible((object) => {
+          if (!(object instanceof Mesh)) return;
+          const positions = object.geometry.getAttribute('position');
+          for (let index = 0; index < positions.count; index += 1) {
+            screenVertex.fromBufferAttribute(positions, index).applyMatrix4(object.matrixWorld).project(camera);
+            screenBounds.expandByPoint(screenVertex);
+          }
+        });
+        expect(Math.abs((screenBounds.min.x + screenBounds.max.x) / 2), definition.id).toBeLessThan(0.03);
+        const screenCenterY = (screenBounds.min.y + screenBounds.max.y) / 2;
+        expect(screenCenterY, `${definition.id} between center and bottom`).toBeGreaterThan(-0.6);
+        expect(screenCenterY, `${definition.id} between center and bottom`).toBeLessThan(-0.4);
+        expect(screenBounds.max.y, `${definition.id} below screen center`).toBeLessThan(-0.2);
+        expect(screenBounds.min.y, `${definition.id} above viewport edge`).toBeGreaterThan(-0.85);
+        catchBounds.getCenter(center);
+        camera.worldToLocal(center);
+        expect(-center.z, `${definition.id} close to player`).toBeLessThan(0.22);
       }
     }
   } finally {

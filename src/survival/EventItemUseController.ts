@@ -13,6 +13,7 @@ import {
   isReturningSingleUseContext,
   sampleEventItemOutcome,
   sampleEventItemUse,
+  UMBRELLA_WIND_FLIGHT_DURATION,
   type EventItemDisposition,
   type EventItemUseContext,
   type EventItemUseSample,
@@ -136,7 +137,9 @@ export class EventItemUseController {
       this.held = null;
       return Promise.resolve();
     }
-    if (held.request.context === 'umbrella-overhead' || held.request.context === 'anchor-drop'
+    const disposition = dispositionFor(held.request, result);
+    if ((held.request.context === 'umbrella-overhead' && disposition !== 'depart')
+      || held.request.context === 'anchor-drop'
       || held.request.context === 'swim-ring-deploy') {
       // Keep deployed items until the event flow clears the scene.
       sampleEventItemUse(held.request.context, held.request.itemId, 1, this.sample);
@@ -145,7 +148,7 @@ export class EventItemUseController {
     }
     return this.startReaction(
       held,
-      dispositionFor(held.request, result),
+      disposition,
       result.consumedInstanceIds.includes(held.request.instanceId)
         && isReturningSingleUseContext(held.request.context),
     );
@@ -187,7 +190,9 @@ export class EventItemUseController {
         disposition,
         retainUntilClear,
         elapsed: 0,
-        duration: eventItemOutcomeDuration(held.request.itemId, disposition),
+        duration: held.request.context === 'umbrella-overhead' && disposition === 'depart'
+          ? UMBRELLA_WIND_FLIGHT_DURATION
+          : eventItemOutcomeDuration(held.request.itemId, disposition),
         resolve,
       };
     });

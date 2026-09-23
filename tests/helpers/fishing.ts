@@ -1,15 +1,5 @@
 import type { ItemId } from '../../src/game/ItemState';
-import type { FishingSession } from '../../src/survival/FishingSession';
-import { SURVIVAL_BALANCE } from '../../src/survival/survivalBalance';
 import { eligibleFishingCatches, type FishingCatchId } from '../../src/survival/fishingCatalog';
-
-/** A skilled player counters the visible displacement each frame. */
-export function landFishingCatch(attempt: FishingSession): void {
-  for (let frame = 0; frame < 250 && attempt.view().state === 'fighting'; frame++) {
-    attempt.counterPull(-attempt.view().fishOffset / SURVIVAL_BALANCE.fishing.mousePullPerPixel);
-    attempt.advance(1 / 60);
-  }
-}
 
 /** Select a catch for integration tests without pinning the entire loot table. */
 export function fishingRoll(

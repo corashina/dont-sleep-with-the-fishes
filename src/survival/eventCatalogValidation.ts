@@ -228,12 +228,9 @@ function validateEffectRecord(value: unknown, path: string): PlainRecord {
     'effect',
     [
       'resources', 'items', 'chest', 'grantHeartPiece',
-      'nextDawnEnergy', 'nextDawnEnergyReduction', 'maximumNextDawnEnergy', 'followUpNight', 'restoreCrew',
+      'nextDawnEnergy', 'nextDawnEnergyReduction', 'maximumNextDawnEnergy', 'followUpNight',
     ],
   );
-  if (Object.hasOwn(candidateEffects, 'restoreCrew') && candidateEffects.restoreCrew !== true) {
-    throw new Error(`${path}.effects.restoreCrew must be true`);
-  }
   if (Object.hasOwn(candidateEffects, 'grantHeartPiece')
     && !HEART_PIECE_IDS.includes(candidateEffects.grantHeartPiece as HeartPieceId)) {
     throw new Error(path + '.effects.grantHeartPiece is invalid');
@@ -581,6 +578,9 @@ function validateChoiceRequirement(
   }
   const candidate = requirement as Record<string, unknown>;
   assertExactKeys(candidate, `${eventEntry.id}.${eventChoice.id} requirement`, 'requirement', ['resource', 'minimum'], ['resource', 'minimum']);
+  if (candidate.resource === 'rescueLead') {
+    throw new Error(`${eventEntry.id}.${eventChoice.id} requirement must not expose hidden rescue progress`);
+  }
   if (!EVENT_RESOURCES.includes(candidate.resource as EventResource)) {
     throw new Error(`${eventEntry.id}.${eventChoice.id} requirement contains unknown resource`);
   }

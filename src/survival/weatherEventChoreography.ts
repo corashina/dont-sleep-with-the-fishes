@@ -257,11 +257,6 @@ function sampleWeatherRevealMotion(
   }
   if (eventId === 'windy-night') sampleWindyReveal(t, output);
   if (eventId === 'thunderstorm') output.lightningEmphasis = lightningFlashIntensity((t - 0.515) * 4);
-  if (eventId === 'monster-in-the-fog') {
-    output.figureVisibility = smoothstep((t - 0.2) / 0.18);
-    output.figureDistance = 0;
-    return false;
-  }
   return eventId === 'windy-night' || eventId === 'thunderstorm';
 }
 
@@ -276,13 +271,14 @@ export function sampleWeatherReveal(
 ): boolean {
   resetReveal(output);
   if (!isEventPresentationRoute(eventId, 'weather')) return false;
+  if (eventId === 'monster-in-the-fog') {
+    output.figureVisibility = 1;
+    return true;
+  }
 
   const t = clamp01(progress);
   if (t === 0) return true;
-  if (t === 1) {
-    if (eventId === 'monster-in-the-fog') output.figureVisibility = 1;
-    return true;
-  }
+  if (t === 1) return true;
   if (!sampleWeatherRevealMotion(eventId, t, output)) return true;
 
   const ingressEnvelope = smoothstep(t / 0.12);

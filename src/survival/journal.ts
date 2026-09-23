@@ -96,12 +96,11 @@ function formatCarlitosMood(before: number, after: number): string {
 
 function formatDive(record: JournalSurvivalActionRecord): string {
   const sentences = [t('dived')];
-  const { food = 0, bait = 0, rescueLead = 0, health = 0 } = record.deltas;
+  const { food = 0, bait = 0, health = 0 } = record.deltas;
   if (food > 0) sentences.push(t('foundFood'));
   if (bait > 0) sentences.push(t('foundBait'));
-  if (rescueLead > 0) sentences.push(t('foundLead'));
   const gainedItem = record.inventoryMutations.some(({ kind, instanceIds }) => kind === 'gain' && instanceIds.length > 0);
-  if (Math.max(food, bait, rescueLead) <= 0 && !gainedItem) sentences.push(t('noSupplies'));
+  if (Math.max(food, bait) <= 0 && !gainedItem) sentences.push(t('noSupplies'));
   if (health < 0) sentences.push(t('injured'));
   return sentences.join(' ');
 }

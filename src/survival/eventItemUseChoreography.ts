@@ -71,6 +71,7 @@ const UMBRELLA_OVERHEAD_ROTATION = Object.freeze({
 const UMBRELLA_SHIELD_VIEW_Z = -0.2;
 const UMBRELLA_SHIELD_VIEW_Y = -0.075;
 const UMBRELLA_SHIELD_SCALE = 1.5;
+export const UMBRELLA_WIND_FLIGHT_DURATION = 5.8;
 const ANCHOR_FLIGHT_START = 0.56;
 const ANCHOR_IMPACT_PROGRESS = 0.84;
 const ANCHOR_ACTION_CUE_PROGRESSES = Object.freeze([ANCHOR_IMPACT_PROGRESS]);
@@ -132,6 +133,7 @@ export interface EventItemUseSample {
   targetBlend: number;
   netSwing: boolean;
   ballisticFlight: boolean;
+  windFlight: boolean;
   flightArc: number;
   flightArcHeight: number;
   flightTarget: EventItemFlightTarget;
@@ -146,7 +148,7 @@ const BUCKET_SCOOP_EVENTS: ReadonlySet<string> = new Set([
   'leak', 'school-of-fish', 'ocean-of-blood',
 ]);
 const BUCKET_HELMET_EVENTS: ReadonlySet<string> = new Set([
-  'shower-night', 'bad-sleep', 'thunderstorm', 'eerie-melody',
+  'shower-night', 'bad-sleep', 'thunderstorm', 'eerie-melody', 'face-on-the-moon',
 ]);
 const UMBRELLA_OVERHEAD_EVENTS: ReadonlySet<string> = new Set([
   'shower-night', 'windy-night', 'thunderstorm',
@@ -264,6 +266,7 @@ export function createEventItemUseSample(): EventItemUseSample {
     targetBlend: 0,
     netSwing: false,
     ballisticFlight: false,
+    windFlight: false,
     flightArc: 0,
     flightArcHeight: 0,
     flightTarget: 'event',
@@ -380,6 +383,7 @@ function resetSample(output: EventItemUseSample): void {
   output.targetBlend = 0;
   output.netSwing = false;
   output.ballisticFlight = false;
+  output.windFlight = false;
   output.flightArc = 0;
   output.flightArcHeight = 0;
   output.flightTarget = 'event';
@@ -492,7 +496,6 @@ function sampleTapeSecure(
   sampleTapeStretch(output, pickup, hold, stretch);
   const press = smoothstep((progress - 0.62) / 0.28);
   output.targetBlend = press;
-  output.cameraTargetBlend = 0.65 * smoothstep((progress - 0.5) / 0.22);
   output.pitch = -0.28 * press;
 }
 
@@ -829,6 +832,7 @@ function sampleAnchorDrop(
   output.effectKind = released > 0 ? 'chain' : 'none';
   output.primaryEffect = released;
   output.secondaryEffect = flight;
+  output.effectTravel = smoothstep((progress - ANCHOR_IMPACT_PROGRESS) / (1 - ANCHOR_IMPACT_PROGRESS));
   output.itemVisible = flight < 0.999;
 }
 
@@ -1139,7 +1143,7 @@ function sampleImmediateEventItemOutcome(
     case 'binocular-look': sampleBinocularOutcome(progress, output); return true;
     case 'flare-target': sampleFlareOutcome(progress, output); return true;
     case 'flare-sky': sampleFlareOutcome(progress, output); return true;
-    case 'umbrella-overhead': sampleUmbrellaOutcome(progress, output); return true;
+    case 'umbrella-overhead': sampleUmbrellaOutcome(disposition, progress, output); return true;
     case 'tape-stretch': sampleTapeOutcome(progress, profile, output); return true;
     default: return false;
   }
@@ -1182,7 +1186,35 @@ function sampleFlareOutcome(progress: number, output: EventItemUseSample): void 
   sampleFlare(output, pickup, pickup, 1);
 }
 
-function sampleUmbrellaOutcome(progress: number, output: EventItemUseSample): void {
+function sampleUmbrellaOutcome(
+  disposition: EventItemDisposition,
+  progress: number,
+  output: EventItemUseSample,
+): void {
+  if (disposition === 'depart') {
+    // Pull right, then drift with alternating gusts and lulls.
+    const pull = smoothstep(progress / 0.07);
+    const flight = clamp01((progress - 0.07) / 0.93);
+    const gustPhase = Math.PI * 6 * flight;
+    const travel = flight - 0.5 * Math.sin(gustPhase) / (Math.PI * 6)
+      - 0.2 * Math.sin(Math.PI * 14 * flight) / (Math.PI * 14);
+    const flutter = smoothstep(flight / 0.12);
+    output.windFlight = true;
+    output.viewX += 0.08 * pull + 6 * travel + 30 * travel ** 3;
+    output.viewY += 0.04 * pull + flutter * (
+      0.35 + 0.22 * Math.sin(gustPhase) + 0.1 * Math.sin(Math.PI * 13 * flight)
+    );
+    output.viewZ -= 0.02 * pull + 4 * travel;
+    output.yaw += 1.2 * travel + flutter * 0.65 * Math.sin(Math.PI * 5 * flight);
+    output.pitch += flutter * (
+      0.45 * Math.sin(gustPhase) + 0.16 * Math.sin(Math.PI * 15 * flight)
+    );
+    output.roll += -0.15 * pull - 1.8 * travel + flutter * (
+      0.5 * Math.sin(Math.PI * 7 * flight) + 0.14 * Math.sin(Math.PI * 17 * flight)
+    );
+    output.itemVisible = progress < 1;
+    return;
+  }
   resetSample(output);
   const pickup = 1 - smoothstep(progress);
   sampleUmbrella(output, pickup, pickup, false, 1);
@@ -1202,7 +1234,6 @@ function sampleTapeSecureOutcome(
   } else {
     sampleTapeOutcome((progress - 0.5) * 2, profile, output);
   }
-  output.cameraTargetBlend = 0.65 * (1 - smoothstep(progress));
 }
 
 function sampleTapeOutcome(

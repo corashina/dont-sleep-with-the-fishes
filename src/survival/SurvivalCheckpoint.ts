@@ -40,7 +40,6 @@ export interface SurvivalSessionCheckpoint {
   readonly recoveredFood: number;
   readonly recoveredBait: number;
   readonly rescueLead: RescueLead;
-  readonly rescueTraceFinds: 0 | 1 | 2;
   readonly radioSignalAvailable: boolean;
   readonly radioSignalsSent: number;
   readonly radioSignalsEnabled: boolean;
@@ -55,7 +54,6 @@ export interface SurvivalSessionCheckpoint {
   readonly pendingEventId: string | null;
   readonly pendingEventTargetId: ItemInstanceId | null;
   readonly nextDawnEnergyOverride: DawnEnergy | null;
-  readonly crewRestorationAtDawn: boolean;
   readonly lastEventId: string | null;
   readonly lastSeenDays: Readonly<Record<string, number>>;
   readonly appearanceCounts: Readonly<Record<string, number>>;

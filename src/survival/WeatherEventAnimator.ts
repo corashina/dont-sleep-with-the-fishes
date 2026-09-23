@@ -235,6 +235,7 @@ export class WeatherEventAnimator {
     if (eventId === 'monster-in-the-fog') this.monster?.stage(variantSeed);
     this.rememberCameraBase();
     this.hideTransientEffects();
+    this.showStagedFogMonster();
     this.selectedActorId = null;
   }
 
@@ -267,6 +268,7 @@ export class WeatherEventAnimator {
     this.stagedEventId = eventId;
     this.rememberCameraBase();
     this.hideTransientEffects();
+    this.showStagedFogMonster();
     return new Promise((resolve) => {
       this.active = {
         kind: 'reveal',

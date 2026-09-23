@@ -86,8 +86,10 @@ export class SurvivalCoverView {
       </div>
       <section class="dive-result" data-dive-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="dive-result-title" inert>
         <div class="dive-result__paper scuba-popup-paper">
-          <button type="button" class="dive-result__close ui-role-context" data-dive-result-close data-ui-aria="closeDive" aria-label="${uiText('closeDive')}">&times;</button>
-          <h2 class="dive-result__title scuba-popup-title ui-role-display" id="dive-result-title" data-dive-result-title></h2>
+          <header class="popup-header">
+            <button type="button" class="popup-header__close" data-dive-result-close data-ui-aria="closeDive" aria-label="${uiText('closeDive')}"></button>
+            <h2 class="dive-result__title scuba-popup-title ui-role-display" id="dive-result-title" data-dive-result-title></h2>
+          </header>
           <ul class="dive-result__lines ui-role-numeral" data-dive-result-lines></ul>
           <div class="dive-result__rewards" data-dive-result-rewards hidden></div>
         </div>

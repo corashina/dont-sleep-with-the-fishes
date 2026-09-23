@@ -58,6 +58,7 @@ describe('EventBundleManager', () => {
 
   it.each([
     ['campfire model', { missingModel: 'midnightCampfire' }, 'Missing required Midnight Tour campfire model.'],
+    ['backpack model', { missingModel: 'midnightBackpack' }, 'Missing required Midnight Tour backpack model.'],
     [
       'monster idle clip',
       { missingClip: 'CharacterArmature|Idle' },

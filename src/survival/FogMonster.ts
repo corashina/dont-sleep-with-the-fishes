@@ -21,8 +21,8 @@ export class FogMonster {
   private duration = 5;
   private startX = -0.7;
   private targetX = 0.7;
-  private startZ = -9;
-  private targetZ = -9;
+  private startZ = -24;
+  private targetZ = -24;
   private disposed = false;
 
   constructor(
@@ -57,7 +57,7 @@ export class FogMonster {
   stage(seed: number): void {
     this.random = mulberry32(seed);
     this.startX = (this.random.next() < 0.5 ? -1 : 1) * (0.35 + this.random.next() * 0.55);
-    this.startZ = -8 - this.random.next() * 2;
+    this.startZ = -23 - this.random.next() * 2;
     this.elapsed = 0;
     this.chooseTarget();
     this.root.rotation.set(0, 0, 0);
@@ -109,7 +109,7 @@ export class FogMonster {
 
   private chooseTarget(): void {
     this.targetX = (this.startX < 0 ? 1 : -1) * (0.35 + this.random.next() * 0.55);
-    this.targetZ = -8 - this.random.next() * 2;
+    this.targetZ = -23 - this.random.next() * 2;
     this.duration = 4 + this.random.next() * 3;
   }
 }

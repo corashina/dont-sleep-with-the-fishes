@@ -522,14 +522,13 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const recoveredFood = parseInteger(value.recoveredFood, 0, parsedUpperBound(food));
   const recoveredBait = parseInteger(value.recoveredBait, 0, parsedUpperBound(bait));
   const rescueLead = parseInteger(value.rescueLead, 0, 8);
-  const rescueTraceFinds = parseInteger(value.rescueTraceFinds, 0, 2);
   const radioSignalsSent = parseInteger(value.radioSignalsSent, 0, MAX_COUNTER);
   const savedPickupCount = parseInteger(value.savedPickupCount, 0, MAX_COUNTER);
   const fishingCounter = parseInteger(value.fishingCounter, 0, MAX_COUNTER);
   const seed = parseInteger(value.seed, 0, MAX_UINT32);
   const randomState = parseInteger(value.randomState, 0, MAX_UINT32);
   const scavengeFields = [day, pressure, health, hunger, energy, hull, food, bait, recoveredFood,
-    recoveredBait, rescueLead, rescueTraceFinds, radioSignalsSent, savedPickupCount,
+    recoveredBait, rescueLead, radioSignalsSent, savedPickupCount,
     fishingCounter, seed, randomState];
   if (!hasValidSessionScalars(state, scavengeFields)) return null;
   if (!hasSessionFlags(value)) return null;
@@ -572,10 +571,9 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
     history: history!,
     state: state as SurvivalSessionCheckpoint['state'], day: day!, pressure: pressure!, health: health!, hunger: hunger!, energy: energy!, hull: hull!,
     food: food!, bait: bait!, recoveredFood: recoveredFood!, recoveredBait: recoveredBait!, rescueLead: rescueLead! as RescueLead,
-    rescueTraceFinds: rescueTraceFinds! as 0 | 1 | 2, radioSignalAvailable: value.radioSignalAvailable, radioSignalsSent: radioSignalsSent!, radioSignalsEnabled: value.radioSignalsEnabled,
+    radioSignalAvailable: value.radioSignalAvailable, radioSignalsSent: radioSignalsSent!, radioSignalsEnabled: value.radioSignalsEnabled,
     heartPieces: heartPieces!, chest: chest!, weather: value.weather, actedToday: value.actedToday, inventory: inventory!, savedItems: savedItems!, savedPickupCount: savedPickupCount!, carlitos: carlitos!,
     pendingEventId, pendingEventTargetId, nextDawnEnergyOverride: nextDawnEnergyOverride as DawnEnergy | null,
-    crewRestorationAtDawn: value.crewRestorationAtDawn,
     lastEventId: lastEventId!, lastSeenDays: lastSeenDays!, appearanceCounts: appearanceCounts!, lastOutcome: lastOutcome!, lastHealthCause: lastHealthCause!, lastHullEventId: lastHullEventId!,
     pendingJournalDaytime: pendingJournalDaytime!, pendingJournalNighttime: pendingJournalNighttime!, pendingJournalActions: pendingJournalActions!, journalEntries: journalEntries!,
     fishingCounter: fishingCounter!, seed: seed!, randomState: randomState!,
@@ -638,13 +636,11 @@ function hasSessionFlags(
   radioSignalAvailable: boolean;
   radioSignalsEnabled: boolean;
   actedToday: boolean;
-  crewRestorationAtDawn: boolean;
   weather: WeatherId;
 } {
   return typeof value.radioSignalAvailable === 'boolean'
     && typeof value.radioSignalsEnabled === 'boolean'
     && typeof value.actedToday === 'boolean'
-    && typeof value.crewRestorationAtDawn === 'boolean'
     && typeof value.weather === 'string'
     && WEATHER_ID_SET.has(value.weather as WeatherId);
 }

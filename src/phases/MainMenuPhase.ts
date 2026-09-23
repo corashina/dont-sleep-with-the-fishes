@@ -1,5 +1,7 @@
 import { PerspectiveCamera, Scene } from 'three';
 import type { GamePhase, MenuPhaseContext } from '../app/GamePhase';
+import { reportLoadingStage, type ReportLoadingProgress } from '../app/LoadingProgress';
+import { prepareScene } from '../rendering/prepareScene';
 import type { AudioScope } from '../audio/AudioScope';
 import { MenuModelLibrary } from '../menu/MenuModelLibrary';
 import { MENU_FADE_SECONDS, sampleMenuFade } from '../menu/menuChoreography';
@@ -144,7 +146,11 @@ export class MainMenuPhase implements GamePhase {
     this.ui.onOverlayChange = () => this.clearSignInteraction();
   }
 
-  async prepare(): Promise<void> {
+  async prepare(report?: ReportLoadingProgress): Promise<void> {
+    if (this.disposed) return;
+    await prepareScene(this.context.renderer, this.scene, this.context.camera, [], () => !this.disposed, report);
+    if (this.disposed) return;
+    await reportLoadingStage(report, 'preparingEffects');
     if (this.disposed) return;
     await this.context.sceneRenderer.prepare(this.scene, this.context.camera, this.visualState);
   }

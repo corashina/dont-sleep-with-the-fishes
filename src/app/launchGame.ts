@@ -4,7 +4,7 @@ import { createBrowserGame, WebGlInitializationError } from './createBrowserGame
 import { ITEM_DEFINITIONS } from '../game/ItemState';
 import {
   createSystemScreen,
-  observeSystemScreenDownloads,
+  observeSystemScreenLoading,
   type SystemScreenDescription,
 } from '../ui/SystemScreen';
 import {
@@ -256,7 +256,7 @@ export function launchGame(
     return { completion: Promise.resolve(null), cancel: () => undefined };
   }
   const loading = renderLoading(mount);
-  const stopDownloads = observeSystemScreenDownloads(loading);
+  const stopLoading = observeSystemScreenLoading(loading);
   const invalid = (): boolean => cancelled || !mount.isConnected;
   const completion = (async (): Promise<Game | null> => {
     try {
@@ -274,7 +274,7 @@ export function launchGame(
       if (!invalid()) renderPreloadFailure(mount, error);
       return null;
     } finally {
-      stopDownloads();
+      stopLoading();
       loading.remove();
     }
   })();
@@ -283,7 +283,7 @@ export function launchGame(
     cancel(): void {
       if (cancelled) return;
       cancelled = true;
-      stopDownloads();
+      stopLoading();
       loading.remove();
       disposeCurrentOwnership();
     },

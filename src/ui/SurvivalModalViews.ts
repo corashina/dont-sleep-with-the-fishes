@@ -79,8 +79,10 @@ export class SurvivalModalViews {
     template.innerHTML = `
       <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="repairTarget" aria-label="${uiText('repairTarget')}" inert>
         <div class="routine-dialog__card scuba-popup-paper">
-          <button type="button" class="dive-result__close ui-role-context" data-repair-cancel data-ui-aria="cancelRepair" aria-label="${uiText('cancelRepair')}">&times;</button>
-          <h2 class="scuba-popup-title ui-role-display" data-repair-options-title tabindex="-1" data-ui-text="repairItem">${uiText('repairItem')}</h2>
+          <header class="popup-header">
+            <button type="button" class="popup-header__close" data-repair-cancel data-ui-aria="cancelRepair" aria-label="${uiText('cancelRepair')}"></button>
+            <h2 class="scuba-popup-title ui-role-display" data-repair-options-title tabindex="-1" data-ui-text="repairItem">${uiText('repairItem')}</h2>
+          </header>
           <p class="repair-unavailable ui-role-context" data-repair-unavailable hidden></p>
           <div class="repair-targets" data-repair-targets></div>
         </div>

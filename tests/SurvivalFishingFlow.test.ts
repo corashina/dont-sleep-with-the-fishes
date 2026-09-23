@@ -1,4 +1,3 @@
-import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 // Importance: 10/10. Protects fishing workflow order, state, and lifecycle guards.
 import { describe,expect,it,vi } from 'vitest';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
@@ -92,7 +91,7 @@ function createRig(options: FishingRigOptions = {}) {
     playFishingCast: vi.fn(() => startAnimation('cast')),
     showFishingWaiting: vi.fn(() => calls.push('world:waiting')),
     showFishingBite: vi.fn(() => calls.push('world:bite')),
-    updateFishingFight: vi.fn(),
+    moveFishingBite: vi.fn(() => calls.push('world:move-bite')),
     projectFishingBite: vi.fn(() => biteTarget),
     playFishingReel: vi.fn(() => startAnimation('reel')),
     playFishingNetHaul: vi.fn(() => startAnimation('net')),
@@ -119,7 +118,7 @@ function createRig(options: FishingRigOptions = {}) {
     deny: vi.fn(() => calls.push('audio:deny')),
     fishingCast: vi.fn(() => calls.push('audio:cast')),
     fishingBite: vi.fn(() => calls.push('audio:bite')),
-    setFishingReeling: vi.fn((active: boolean) => calls.push(active ? 'audio:reel' : 'audio:reel-stop')),
+    fishingReel: vi.fn(() => calls.push('audio:reel')),
     fishingNet: vi.fn(() => calls.push('audio:net')),
     fishingNetSplash: vi.fn(() => calls.push('audio:net-splash')),
     fishingResult: vi.fn(() => calls.push('audio:result')),
@@ -183,50 +182,7 @@ async function cast(rig: ReturnType<typeof createRig>): Promise<void> {
   await flushPromises();
 }
 
-function finishFight(rig: ReturnType<typeof createRig>): void {
-  rig.flow.setControlActive(true);
-  const attempt = rig.session.beginFishing.mock.results.at(-1)!.value.attempt;
-  for (let frame = 0; frame < 250 && attempt.view().state === 'fighting'; frame++) {
-    rig.flow.counterPull(-attempt.view().fishOffset / SURVIVAL_BALANCE.fishing.mousePullPerPixel);
-    rig.flow.update(1 / 60);
-  }
-}
-
 describe('SurvivalFishingFlow', () => {
-  // Importance: 95/100. Lost control must not cost resources or keep the reel running.
-  it('freezes the struggle without mouse ownership and stops reeling on escape', async () => {
-    const rig = createRig();
-    await enter(rig);
-    await cast(rig);
-    rig.flow.update(3);
-    expect(rig.flow.reel()).toBe(true);
-    const attempt = rig.session.beginFishing.mock.results[0]!.value.attempt;
-    rig.flow.update(10);
-    expect(attempt.view().fightSeconds).toBe(0);
-    rig.flow.setControlActive(true);
-    rig.flow.update(0.2);
-    const elapsed = attempt.view().fightSeconds;
-    rig.flow.setControlActive(false);
-    rig.flow.update(10);
-    expect(attempt.view().fightSeconds).toBe(elapsed);
-    expect(rig.audio.setFishingReeling).toHaveBeenLastCalledWith(false);
-    rig.flow.setControlActive(true);
-    rig.setPaused(true);
-    rig.flow.update(10);
-    expect(attempt.view().fightSeconds).toBe(elapsed);
-    rig.setPaused(false);
-    rig.flow.update(4);
-    expect(attempt.view().result).toEqual({ kind: 'miss' });
-    expect(rig.audio.setFishingReeling).toHaveBeenLastCalledWith(false);
-    expect(rig.animations.miss).toHaveLength(1);
-    expect(rig.realSession.snapshot().food).toBe(0);
-    rig.animations.miss[0]!.resolve();
-    await flushPromises();
-    expect(rig.ui.showFishingResult).toHaveBeenCalledExactlyOnceWith({
-      items: [], message: 'The fish got away.',
-    });
-  });
-
   it('hauls one net catch automatically and returns aboard after the result', async () => {
     const rig = createRig({ withNet: true, withBait: true });
     const before = rig.realSession.snapshot();
@@ -253,7 +209,7 @@ describe('SurvivalFishingFlow', () => {
     }));
     expect(rig.audio.fishingBite).not.toHaveBeenCalled();
     expect(rig.audio.fishingCast).not.toHaveBeenCalled();
-    expect(rig.audio.setFishingReeling).not.toHaveBeenCalledWith(true);
+    expect(rig.audio.fishingReel).not.toHaveBeenCalled();
     expect(rig.audio.fishingNet).toHaveBeenCalledOnce();
     rig.flow.continueResult();
     expect(rig.animations.exit).toHaveLength(1);
@@ -302,9 +258,18 @@ describe('SurvivalFishingFlow', () => {
       mode: 'bite', message: 'BITE - REEL NOW', biteTarget: rig.biteTarget,
     });
 
+    // Importance: 95/100. The clickable target must follow the moving bite before hooking.
+    const firstOffset = vi.mocked(rig.world.moveFishingBite).mock.lastCall![1];
+    rig.calls.length = 0;
+    rig.flow.update(0.1);
+    const nextMove = vi.mocked(rig.world.moveFishingBite).mock.lastCall!;
+    expect(nextMove[0]).toEqual(rig.castPoint);
+    expect(nextMove[1]).toBeGreaterThan(firstOffset);
+    expect(rig.calls.indexOf('world:move-bite')).toBeLessThan(rig.calls.indexOf('ui:bite-target'));
+    expect(rig.ui.updateFishingBiteTarget).toHaveBeenLastCalledWith(rig.biteTarget);
+
     rig.calls.length = 0;
     expect(rig.flow.reel()).toBe(true);
-    finishFight(rig);
     expect(rig.flow.reel()).toBe(false);
     expect(rig.session.finishFishing).toHaveBeenCalledOnce();
     expect(rig.calls.indexOf('audio:reel')).toBeLessThan(rig.calls.indexOf('finishFishing'));
@@ -357,7 +322,6 @@ describe('SurvivalFishingFlow', () => {
       await flushPromises();
       rig.flow.update(3);
       expect(rig.flow.reel()).toBe(true);
-    finishFight(rig);
       expect(rig.flow.reel()).toBe(false);
       rig.animations.reel.at(-1)!.resolve();
       await flushPromises();
@@ -383,7 +347,6 @@ describe('SurvivalFishingFlow', () => {
     await cast(rig);
     rig.flow.update(3);
     expect(rig.flow.reel()).toBe(true);
-    finishFight(rig);
     rig.animations.reel[0]!.resolve();
     await flushPromises();
     rig.flow.continueResult();
@@ -449,23 +412,29 @@ describe('SurvivalFishingFlow', () => {
     expect(rig.flow.reel()).toBe(false);
     rig.setHidden(false);
     expect(rig.flow.reel()).toBe(true);
-    finishFight(rig);
   });
 
-  it('retries a rejected settlement without repeating the struggle', async () => {
+  it('restores the bite state after a rejected settlement and permits retry', async () => {
     const rig = createRig();
     await enter(rig);
     await cast(rig);
     rig.flow.update(3);
-    rig.session.finishFishing.mockImplementationOnce(() => ({
-      accepted: false, code: 'fishing-result-mismatch', message: '', deltas: {}, cue: 'none',
-    }));
-    expect(rig.flow.reel()).toBe(true);
-    finishFight(rig);
+    const rejection = {
+      accepted: false,
+      code: 'fishing-result-mismatch',
+      message: 'That result does not belong to this attempt.',
+      deltas: {},
+      cue: 'none' as const,
+    };
+    rig.session.finishFishing.mockImplementationOnce(() => rejection);
+
+    expect(rig.flow.reel()).toBe(false);
+
     expect(rig.audio.deny).toHaveBeenCalledOnce();
-    rig.flow.update(0);
-    expect(rig.session.finishFishing).toHaveBeenCalledTimes(2);
-    expect(rig.animations.reel).toHaveLength(1);
+    expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
+      mode: 'bite', message: 'BITE - REEL NOW', biteTarget: rig.biteTarget,
+    });
+    expect(rig.flow.reel()).toBe(true);
   });
 
   it('continues normally after visibility settlement resolves a view animation', async () => {
@@ -497,8 +466,7 @@ describe('SurvivalFishingFlow', () => {
     expect(rig.world.showFishingWaiting).not.toHaveBeenCalled();
     expect(rig.ui.hideFishingResult).toHaveBeenCalledOnce();
     expect(rig.ui.setFishingViewExitVisible).toHaveBeenLastCalledWith(false);
-    expect(vi.mocked(rig.ui.setFishingState).mock.calls).toHaveLength(stateCalls + 1);
-    expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({ mode: 'hidden', message: '', biteTarget: null });
+    expect(vi.mocked(rig.ui.setFishingState).mock.calls).toHaveLength(stateCalls);
     expect(rig.flow.cast(null, null, 800, 600)).toBe(false);
     expect(rig.flow.reel()).toBe(false);
   });
@@ -509,7 +477,6 @@ describe('SurvivalFishingFlow', () => {
     await cast(rig);
     rig.flow.update(3);
     expect(rig.flow.reel()).toBe(true);
-    finishFight(rig);
     rig.restart();
     const stateCalls = vi.mocked(rig.ui.setFishingState).mock.calls.length;
 

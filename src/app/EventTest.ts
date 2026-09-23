@@ -1,3 +1,4 @@
+import { constellationItems } from '../survival/starryNight';
 import {
   ITEM_IDS,
   type ItemInstance,
@@ -159,10 +160,13 @@ export const EVENT_TEST_OPTIONS: readonly EventTestOption[] = Object.freeze([
 ]);
 
 export function createEventTestResult(option: EventTestOption, seed: number): Readonly<ScavengeResult> {
-  const rewards = option.phase !== 'ending' && option.eventId === 'night-trader'
+  const rewards = option.phase !== 'ending' && option.eventId === 'starry-night'
+    ? new Set(constellationItems(deriveEventVariantSeed(seed, 1, option.eventId), new Set()))
+    : option.phase !== 'ending' && option.eventId === 'night-trader'
     ? new Set(nightTraderOffers(deriveEventVariantSeed(seed, 1, option.eventId)).map(({ reward }) => reward))
-    // Reserve a light reward so every stocked Handyman payment has a valid trade.
-    : new Set(option.phase !== 'ending' && option.eventId === 'handyman' ? ['compass'] : []);
+    // Reserve a reward for the stocked Handyman and abandoned camp previews.
+    : new Set(option.phase !== 'ending'
+      && (option.eventId === 'handyman' || option.resultId === 'tour-camp') ? ['compass'] : []);
   const savedItems = ITEM_IDS.filter((type) => !rewards.has(type)).map((type): Readonly<ItemInstance> => Object.freeze({
     instanceId: `${type}-1` as ItemInstanceId,
     type,

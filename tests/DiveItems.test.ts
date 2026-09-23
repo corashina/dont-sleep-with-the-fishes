@@ -28,6 +28,25 @@ describe('dive item selection', () => {
 });
 
 describe('normal dive item rewards', () => {
+  // Importance: 95/100. Diving must never advance hidden rescue progress.
+  it.each(['calm', 'overcast'] as const)('splits supply rewards equally without rescue progress in %s', (weather) => {
+    const counts = { food: 0, bait: 0 };
+    for (let index = 0; index < 100; index += 1) {
+      const session = new SurvivalSession(saved(['scubaSet']), {
+        seed: 1, weather, initial: { rescueLead: 2 },
+        random: sequenceRandom([0, 0.99, (index + 0.5) / 100, 0, 0.99]),
+      });
+      const outcome = session.perform('dive');
+      expect(outcome.accepted).toBe(true);
+      expect(outcome.deltas.rescueLead).toBeUndefined();
+      expect(session.snapshot().rescueLead).toBe(2);
+      expect((outcome.deltas.food ?? 0) + (outcome.deltas.bait ?? 0)).toBe(1);
+      if (outcome.deltas.food) counts.food += 1;
+      if (outcome.deltas.bait) counts.bait += 1;
+    }
+    expect(counts).toEqual({ food: 50, bait: 50 });
+  });
+
   it.each(['calm'] as const)('gives an item on 15%% of all dives in %s weather', (weather) => {
     let itemFinds = 0;
     for (let index = 0; index < 100; index += 1) {

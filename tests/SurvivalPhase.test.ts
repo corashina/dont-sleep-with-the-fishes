@@ -1,4 +1,3 @@
-import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 // Importance: 10/10 (scaled from 5/5). Protects survival orchestration and lifecycle.
 import { Scene } from 'three';
 import { afterEach,describe,expect,it,vi } from 'vitest';
@@ -39,7 +38,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     state: 'day', ending: null, day: 1, pressure: 0, health: 100, hunger: 20, energy: 3, hull: 100,
     history: [],
     food: 0, bait: 0, recoveredFood: 0, recoveredBait: 0,
-    rescueLead: 0, rescueTraceFinds: 0, radioSignalAvailable: false, radioSignalsSent: 0,
+    rescueLead: 0, radioSignalAvailable: false, radioSignalsSent: 0,
     heartPieces: { flowers: false, blood: false, chest: false },
     chest: { state: 'none', acquiredDay: null },
     weather: 'calm', actedToday: false,
@@ -50,6 +49,41 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 }
 
 describe('survival checkpoints', () => {
+  // Importance: 95/100. Both lab entry paths must set fog before the monster is staged.
+  it.each([true, false])('sets fog before staging the monster: item lab=%s', async (lab) => {
+    const calls: string[] = [];
+    const playback = deferred();
+    const ui: Partial<SurvivalUI> = {};
+    const phase = SurvivalPhase.forTestStart({
+      world: {
+        setPresentationWeather: vi.fn((id) => { calls.push(`weather:${id}`); }),
+        stageEvent: vi.fn(() => { calls.push('stage'); }),
+        playEventItemUse: vi.fn(() => playback.promise),
+      },
+      ui,
+    }, {
+      kind: 'fresh', savedItems: [{ type: 'compass', instanceId: 'compass-1' }],
+      seed: 41, scavengeElapsedSeconds: 0,
+      initialEventId: lab ? 'item-animation-lab' : 'monster-in-the-fog',
+    });
+    try {
+      phase.start();
+      if (lab) {
+        phase.handleEventItem('compass-search', 'compass-1');
+        ui.onEventChoice?.('compass-search');
+      }
+      await flushPromises();
+      phase.update(1, 1);
+      expect(calls.slice(0, 2)).toEqual(['weather:fog', 'stage']);
+      expect(phase.getPresentationWeather()).toBe('fog');
+      if (lab) {
+        playback.resolve();
+        await flushPromises();
+        expect(phase.getPresentationWeather()).toBe('calm');
+      }
+    } finally { phase.dispose(); }
+  });
+
   // Importance: 98/100. All survival ending bells must use the popup visibility callback.
   it.each(['rescue', 'kraken', 'death', 'sinking'] as const)('rings when the %s popup reports visibility', (id) => {
     const bell = vi.spyOn(SurvivalAudio.prototype, 'endingPopup');
@@ -415,6 +449,7 @@ function createFishingRig(options: FishingRigOptions = {}) {
     showFishingBite: vi.fn((point: FishingCastPoint) => {
       calls.push(`bite:${point.x},${point.z}`);
     }),
+    moveFishingBite: vi.fn(),
     projectFishingBite: vi.fn(() => biteTarget),
     projectFishingCatch: vi.fn(() => catchTarget),
     playFishingReel: vi.fn((catchId: string) => {
@@ -499,16 +534,6 @@ function fishingReelCallback(rig: FishingRig) {
   const callback = rig.ui.onFishingReel;
   if (callback === null || callback === undefined) throw new Error('Fishing reel callback was not wired.');
   return callback;
-}
-
-function completeFishingFight(rig: FishingRig): void {
-  const begun = rig.session.beginFishing.mock.results.at(-1)!.value;
-  if (!begun.accepted) throw new Error('Fishing unavailable');
-  rig.ui.onFishingControlActive?.(true);
-  for (let frame = 0; frame < 250 && begun.attempt.view().state === 'fighting'; frame++) {
-    rig.ui.onFishingCounterPull?.(-begun.attempt.view().fishOffset / SURVIVAL_BALANCE.fishing.mousePullPerPixel);
-    rig.phase.update(3 + frame / 60, 1 / 60);
-  }
 }
 
 async function settleFishingEntry(rig: FishingRig): Promise<void> {
@@ -826,7 +851,7 @@ describe('SurvivalPhase orchestration', () => {
     const reel = fishingReelCallback(rig);
     expect(reel()).toBe(true);
     expect(reel()).toBe(false);
-    completeFishingFight(rig);
+    rig.phase.update(3.1, 0.1);
 
     expect(rig.session.finishFishing).toHaveBeenCalledOnce();
     expect(rig.world.playFishingReel).toHaveBeenCalledOnce();
@@ -891,7 +916,6 @@ describe('SurvivalPhase orchestration', () => {
     await completeFishingCast(rig);
     rig.phase.update(3, 3);
     expect(fishingReelCallback(rig)()).toBe(true);
-    completeFishingFight(rig);
     rig.animations.reel[0]!.resolve();
     await flushPromises();
     rig.ui.onFishingResultContinue?.();

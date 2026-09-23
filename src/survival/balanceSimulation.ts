@@ -83,7 +83,7 @@ export function enumerateMissingPickupSets(): readonly MissingPickupSet[] {
 
 const EVENT_CHOICE_PRIORITY = Object.freeze({
   kraken: ['return-heart'],
-  'starry-night': ['wish'],
+  'starry-night': ['compass', 'map', 'knife', 'ductTape', 'energyBar', 'cannedFood', 'baitTin'],
   'quiet-night': ['sleep'],
   'something-under-us': ['baitTin', 'sleep'],
   'ocean-of-blood': ['fishingNet', 'sleep'],
@@ -102,7 +102,7 @@ const EVENT_CHOICE_PRIORITY = Object.freeze({
   'monster-in-the-fog': ['compass', 'flashlight', 'sleep'],
   ghosts: ['flashlight', 'sleep', 'flareGun'],
   'eerie-melody': ['ductTape', 'umbrella', 'bucket', 'sleep', 'spyglass'],
-  'face-on-the-moon': ['umbrella', 'spyglass', 'sleep'],
+  'face-on-the-moon': ['umbrella', 'bucket', 'spyglass', 'sleep'],
   'shadow-figure': ['sleep'],
   'guarded-sleep': ['watch', 'sleep'],
   'drifting-supplies': ['retrieve', 'delegate-carlitos', 'sleep'],
@@ -207,15 +207,10 @@ function fishOnceWhenPossible(
     begun.attempt.snapshot().biteDelaySeconds
       + (catches ? 0 : SURVIVAL_BALANCE.fishing.reactionSeconds),
   );
-  if (catches) {
-    begun.attempt.reel();
-    // Model a successful player; the policy's success rate includes the struggle.
-    for (let frame = 0; frame < 250 && begun.attempt.view().state === 'fighting'; frame++) {
-      begun.attempt.counterPull(-begun.attempt.view().fishOffset / SURVIVAL_BALANCE.fishing.mousePullPerPixel);
-      begun.attempt.advance(1 / 60);
-    }
-  }
-  const terminal = begun.attempt.view().result!;
+  const terminal = catches
+    ? begun.attempt.reel().result!
+    : begun.attempt.snapshot().result!;
+  if (catches) begun.attempt.completeReel();
   session.finishFishing(begun.attempt.snapshot().id, terminal);
 }
 
@@ -226,22 +221,6 @@ function recoverDailyResources(session: SurvivalSession): void {
   }
   if (session.snapshot().health <= 60) session.perform('treat');
   repairHullAtOrBelowSixty(session);
-}
-
-function seekRescueOrFish(
-  session: SurvivalSession,
-  policyRandom: RandomSource,
-  fishingReactionSuccess: number,
-  signalsEnabled: boolean,
-): void {
-  const snapshot = session.snapshot();
-  const canSeekTrace = signalsEnabled
-    && snapshot.rescueTraceFinds < 2
-    && snapshot.food >= 3
-    && snapshot.health >= 70
-    && session.availableReason('dive') === null;
-  if (canSeekTrace) session.perform('dive');
-  else fishOnceWhenPossible(session, policyRandom, fishingReactionSuccess);
 }
 
 function answerRadioIfPossible(session: SurvivalSession, signalsEnabled: boolean): void {
@@ -268,7 +247,7 @@ export function runCompetentDay(
   resolvePendingDayEvent(session, signalsEnabled);
   if (session.snapshot().state !== 'day') return;
   recoverDailyResources(session);
-  seekRescueOrFish(session, policyRandom, fishingReactionSuccess, signalsEnabled);
+  fishOnceWhenPossible(session, policyRandom, fishingReactionSuccess);
   answerRadioIfPossible(session, signalsEnabled);
   completeCompetentDay(session, signalsEnabled);
 }

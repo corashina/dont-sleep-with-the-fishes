@@ -1,8 +1,6 @@
 import { defineMessages } from './messages';
 
 export const flowText = defineMessages({
-  counterPull: { en: 'PULL AGAINST THE FISH — KEEP IT CENTERED', pl: 'CIĄGNIJ PRZECIWNIE DO RYBY — UTRZYMAJ JĄ NA ŚRODKU', 'es-AR': 'TIRÁ CONTRA EL PEZ — MANTENELO EN EL CENTRO' },
-  resumeFishing: { en: 'CLICK TO CONTINUE REELING', pl: 'KLIKNIJ, ABY KONTYNUOWAĆ ZWIJANIE', 'es-AR': 'HACÉ CLIC PARA SEGUIR RECOGIENDO' },
   netCast: { en: 'CLICK THE WATER TO SCOOP', pl: 'KLIKNIJ WODĘ, ABY ZACZERPNĄĆ SIECIĄ', 'es-AR': 'HACÉ CLIC EN EL AGUA PARA PESCAR CON LA RED' },
   junk: { en: 'Junk', pl: 'Śmieci', 'es-AR': 'Basura' },
   netHaul: { en: 'HAULING THE NET', pl: 'WCIĄGANIE SIECI', 'es-AR': 'RECOGIENDO LA RED' },
@@ -13,13 +11,12 @@ export const flowText = defineMessages({
   requiresChest: { en: (required: string, available: string) => `Requires a ${required} chest; you have ${available}.`, pl: (required: string, available: string) => `Wymagany stan skrzyni: ${required}. Obecny stan: ${available}.`, "es-AR": (required: string, available: string) => `Estado requerido del cofre: ${required}. Estado actual: ${available}.` },
   none: { en: 'none', pl: 'brak', "es-AR": "ninguno" }, closed: { en: 'closed', pl: 'zamknięta', "es-AR": "cerrado" }, mimic: { en: 'mimic', pl: 'mimik', "es-AR": "mímico" },
   pressure: { en: 'pressure', pl: 'zagrożenie', "es-AR": "presión" }, health: { en: 'health', pl: 'zdrowie', "es-AR": "salud" }, hull: { en: 'hull', pl: 'kadłub', "es-AR": "casco" }, energy: { en: 'energy', pl: 'energia', "es-AR": "energía" },
-  resourceFood: { en: 'food', pl: 'jedzenie', "es-AR": "comida" }, resourceBait: { en: 'bait', pl: 'przynęta', "es-AR": "carnada" }, rescueLead: { en: 'rescue lead', pl: 'szansa na ratunek', "es-AR": "pista de rescate" },
+  resourceFood: { en: 'food', pl: 'jedzenie', "es-AR": "comida" }, resourceBait: { en: 'bait', pl: 'przynęta', "es-AR": "carnada" },
   cast: {"en":"CLICK THE WATER TO CAST","pl":"KLIKNIJ WODĘ, ABY ZARZUCIĆ", "es-AR": "HACÉ CLIC EN EL AGUA PARA LANZAR" },
   wait: {"en":"WAIT FOR A BITE","pl":"CZEKAJ NA BRANIE", "es-AR": "ESPERÁ A QUE PIQUE" },
   bite: {"en":"BITE - REEL NOW","pl":"BRANIE — ZWIŃ ŻYŁKĘ", "es-AR": "PICÓ - RECOGÉ LA LÍNEA YA" },
   reel: {"en":"REELING IN","pl":"ZWIJANIE ŻYŁKI", "es-AR": "RECOGIENDO LA LÍNEA" },
   slack: {"en":"THE LINE WENT SLACK","pl":"ŻYŁKA SIĘ POLUZOWAŁA", "es-AR": "LA LÍNEA SE AFLOJÓ" },
-  trace: {"en":"RESCUE TRACE FOUND","pl":"ZNALEZIONO ŚLAD RATUNKU", "es-AR": "PISTA DE RESCATE ENCONTRADA" },
   nothing: {"en":"NOTHING FOUND","pl":"NIC NIE ZNALEZIONO", "es-AR": "NO ENCONTRASTE NADA" },
   injured: {"en":"YOU SUFFERED SOME INJURIES","pl":"ODNIESIONO OBRAŻENIA", "es-AR": "SUFRISTE ALGUNAS HERIDAS" },
   dive: {"en":"DIVE RESULT","pl":"WYNIK NURKOWANIA", "es-AR": "RESULTADO DEL BUCEO" },

@@ -140,10 +140,7 @@ Carlitos improves fishing luck and can help during events while he has energy.
 
 ### Fishing
 
-Click the moving bite to hook the catch. The cursor hides during the struggle.
-Move the mouse against the fish's pull. Keep control for four seconds to land it.
-The fish escapes if it pulls too far sideways. Rod bending and line tension show the strain.
-Pause releases the cursor and freezes the struggle. Click to resume reeling after pause or mouse capture loss.
+Track the bite as it moves across the water. Click it to hook the catch and reel it in automatically.
 
 Fishing can reel in Fish Bones as a rare junk catch. It gives no food.
 
@@ -196,7 +193,7 @@ The ship sinks in one minute. Search the cabin, wheelhouse, cargo deck, and stor
 In the lifeboat, each day gives three energy for daytime actions:
 
 - **Fish** costs one energy and uses the lifeboat's permanent bow rod. Click valid water to cast, or press `Enter`/`Space` for the centered cast; when bubbles appear, click them or press `Enter`/`Space` within the 1.5-second reel window. Available bait improves the catch automatically and is consumed only when a fish lands, never for junk or a miss. Pausing with `Escape` freezes the attempt but does not cancel it, and an accepted attempt's energy remains spent.
-- **Dive** costs 3 Energy and requires usable scuba gear. Normal dives have a 65% reward chance and an independent 25% injury chance. Overcast weather changes these to 60% and 30%. Injuries remove 15–45 Health. Flashlights do not affect diving. Rewards are food (37.5%), bait (37.5%), or rescue traces (25%, capped at two per run). Food and bait quantities are one (90%), two (9%), or three (1%). Wreckage dives give equipment (40%), food (17.5%), bait (17.5%), or injury (25%). Wreckage uses the same food and bait quantity chances.
+- **Dive** costs 3 Energy and requires usable scuba gear. Normal dives have a 65% reward chance and an independent 25% injury chance. Overcast weather changes these to 60% and 30%. Injuries remove 15–45 Health. Flashlights do not affect diving. Equipment rewards occupy 15% of all dives within the success chance. Other successful dives give food or bait with equal chances. Diving never adds rescue progress. Food and bait quantities are one (90%), two (9%), or three (1%). Wreckage dives give equipment (40%), food (17.5%), bait (17.5%), or injury (25%). Wreckage uses the same food and bait quantity chances.
 - **Eat** spends one food to reduce hunger by a random 18–24 points. Each whole number has equal probability. Hunger stops at zero.
 - **Repair** uses the lifeboat's fixed toolbox. It spends one to three Energy and repairs up to 33 Hull per Energy.
 - **Treat** consumes the recovered Medkit to restore health.
@@ -234,7 +231,7 @@ Clicking the physical boat lantern ends the day and uses the same slow cover bef
 
 Each journal page retells fishing, daytime events, and nighttime events in the survivor's voice in all supported languages. Entries describe wounds, fatigue, catches, and Carlitos's condition in words, without resource counts or stat changes. Event entries explain the attempted action, its actual result, and how equipment was spent, damaged, lost, or traded.
 
-Rescue remains random. Maximum hidden rescue lead opens a small chance on day 25. Lower lead opens rescue later. Radio replies, rescue-trace dives, and the **Other People** event shorten the hidden wait. The Flare Gun is consumed during **Other People**, but **Other People** never ends the run immediately. Exact rescue lead and odds remain hidden. A well-supplied successful run usually ends from day 30 through day 35. A no-signal successful run can pass day 40.
+Rescue remains random. Maximum hidden rescue lead opens a small chance on day 25. Lower lead opens rescue later. Radio replies and signaling events shorten the hidden wait. Supply searches do not add rescue progress. The Flare Gun is consumed during **Other People**, but **Other People** never ends the run immediately. Rescue progress and gains remain hidden in all player text. Radio feedback describes only the transmission. A well-supplied successful run usually ends from day 30 through day 35. A no-signal successful run can pass day 40.
 
 ## Endings
 

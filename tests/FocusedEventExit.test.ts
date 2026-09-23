@@ -26,7 +26,8 @@ function expectNoSleepCover(
 describe('focused event dismiss actions', () => {
   for (const { eventId, energy, carlitos } of exitCases) {
     const declineId = 'sleep';
-    it.each(['choice', 'return'] as const)(`${eventId}, Energy ${energy}, Carlitos ${carlitos}: %s has distinct exit behavior`, async (exit) => {
+    // Importance: 98/100. Both exit actions must preserve loot and allow reopening without energy.
+    it.each(['choice', 'return'] as const)(`${eventId}, Energy ${energy}, Carlitos ${carlitos}: %s keeps loot available`, async (exit) => {
       const session = new SurvivalSession([
         ...(eventId === 'drifting-supplies' ? [{ instanceId: 'scubaSet-1' as const, type: 'scubaSet' as const }] : []),
         ...(carlitos !== 'absent' ? [{ instanceId: 'carlitos-1' as const, type: 'carlitos' as const }] : []),
@@ -75,31 +76,14 @@ describe('focused event dismiss actions', () => {
         else ui.onFocusedEventChoice?.({ id: declineId, instanceId: null });
         await vi.waitFor(() => expect(exitFocusedEventView).toHaveBeenCalledOnce());
         await vi.waitFor(() => expect(ui.restoreCommandFocus).toHaveBeenCalled());
-        if (exit === 'return') {
-          expect(session.snapshot()).toEqual(before);
-          expect(clearEvent).not.toHaveBeenCalled();
-          expect(ui.clearEventPresentation).not.toHaveBeenCalled();
-          expect(ui.hideFocusedEvent).toHaveBeenCalledOnce();
-          expect(ui.setBusy).toHaveBeenLastCalledWith(false);
-          ui.onFocusedEventSelect?.(eventId);
-          await vi.waitFor(() => expect(showFocusedEvent).toHaveBeenCalledTimes(2));
-          return;
-        }
-        expect(session.snapshot()).toMatchObject({
-          state: 'day', pendingEventId: null,
-          day: before.day, health: before.health, hunger: before.hunger,
-          energy: before.energy, hull: before.hull, inventory: before.inventory,
-          food: before.food, bait: before.bait,
-          carlitos: before.carlitos,
-        });
+        expect(session.snapshot()).toEqual(before);
         expect(ui.setBusy).toHaveBeenLastCalledWith(false);
         expect(clearEvent).not.toHaveBeenCalled();
-        expect(ui.clearEventPresentation).toHaveBeenCalled();
-        expect(ui.hideFocusedEvent).toHaveBeenCalled();
+        expect(ui.clearEventPresentation).not.toHaveBeenCalled();
+        expect(ui.hideFocusedEvent).toHaveBeenCalledOnce();
         expectNoSleepCover(eventId, ui);
         ui.onFocusedEventSelect?.(eventId);
-        await Promise.resolve();
-        expect(showFocusedEvent).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(showFocusedEvent).toHaveBeenCalledTimes(2));
       } finally {
         phase.dispose();
       }

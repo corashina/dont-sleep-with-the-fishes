@@ -104,8 +104,7 @@ function buildDiveResult(outcome: ActionOutcome): RewardResultView {
       }
     }
   }
-  if ((outcome.deltas.rescueLead ?? 0) > 0) lines.push(flowText('trace'));
-  if (reward === null && lines.length === 0) lines.push(flowText('nothing'));
+  if (reward === null) lines.push(flowText('nothing'));
   const appliedHealthDelta = outcome.deltas.health;
   if (appliedHealthDelta !== undefined && appliedHealthDelta < 0) {
     lines.push(flowText('injured'));

@@ -15,8 +15,6 @@ export const SURVIVAL_BALANCE = {
     minimumBiteDelaySeconds: 2,
     biteDelayRangeSeconds: 3,
     reactionSeconds: 6,
-    fightSeconds: 4,
-    mousePullPerPixel: 0.001,
   },
   netFishing: {
     junkWeight: 0.1,

@@ -55,11 +55,11 @@ export class MenuUI {
         aria-modal="true" aria-hidden="true" aria-labelledby="menu-how-to-play-title"
         inert>
         <div class="screen__content how-to-play-popup">
-          <button type="button" class="how-to-play-page__close ui-role-context"
-            data-menu-guide-close aria-label="Close how to play">&times;</button>
           <article class="how-to-play-page">
-            <header class="how-to-play-page__header">
+            <header class="how-to-play-page__header popup-header">
               <h2 class="ui-role-display" id="menu-how-to-play-title" data-menu-guide-title tabindex="-1"></h2>
+              <button type="button" class="popup-header__close"
+                data-menu-guide-close aria-label="Close how to play"></button>
             </header>
             <div class="how-to-play-page__sections" data-menu-guide-sections tabindex="0"
               role="region" aria-labelledby="menu-how-to-play-title"></div>

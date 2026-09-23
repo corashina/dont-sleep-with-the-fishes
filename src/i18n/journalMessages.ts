@@ -32,7 +32,6 @@ export const journalMessage = defineMessages({
   injured: { en: 'I came back hurt.', pl: 'Wróciłem poraniony.', 'es-AR': 'Volví herido.' },
   foundFood: { en: 'I brought back something to eat.', pl: 'Przyniosłem coś do jedzenia.', 'es-AR': "Traje algo para comer." },
   foundBait: { en: 'I found bait for the next cast.', pl: 'Znalazłem przynętę na następny połów.', 'es-AR': 'Encontré carnada para la próxima pesca.' },
-  foundLead: { en: 'I found a clue that might help someone find us.', pl: 'Trafiłem na ślad, który może pomóc komuś nas odnaleźć.', 'es-AR': "Encontré una pista que podría ayudar a que nos encuentren." },
   spareFood: { en: 'I already had that gear, so I took food instead.', pl: 'Taki sprzęt już miałem, więc zabrałem jedzenie.', 'es-AR': "Ya tenía ese equipo, así que me llevé comida en su lugar." },
   spareFoodCarlitos: { en: 'Carlitos brought food back instead of gear we already had.', pl: 'Carlitos przyniósł jedzenie zamiast sprzętu, który już mieliśmy.', 'es-AR': 'Carlitos trajo comida en lugar del equipo que ya teníamos.' },
   day: { en: (day: number) => `DAY ${day}`, pl: (day: number) => `DZIEŃ ${day}`, 'es-AR': (day: number) => `DÍA ${day}` },

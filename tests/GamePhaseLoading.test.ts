@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GameFactories } from '../src/Game';
 import { PhaseResources, type PhaseResourceLoaders } from '../src/app/PhaseResources';
 import type { GamePhase } from '../src/app/GamePhase';
+import type { ReportLoadingProgress } from '../src/app/LoadingProgress';
 import { AudioSystem } from '../src/audio/AudioSystem';
 import { flushPhases } from './helpers/game';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -37,6 +38,29 @@ function rig(overrides: Partial<GameFactories> = {}, options: Pick<GameRuntimeTe
 }
 afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
 describe('asynchronous phase activation', () => {
+  // Importance: 95/100. Saved lab weather must not suppress an event's default weather.
+  it('clears a prior weather override when opening the fog monster event from the lab', async () => {
+    const setWeatherOverride = vi.fn();
+    const r = rig({ createSurvival: () => ({ ...phase(), setWeatherOverride }) });
+    const director = r.game as unknown as {
+      enterTestEvent(id: string): void;
+      setWeatherOverride(id: 'calm'): void;
+      weatherOverride: string | null;
+    };
+    try {
+      await r.game.ready;
+      director.enterTestEvent('item-animation-lab');
+      await flushPhases();
+      director.setWeatherOverride('calm');
+      setWeatherOverride.mockClear();
+      director.enterTestEvent('monster-in-the-fog');
+      await flushPhases();
+      expect(director.weatherOverride).toBeNull();
+      expect(setWeatherOverride).not.toHaveBeenCalledWith('calm');
+      expect(r.onFatalError).not.toHaveBeenCalled();
+    } finally { r.game.dispose(); }
+  });
+
   it('holds the loading cover and gameplay until scene preparation finishes', async () => {
     let start!: () => void;
     const pending = deferred<void>();
@@ -51,7 +75,7 @@ describe('asynchronous phase activation', () => {
     expect(ship.prepare).toHaveBeenCalledOnce();
     expect(ship.start).not.toHaveBeenCalled();
     expect(r.mount.querySelector('progress')?.position).toBe(-1);
-    expect(r.mount.querySelector('.system-loading-status')?.textContent).toBe('Preparing scene');
+    expect(r.mount.querySelector('.system-loading-status')?.textContent).toBe('Building scene');
     pending.resolve();
     await flushPhases();
     expect(ship.start).toHaveBeenCalledOnce();
@@ -59,10 +83,15 @@ describe('asynchronous phase activation', () => {
     r.game.dispose();
   });
 
-  it('does not start a prepared scene after another selection replaces it', async () => {
+  // Importance: 95/100. Cancelled scenes must not overwrite the current loading status.
+  it('does not start or report progress from a scene after another selection replaces it', async () => {
     let start!: () => void;
     const pending = deferred<void>();
-    const ship = { ...phase(), prepare: () => pending.promise };
+    let report!: ReportLoadingProgress;
+    const ship = { ...phase(), prepare: (onProgress?: ReportLoadingProgress) => {
+      report = onProgress!;
+      return pending.promise;
+    } };
     const r = rig({
       createMenu: (_context, next) => { start = next; return phase(); },
       createScavenge: () => ship,
@@ -73,6 +102,9 @@ describe('asynchronous phase activation', () => {
     (r.game as unknown as { enterTestEvent(id: string): void }).enterTestEvent('leak');
     await flushPhases();
     expect(ship.dispose).not.toHaveBeenCalled();
+    const currentStatus = r.mount.querySelector('.system-loading-status')?.textContent;
+    report({ stage: 'preparingTextures', completed: 8, total: 16 });
+    expect(r.mount.querySelector('.system-loading-status')?.textContent).toBe(currentStatus);
     pending.resolve();
     await flushPhases();
     expect(ship.start).not.toHaveBeenCalled();

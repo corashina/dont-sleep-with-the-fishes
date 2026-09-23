@@ -47,7 +47,6 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     recoveredFood: 0,
     recoveredBait: 0,
     rescueLead: 0,
-    rescueTraceFinds: 0,
     radioSignalAvailable: false,
     radioSignalsSent: 0,
     heartPieces: { flowers: false, blood: false, chest: false },

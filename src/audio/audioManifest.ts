@@ -226,7 +226,7 @@ export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
     diveSurface: asset('diveSurface', 'effects', 0.5, false, 1),
     fishingCast: asset('fishingCast', 'effects', 0.44, false, 2),
     fishingBite: asset('fishingBite', 'effects', 0.45, false, 2),
-    fishingReel: asset('fishingReel', 'effects', 0.42, true, 1),
+    fishingReel: asset('fishingReel', 'effects', 0.42, false, 2),
     fishingNet: asset('fishingNet', 'effects', 0.45, false, 1),
     fishCatch: asset('fishCatch', 'effects', 0.5, false, 2),
     junkCatch: asset('junkCatch', 'effects', 0.46, false, 2),

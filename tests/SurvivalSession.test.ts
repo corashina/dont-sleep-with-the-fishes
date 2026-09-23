@@ -140,11 +140,9 @@ function reelCatch(attempt: FishingSession): FishingTerminalResult {
   attempt.advance(attempt.snapshot().biteDelaySeconds);
   const reeled = attempt.reel();
   expect(reeled.accepted).toBe(true);
-  for (let frame = 0; frame < 250 && attempt.view().state === 'fighting'; frame++) {
-    attempt.counterPull(-attempt.view().fishOffset / SURVIVAL_BALANCE.fishing.mousePullPerPixel);
-    attempt.advance(1 / 60);
-  }
-  return attempt.view().result!;
+  if (reeled.result === undefined) throw new Error('Expected a fishing catch result.');
+  expect(attempt.completeReel().accepted).toBe(true);
+  return reeled.result;
 }
 
 function missCatch(attempt: FishingSession): FishingTerminalResult {

@@ -3,50 +3,34 @@ import {
   Group, Mesh, ShaderMaterial,
 } from 'three';
 
-// The silhouette is drawn from the head, around the back, to the split tail.
-const STARS: readonly (readonly [number, number])[] = [
-  [-40, -1], [-37, 7], [-28, 13], [-14, 16], [1, 15], [15, 10],
-  [27, 3], [33, 5], [40, 16], [48, 18], [46, 9], [38, 1],
-  [47, -5], [45, -10], [34, -5], [27, -3], [15, -10], [0, -12],
-  [-17, -12], [-32, -8], [-39, -5], [-10, -4], [6, -11], [11, -5],
-  [-30, 3], [-15, 5], [3, 8], [18, 2], [-25, -6],
-];
-const EDGES: readonly (readonly [number, number])[] = [
-  [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7],
-  [7, 8], [8, 9], [9, 10], [10, 11], [11, 12], [12, 13],
-  [13, 14], [14, 15], [15, 16], [16, 17], [17, 18], [18, 19],
-  [19, 20], [20, 0], [21, 22], [22, 23], [23, 21],
-  [24, 25], [25, 26], [26, 27], [27, 6],
-  [3, 25], [25, 21], [26, 4], [0, 28], [28, 18],
-];
-// Leave open space for the moon inside the whale's body.
-const MOON_CENTER = [4, 1] as const;
+import type { ItemId } from '../../game/ItemState';
+import { constellationShape, type ConstellationShape } from './starryNightShapes';
 
 export function starryNightMaterial(fragmentShader: string): ShaderMaterial {
   return new ShaderMaterial({
     transparent: true, depthWrite: false, side: DoubleSide,
     blending: AdditiveBlending, toneMapped: false,
     uniforms: {
-      time: { value: 0 }, reveal: { value: 0 }, opacity: { value: 1 },
+      time: { value: 0 }, reveal: { value: 0 }, opacity: { value: 1 }, highlight: { value: 0 },
     },
     vertexShader: `
-      attribute float birth;
+      attribute float phase;
       attribute float warmth;
       varying vec2 vUv;
       varying vec2 vLocalPosition;
-      varying float vBirth;
+      varying float vPhase;
       varying float vWarmth;
       void main() {
-        vUv = uv; vBirth = birth; vWarmth = warmth;
+        vUv = uv; vPhase = phase; vWarmth = warmth;
         vLocalPosition = position.xy;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
     fragmentShader: `
-      uniform float time, reveal, opacity;
+      uniform float time, reveal, opacity, highlight;
       varying vec2 vUv;
       varying vec2 vLocalPosition;
-      varying float vBirth, vWarmth;
+      varying float vPhase, vWarmth;
       ${fragmentShader}
     `,
   });
@@ -56,17 +40,18 @@ const STAR_FRAGMENT = `
   void main() {
     vec2 p = (vUv - 0.5) * 2.0;
     float r = length(p);
-    float core = exp(-r*r*160.0);
-    float halo = exp(-r*r*11.0) * 0.28;
+    float core = exp(-r*r*210.0);
+    float halo = exp(-r*r*12.0) * 0.17;
     float rays = pow(max(0.0, 1.0-abs(p.x)), 65.0)
       * pow(max(0.0, 1.0-abs(p.y)), 3.0);
     rays += pow(max(0.0, 1.0-abs(p.y)), 65.0)
       * pow(max(0.0, 1.0-abs(p.x)), 3.0);
-    float twinkle = 0.86 + 0.14*sin(time*1.3 + vBirth*49.0);
-    float visible = smoothstep(vBirth, vBirth+0.12, reveal);
-    vec3 color = mix(vec3(0.48, 0.73, 1.0), vec3(1.0, 0.73, 0.36), vWarmth);
+    float twinkle = 0.91 + 0.09*sin(time*0.7 + vPhase*49.0);
+    float visible = smoothstep(0.0, 1.0, reveal);
+    vec3 color = mix(vec3(0.72, 0.83, 1.0), vec3(1.0, 0.88, 0.72), vWarmth);
     color = mix(color, vec3(1.0, 0.97, 0.89), core);
-    gl_FragColor = vec4(color * (core*2.0 + halo + rays*0.7),
+    color = mix(color, vec3(0.18, 0.46, 1.0), highlight);
+    gl_FragColor = vec4(color * (core*3.0 + halo + rays*0.16) * mix(1.0, 1.25, highlight),
       visible * twinkle * opacity * (1.0-smoothstep(0.7, 1.0, r)));
   }
 `;
@@ -83,11 +68,15 @@ const THREAD_FRAGMENT = `
   }
   void main() {
     float across = vUv.y*2.0-1.0;
-    float drift = sin(vUv.x*9.0+vBirth*31.0+time*0.14)
+    float drift = sin(vUv.x*9.0+vPhase*31.0+time*0.14)
       * sin(vUv.x*3.14159)*0.16;
     float cloud = mistNoise(vLocalPosition*0.65+vec2(time*0.025, 0.0));
     float veil = exp(-pow((across-drift)*3.5, 2.0));
-    float wisps = veil * smoothstep(0.22, 0.8, cloud) * 0.045;
+    float wisps = veil * smoothstep(0.22, 0.8, cloud) * 0.035;
+    // Faint, broken traces preserve the shape behind the individual stars.
+    float coreWidth = max(0.16, fwidth(across));
+    float gaps = mix(0.12, 1.0, smoothstep(0.25, 0.72, cloud));
+    float thread = exp(-pow(across / coreWidth, 2.0)) * 0.14 * gaps;
 
     // Tiny, irregular glints stay inside the connection's soft band.
     vec2 dustUv = vLocalPosition*1.6;
@@ -101,97 +90,148 @@ const THREAD_FRAGMENT = `
       * 0.009/sqrt(variance.x*variance.y) * step(0.73, seed);
     float twinkle = 0.35+0.65*pow(0.5+0.5*sin(time*0.85+seed*47.0), 3.0);
     float taper = smoothstep(0.0, 0.08, vUv.x)*smoothstep(0.0, 0.08, 1.0-vUv.x);
-    float visible = smoothstep(vBirth, vBirth+0.06, reveal);
+    float visible = smoothstep(0.0, 1.0, reveal);
     vec3 color = mix(vec3(0.38, 0.53, 0.9), vec3(0.65, 0.78, 1.0), cloud);
     color = mix(color, vec3(0.9, 0.78, 0.56), vWarmth*0.45);
+    color = mix(color, vec3(0.18, 0.46, 1.0), highlight);
     gl_FragColor = vec4(color,
-      (wisps+dust*veil*twinkle*0.48)*taper*visible*opacity);
+      (thread+wisps+dust*veil*twinkle*0.26)*taper*visible*opacity*0.7);
   }
 `;
 
 interface VertexData {
-  positions: number[]; uvs: number[]; births: number[]; warmth: number[];
+  positions: number[]; uvs: number[]; phases: number[]; warmth: number[];
 }
 function vertexData(): VertexData {
-  return { positions: [], uvs: [], births: [], warmth: [] };
+  return { positions: [], uvs: [], phases: [], warmth: [] };
 }
 function geometry(data: VertexData): BufferGeometry {
   const result = new BufferGeometry();
   result.setAttribute('position', new Float32BufferAttribute(data.positions, 3));
   result.setAttribute('uv', new Float32BufferAttribute(data.uvs, 2));
-  result.setAttribute('birth', new Float32BufferAttribute(data.births, 1));
+  result.setAttribute('phase', new Float32BufferAttribute(data.phases, 1));
   result.setAttribute('warmth', new Float32BufferAttribute(data.warmth, 1));
   result.computeBoundingSphere();
   return result;
 }
 const CORNERS = [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]] as const;
-function star(data: VertexData, x: number, y: number, size: number, birth: number, warmth: number): void {
+function star(data: VertexData, x: number, y: number, size: number, phase: number, warmth: number): void {
   for (const [u, v] of CORNERS) {
     data.positions.push(x + (u-0.5)*size*2, y + (v-0.5)*size*2, 0);
-    data.uvs.push(u, v); data.births.push(birth); data.warmth.push(warmth);
+    data.uvs.push(u, v); data.phases.push(phase); data.warmth.push(warmth);
   }
 }
 
-function whaleStars(): Mesh<BufferGeometry, ShaderMaterial> {
+function starVariation(x: number, y: number): number {
+  const value = Math.sin(x*127.1 + y*311.7)*43758.5453;
+  return value - Math.floor(value);
+}
+
+function itemStars({ stars, edges }: ConstellationShape): Mesh<BufferGeometry, ShaderMaterial> {
   const data = vertexData();
-  STARS.forEach(([x, y], index) => {
-    const heart = index === 25;
-    const size = heart ? 5 : index === 24 ? 1.8 : 1.8 + (index % 4)*0.35;
-    star(data, x-MOON_CENTER[0], y-MOON_CENTER[1], size, index / STARS.length * 0.65, heart ? 1 : 0);
+  const connections = new Uint8Array(stars.length);
+  for (const [a, b] of edges) { connections[a]! += 1; connections[b]! += 1; }
+  stars.forEach(([x, y], index) => {
+    const variation = starVariation(x, y);
+    const landmark = connections[index]! > 2 || Math.abs(x) >= 9 || Math.abs(y) >= 9;
+    const size = (landmark ? 1.25 : 0.8) + variation*variation*0.75;
+    star(data, x, y, size, variation, variation > 0.84 ? 0.7 : variation*0.12);
   });
   return new Mesh(geometry(data), starryNightMaterial(STAR_FRAGMENT));
 }
 
-function whaleThreads(): Mesh<BufferGeometry, ShaderMaterial> {
+function itemThreads({ stars, edges }: ConstellationShape): Mesh<BufferGeometry, ShaderMaterial> {
   const data = vertexData();
-  EDGES.forEach(([a, b], index) => {
-    const [ax, ay] = STARS[a]!;
-    const [bx, by] = STARS[b]!;
+  edges.forEach(([a, b]) => {
+    const [ax, ay] = stars[a]!;
+    const [bx, by] = stars[b]!;
     const length = Math.hypot(bx-ax, by-ay);
-    const nx = -(by-ay) / length * 1.15;
-    const ny = (bx-ax) / length * 1.15;
+    const nx = -(by-ay) / length * 0.45;
+    const ny = (bx-ax) / length * 0.45;
     for (const [u, v] of CORNERS) {
       data.positions.push(
-        ax-MOON_CENTER[0]+(bx-ax)*u+nx*(v*2-1),
-        ay-MOON_CENTER[1]+(by-ay)*u+ny*(v*2-1), -0.08,
+        ax+(bx-ax)*u+nx*(v*2-1),
+        ay+(by-ay)*u+ny*(v*2-1), -0.08,
       );
       data.uvs.push(u, v);
-      data.births.push(0.16 + (index+u)/EDGES.length * 0.66);
-      data.warmth.push(a === 25 || b === 25 ? 0.35 : 0);
+      data.phases.push(starVariation(ax, by));
+      data.warmth.push(0);
     }
   });
   return new Mesh(geometry(data), starryNightMaterial(THREAD_FRAGMENT));
 }
 
+
 export class StarryNightGeometry {
   readonly root = new Group();
-  readonly constellation = new Group();
-  readonly stars = whaleStars();
-  readonly threads = whaleThreads();
-  private readonly meshes: readonly Mesh<BufferGeometry, ShaderMaterial>[];
+  readonly constellations: Group[] = [];
+  private readonly meshes: Mesh<BufferGeometry, ShaderMaterial>[][] = [];
+  private highlighted = -1;
+  private previousTime = 0;
 
-  constructor() {
-    this.constellation.name = 'starry-night-constellation';
-    this.constellation.userData.disableHoverOutline = true;
-    this.constellation.add(this.threads, this.stars);
-    this.root.add(this.constellation);
-    this.meshes = [this.stars, this.threads];
+  setHighlighted(index: number, highlighted: boolean): void {
+    if (highlighted) {
+      this.highlighted = index;
+    } else if (this.highlighted === index) this.clearHighlight();
   }
 
-  update(time: number, reveal: number, opacity: number): void {
-    for (const mesh of this.meshes) {
-      const uniforms = mesh.material.uniforms;
-      uniforms.time!.value = time;
-      uniforms.reveal!.value = reveal;
-      uniforms.opacity!.value = opacity;
+  clearHighlight(): void {
+    this.highlighted = -1;
+  }
+
+  setItems(items: readonly ItemId[]): void {
+    this.dispose();
+    for (const item of items) {
+      const outline = constellationShape(item);
+      const stars = itemStars(outline);
+      const threads = itemThreads(outline);
+      const constellation = new Group();
+      constellation.name = 'starry-night:' + item;
+      constellation.userData.disableHoverOutline = true;
+      constellation.add(threads, stars);
+      constellation.scale.setScalar(2.4);
+      this.root.add(constellation);
+      this.constellations.push(constellation);
+      this.meshes.push([stars, threads]);
+    }
+  }
+
+  update(time: number, reveal: number, opacity: number, selected: number, flash: number, aspect: number): void {
+    // Reach 95% of the hover color in 0.3 seconds, independent of frame rate.
+    const highlightBlend = 1 - Math.exp(-Math.max(0, time - this.previousTime) * 10);
+    this.previousTime = time;
+    for (let index = 0; index < this.constellations.length; index++) {
+      const group = this.constellations[index]!;
+      if (aspect < 1.2) {
+        group.position.set(0, index === 0 ? 40 : -27, 0);
+      } else {
+        group.position.set((index - 0.5)*105, 12, 0);
+      }
+      const chosen = index === selected;
+      const alpha = chosen ? Math.min(1, opacity * 2) : opacity;
+      const highlightTarget = index === this.highlighted ? 1 : 0;
+      group.scale.setScalar(2.4 * (chosen ? 1 + flash*0.08 : 1));
+      for (const mesh of this.meshes[index]!) {
+        const uniforms = mesh.material.uniforms;
+        uniforms.time!.value = time;
+        uniforms.reveal!.value = reveal;
+        uniforms.opacity!.value = alpha * (chosen ? 1 + flash*2 : 1);
+        uniforms.highlight!.value += (highlightTarget - uniforms.highlight!.value) * highlightBlend;
+      }
     }
   }
 
   dispose(): void {
-    for (const mesh of this.meshes) {
-      mesh.geometry.dispose();
-      mesh.material.dispose();
+    this.clearHighlight();
+    this.previousTime = 0;
+    for (const meshes of this.meshes) {
+      for (const mesh of meshes) {
+        mesh.geometry.dispose();
+        mesh.material.dispose();
+      }
     }
+    this.meshes.length = 0;
+    this.constellations.length = 0;
     this.root.clear();
   }
 }

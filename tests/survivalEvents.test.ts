@@ -220,6 +220,13 @@ describe('survival events', () => {
       .toThrow(/immediate energy.*night event/i);
   });
 
+  // Importance: 95/100. Choice requirements must not disclose hidden rescue progress.
+  it('rejects rescue progress as a visible choice requirement', () => {
+    const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
+    catalog[0].choices[0].requirements = [{ resource: 'rescueLead', minimum: 2 }];
+    expect(() => validateSurvivalEventCatalog(catalog)).toThrow(/hidden rescue progress/i);
+  });
+
   it.each([0, 1.5])(
     'rejects next dawn energy outside one through four: %s',
     (nextDawnEnergy) => {

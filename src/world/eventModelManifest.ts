@@ -21,6 +21,15 @@ type EventModelPresentation = Pick<
 > & Pick<EventModelSpec, 'sourceUrl' | 'sourceModelId' | 'license'>;
 
 const presentations = {
+  midnightBackpack: {
+    sourceUrl: 'https://poly.pizza/m/vF7TuXCPDH',
+    sourceModelId: 'poly-pizza:2eb5178b-0c98-4a0d-b0ea-ad8925525d1e',
+    license: 'CC0 1.0',
+    targetLongestDimension: 0.6,
+    maxTriangles: 1_800,
+    translation: [0, 0, 0],
+    rotation: [0, 0, 0],
+  },
   ghostShip: {
     sourceUrl: 'https://poly.pizza/m/cIzO4MBPqI',
     sourceModelId: 'poly-pizza:941391c3-04a0-43fe-9f7a-c8e7d3b3a77d',
@@ -240,7 +249,9 @@ function createEventModelSpec(id: EventModelId): EventModelSpec {
   const metadata = generatedMetadata[id] ?? INVALID_METADATA;
   const assetFile = id === 'chestClosed' ? 'mysteryChest' : id;
   return Object.freeze({
-    url: new URL(`../assets/models/events/${assetFile}.glb`, import.meta.url).href,
+    url: id === 'midnightBackpack'
+      ? new URL('../assets/models/fishing/backpack.glb', import.meta.url).href
+      : new URL(`../assets/models/events/${assetFile}.glb`, import.meta.url).href,
     ...authored,
     offset: authored.translation,
     ...generatedNormalization(metadata, authored),

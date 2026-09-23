@@ -1,11 +1,64 @@
-import { BoxGeometry, Group, Mesh, MeshStandardMaterial, ShaderMaterial } from 'three';
+import {
+  BoxGeometry, Group, Mesh, MeshStandardMaterial, PerspectiveCamera, Scene,
+  ShaderLib, ShaderMaterial, Texture, Vector3,
+  type WebGLProgramParametersWithUniforms, type WebGLRenderer,
+} from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
 import { supernaturalItemUseDuration, supernaturalRevealDuration } from '../src/survival/supernaturalEventChoreography';
+import { Skybox } from '../src/world/Skybox';
 
 describe('Eerie Melody fog', () => {
+  // Importance: 95/100. Every reef surface must share the water's fog, without a second mist overlay.
+  it('binds the singer and reef to scene fog and releases fog in clear weather', () => {
+    const scene = new Scene();
+    const texture = new Texture();
+    const sky = new Skybox(scene, { phase: 'night', weather: 'fog', severity: 0 }, texture);
+    const display = { clearEventPose: vi.fn() } as unknown as BoatSupplyDisplay;
+    const models = { create: () => {
+      const root = new Group();
+      root.add(new Mesh(new BoxGeometry(1, 2, 1), new MeshStandardMaterial()));
+      return root;
+    } } as unknown as EventModelLibrary;
+    const boat = new Group();
+    scene.add(boat);
+    const animator = new SupernaturalEventAnimator(boat, display, models, undefined, 'eerie-melody');
+    const renderer = {} as WebGLRenderer;
+    const camera = new PerspectiveCamera();
+    try {
+      animator.stage('eerie-melody');
+      expect(animator.worldRoot.getObjectByName('supernatural-sea-mist')!.visible).toBe(false);
+      const surfaces: Mesh[] = [];
+      animator.worldRoot.getObjectByName('siren-tableau')!.traverse(object => {
+        if (object instanceof Mesh) surfaces.push(object);
+      });
+      expect(surfaces.length).toBeGreaterThan(1);
+      for (const mesh of surfaces) {
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const material of materials) {
+          const shader = {
+            uniforms: {}, vertexShader: ShaderLib.standard.vertexShader,
+            fragmentShader: ShaderLib.standard.fragmentShader,
+          } as WebGLProgramParametersWithUniforms;
+          material.onBeforeCompile(shader, renderer);
+          sky.update(2, { phase: 'night', weather: 'fog', severity: 0 }, new Vector3(0, 1.5, 0));
+          material.onBeforeRender(renderer, scene, camera, mesh.geometry, mesh, null!);
+          expect(shader.uniforms.uSeaFogAmount?.value, mesh.name).toBe(1);
+          expect(shader.uniforms.uSeaFogColor?.value, mesh.name).toEqual(sky.palette.fogColor);
+          sky.update(2, { phase: 'night', weather: 'calm', severity: 0 }, new Vector3());
+          material.onBeforeRender(renderer, scene, camera, mesh.geometry, mesh, null!);
+          expect(shader.uniforms.uSeaFogAmount?.value, mesh.name).toBe(0);
+        }
+      }
+    } finally {
+      animator.dispose();
+      sky.dispose();
+      texture.dispose();
+    }
+  });
+
   it.each([-10])('keeps fog stable through every phase with health change %s', async (health) => {
     const display = {
       resetEventPoseForFrame: vi.fn(), clearEventPose: vi.fn(),

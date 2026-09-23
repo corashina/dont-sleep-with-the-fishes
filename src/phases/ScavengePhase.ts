@@ -1,5 +1,6 @@
 import { onLanguageChange } from '../i18n/language';
 import { prepareScene } from '../rendering/prepareScene';
+import { reportLoadingStage, type ReportLoadingProgress } from '../app/LoadingProgress';
 import {
   Box3,
   Group,
@@ -614,11 +615,17 @@ export class ScavengePhase implements GamePhase {
     return this.presentationPhase;
   }
 
-  async prepare(): Promise<void> {
+  async prepare(report?: ReportLoadingProgress): Promise<void> {
     await prepareScene(this.context.renderer, this.scene, this.context.camera,
-      this.context.propModels.preparationRoots(), () => !this.disposed);
+      this.context.propModels.preparationRoots(), () => !this.disposed, report);
+    if (this.disposed) return;
+    await reportLoadingStage(report, 'preparingEffects');
     if (!this.disposed) await this.context.sceneRenderer.prepare(this.scene, this.context.camera, this.visualState);
-    if (!this.disposed) this.render();
+    if (!this.disposed) {
+      report?.({ stage: 'startingScene' });
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      if (!this.disposed) this.render();
+    }
   }
 
   render(): void {

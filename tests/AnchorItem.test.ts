@@ -1,6 +1,6 @@
 // Importance: 90/100. Protects mesh support and animation travel after moving the anchor.
 import { readFile } from 'node:fs/promises';
-import { Box3, DoubleSide, Group, InstancedMesh, Matrix4, Mesh, PerspectiveCamera, Raycaster, Texture, Vector3 } from 'three';
+import { Box3, DoubleSide, Group, InstancedMesh, Matrix4, Mesh, PerspectiveCamera, Quaternion, Raycaster, Texture, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { expect, it } from 'vitest';
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
@@ -11,6 +11,8 @@ import { createEventItemUseSample, sampleEventItemOutcome, sampleEventItemUse } 
 import { boatSupplyTransform } from '../src/world/BoatStorage';
 import { createLifeboat, LIFEBOAT_FLOOR_SURFACE_Y, LIFEBOAT_GUNWALE_SURFACE_Y, lifeboatHullHalfWidthAt } from '../src/world/Lifeboat';
 import { LifeboatAssets } from '../src/world/LifeboatAssets';
+import { LIFEBOAT_EQUIPMENT_MODEL_SPECS } from '../src/world/lifeboatEquipmentManifest';
+import { createSleepPillow } from '../src/survival/SleepPillow';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { normalizeLongestDimensionTemplate } from '../src/world/modelValidation';
 import { createTestPropModels } from './helpers/propModels';
@@ -30,6 +32,74 @@ function expectVisibleStarboardChain(effects: EventItemEffects, boat: Group, cam
   }
   expect(visibleLinks).toBeGreaterThan(10);
 }
+
+function chainLinkPositions(effects: EventItemEffects): Vector3[] {
+  const links = effects.root.getObjectByName('event-item-chain-links') as InstancedMesh;
+  links.updateWorldMatrix(true, false);
+  const matrix = new Matrix4();
+  return Array.from({ length: links.count }, (_, index) => {
+    links.getMatrixAt(index, matrix);
+    return new Vector3().setFromMatrixPosition(matrix).applyMatrix4(links.matrixWorld);
+  });
+}
+
+// Importance: 95/100. The visible chain must clear the pillow throughout deployment.
+it('routes the chain in front of the pillow', () => {
+  const boat = new Group();
+  const actor = new Group();
+  actor.position.set(2.1, 0.04, -0.85);
+  boat.add(actor);
+  const pillow = createSleepPillow(new Group());
+  pillow.root.updateMatrixWorld(true);
+  const bounds = LIFEBOAT_EQUIPMENT_MODEL_SPECS.pillow.normalizedBounds;
+  const clearance = new Box3(new Vector3(...bounds.min), new Vector3(...bounds.max))
+    .applyMatrix4(pillow.root.matrixWorld).expandByScalar(0.04);
+  const effects = new EventItemEffects();
+  const sample = createEventItemUseSample();
+  try {
+    sampleEventItemUse('anchor-drop', 'anchor', 1, sample);
+    effects.apply(sample, actor, false);
+    for (const point of chainLinkPositions(effects)) {
+      expect(clearance.containsPoint(point)).toBe(false);
+    }
+  } finally {
+    effects.dispose();
+    pillow.dispose();
+  }
+});
+
+// Importance: 95/100. A rolling boat must not expose an upward chain tail above the gunwale.
+it('keeps the deployed outer chain descending into the sea during boat roll', () => {
+  const boat = new Group();
+  const actor = new Group();
+  actor.position.set(2.1, 0.04, -0.85);
+  boat.add(actor);
+  const effects = new EventItemEffects();
+  const sample = createEventItemUseSample();
+  sampleEventItemUse('anchor-drop', 'anchor', 1, sample);
+  try {
+    effects.apply(sample, actor, false);
+    for (const roll of [0, -0.6, 0.6]) {
+      boat.rotation.z = roll;
+      boat.position.y = -0.35;
+      effects.apply(sample, actor, false);
+      const points = chainLinkPositions(effects);
+      const edge = boat.localToWorld(new Vector3(
+        lifeboatHullHalfWidthAt(-0.85)!, LIFEBOAT_GUNWALE_SURFACE_Y + 0.035, -0.85,
+      ));
+      let edgeIndex = 0;
+      for (let index = 1; index < points.length; index += 1) {
+        if (points[index]!.distanceToSquared(edge) < points[edgeIndex]!.distanceToSquared(edge)) edgeIndex = index;
+      }
+      expect(points.at(-1)!.y).toBeLessThan(-1.5);
+      for (let index = edgeIndex + 2; index < points.length; index += 1) {
+        expect(points[index]!.y).toBeLessThanOrEqual(points[index - 1]!.y + 1e-6);
+      }
+    }
+  } finally {
+    effects.dispose();
+  }
+});
 
 it('supports the anchor on the floor and port hull beside the shotgun', async () => {
   const bytes = await readFile('src/assets/models/items/anchor.glb');
@@ -163,3 +233,128 @@ it.each(['anchor-drop'] as const)(
     }
   },
 );
+
+// Importance: 95/100. Camera and boat motion must not steer an airborne anchor.
+it('keeps the released anchor on its world path while the camera and boat move', () => {
+  const models = createTestPropModels();
+  const boat = new Group();
+  const cameraRig = new Group();
+  const camera = new PerspectiveCamera(80, 16 / 9, 0.08, 220);
+  camera.position.set(0, 0.88, 0.96);
+  camera.lookAt(0, 0.88, -1.55);
+  cameraRig.add(camera);
+  boat.add(cameraRig);
+  const saved = [{ instanceId: 'anchor-1', type: 'anchor' }] as const;
+  const supplies = new BoatSupplyDisplay(models, boat, saved);
+  supplies.sync(new SurvivalSession(saved, { seed: 1 }).snapshot());
+  const actor = supplies.borrowEventActor('anchor-1')!;
+  const effects = new EventItemEffects();
+  const adapter = new EventItemUseAdapter(camera, effects);
+  const sample = createEventItemUseSample();
+  const expectedPositions: Vector3[] = [];
+  const landedChainPosition = new Vector3();
+  const linkMatrix = new Matrix4();
+  try {
+    for (const moving of [false, true]) {
+      adapter.begin(actor, 'anchor', null);
+      for (let frame = 0; frame <= 140; frame += 1) {
+        if (moving && frame >= 60) {
+          cameraRig.rotation.y = Math.sin(frame * 0.4) * 0.12;
+          boat.position.x = Math.sin(frame * 0.3) * 0.08;
+          boat.rotation.z = Math.sin(frame * 0.2) * 0.04;
+        }
+        sampleEventItemUse('anchor-drop', 'anchor', frame / 100, sample);
+        adapter.apply(sample);
+        const position = actor.root.getWorldPosition(new Vector3());
+        if (moving) {
+          expect(position.distanceTo(expectedPositions[frame]!)).toBeLessThan(1e-6);
+        } else {
+          expectedPositions.push(position);
+        }
+        if (frame >= 100) {
+          const links = effects.root.getObjectByName('event-item-chain-links') as InstancedMesh;
+          links.updateWorldMatrix(true, false);
+          links.getMatrixAt(links.count - 1, linkMatrix);
+          const chainEnd = new Vector3().setFromMatrixPosition(linkMatrix).applyMatrix4(links.matrixWorld);
+          if (frame > 100) {
+            expect(chainEnd.distanceTo(landedChainPosition)).toBeLessThan(1e-6);
+          } else {
+            landedChainPosition.copy(chainEnd);
+          }
+        }
+      }
+      adapter.clear();
+    }
+  } finally {
+    adapter.dispose();
+    supplies.dispose();
+    models.dispose();
+  }
+});
+
+// Importance: 95/100. Small boat motion must not shift or turn the whole deployed chain abruptly.
+it.each([30, 60, 144])('keeps deployed chain links smooth at %i fps', (fps) => {
+  const boat = new Group();
+  const actor = new Group();
+  boat.add(actor);
+  const effects = new EventItemEffects();
+  const sample = createEventItemUseSample();
+  sampleEventItemUse('anchor-drop', 'anchor', 1, sample);
+  const water = new Vector3(2.1, 0.04, -0.85);
+  const matrix = new Matrix4();
+  const position = new Vector3();
+  const rotation = new Quaternion();
+  const scale = new Vector3();
+  const previousPositions: Vector3[] = [];
+  const previousRotations: Quaternion[] = [];
+  const previousLink = new Vector3();
+  let deployedCount = 0;
+  let deployedLength = 0;
+  let maximumStep = 0;
+  let maximumTurn = 0;
+  let maximumStretch = 0;
+  try {
+    for (let frame = 0; frame <= fps * 20; frame += 1) {
+      const time = frame / fps;
+      boat.position.x = Math.sin(time / 2) * 0.08;
+      boat.updateMatrixWorld(true);
+      actor.position.copy(water);
+      boat.worldToLocal(actor.position);
+      effects.apply(sample, actor, false);
+      const links = effects.root.getObjectByName('event-item-chain-links') as InstancedMesh;
+      links.updateWorldMatrix(true, false);
+      if (frame === 0) deployedCount = links.count;
+      let length = 0;
+      for (let index = 0; index < Math.min(deployedCount, links.count); index += 1) {
+        links.getMatrixAt(index, matrix);
+        matrix.premultiply(links.matrixWorld).decompose(position, rotation, scale);
+        if (index > 0) length += position.distanceTo(previousLink);
+        previousLink.copy(position);
+        if (frame === 0) {
+          previousPositions.push(position.clone());
+          previousRotations.push(rotation.clone());
+        } else {
+          maximumStep = Math.max(maximumStep, position.distanceTo(previousPositions[index]!));
+          maximumTurn = Math.max(maximumTurn, rotation.angleTo(previousRotations[index]!));
+          previousPositions[index]!.copy(position);
+          previousRotations[index]!.copy(rotation);
+        }
+      }
+      expect(links.count).toBe(deployedCount);
+      if (frame === 0) deployedLength = length;
+      // Chords across the bend can vary slightly, but the chain must not stretch with the boat.
+      maximumStretch = Math.max(maximumStretch, Math.abs(length - deployedLength));
+    }
+    expect(maximumStep).toBeLessThan(0.15 / fps);
+    expect(maximumTurn).toBeLessThan(3 / fps);
+    expect(maximumStretch).toBeLessThan(0.005);
+    effects.clear();
+    boat.position.set(0, 0, 0);
+    actor.position.set(3, 0.04, -0.85);
+    effects.apply(sample, actor, false);
+    const replayedLinks = effects.root.getObjectByName('event-item-chain-links') as InstancedMesh;
+    expect(replayedLinks.count).toBeGreaterThan(deployedCount);
+  } finally {
+    effects.dispose();
+  }
+});

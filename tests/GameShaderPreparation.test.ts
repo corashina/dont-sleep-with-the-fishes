@@ -59,7 +59,7 @@ describe('phase shader preparation', () => {
     await flushPhases();
     expect(f.mount.querySelector('.system-screen--loading')).not.toBeNull();
     expect(f.mount.querySelector('progress')?.position).toBe(-1);
-    expect(f.mount.querySelector('.system-loading-status')?.textContent).toBe('Preparing scene');
+    expect(f.mount.querySelector('.system-loading-status')?.textContent).toBe('Building scene');
     frame(16);
     expect(menu.start).not.toHaveBeenCalled();
     expect(menu.update).not.toHaveBeenCalled();

@@ -25,8 +25,7 @@ import {
 } from './BoatInteraction';
 import { NetFishingPresentation, NET_HAUL_DURATION } from './NetFishingPresentation';
 import type { FishingCatchId } from './fishingCatalog';
-import type { FishingAttemptView, FishingCastPoint } from './FishingSession';
-import { FishingRodBend } from './FishingRodBend';
+import type { FishingCastPoint } from './FishingSession';
 import {
   disposeResourceSets,
   runCleanupSteps,
@@ -44,7 +43,7 @@ export const FISHING_ROD_LEAN = -22 * Math.PI / 180;
 const FISHING_CAMERA_LOOK_TARGET = Object.freeze({ x: 0, y: -0.1, z: -8 });
 const FISHING_CAMERA_DURATION = 1.1;
 const FISHING_CAST_DURATION = 0.8;
-const FISHING_REEL_DURATION = 1;
+const FISHING_REEL_DURATION = 3.2;
 const FISHING_MISS_DURATION = 0.8;
 const FISHING_SPLASH_HOLD_DURATION = 0.12;
 const FISHING_CAST_MIN_X = -2.7;
@@ -55,8 +54,7 @@ const CENTERED_FISHING_CAST: FishingCastPoint = Object.freeze({ x: 0, z: -6.4 })
 const FISHING_TARGET_SIZE = 52;
 const FISHING_BITE_PARTICLE_INTERVAL_SECONDS = 0.12;
 const FISHING_BITE_PARTICLE_INTENSITY = 0.85;
-const FISHING_CATCH_REST = Object.freeze({ x: 0, y: -0.3, z: -0.9 });
-const FISHING_RESULT_ROD_OFFSET = -0.55;
+const FISHING_CATCH_VIEW_DEPTH = 0.2;
 
 export interface FishingCameraControl {
   restoreBasePose(): void;
@@ -118,7 +116,6 @@ type FishingPresentationPhase =
   | 'casting'
   | 'waiting'
   | 'bite'
-  | 'fighting'
   | 'reeling'
   | 'landed'
   | 'missing'
@@ -320,17 +317,11 @@ export class FishingPresentation {
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly lineOrigin = new Object3D();
-  private rodBend: FishingRodBend | null = null;
-  private readonly castAnchor = new Vector3();
-  private readonly strainTarget = new Vector3();
-  private fightStrain = 0;
-  private fightRodPull = 0;
-  private fightStartX = 0;
   private readonly catchRest = new Group();
+  private catchRestScale = 1;
   private readonly fishing: FishingVisuals;
   private readonly baseRodPivotRotationX: number;
-  private readonly baseRodPivotRotationY: number;
-  private readonly baseRodPivotPositionX: number;
+  private readonly baseRodPivotRotationZ: number;
   private readonly cameraPosition = new Vector3(
     FISHING_PLAYER_SEAT.x,
     FISHING_PLAYER_SEAT.y,
@@ -352,8 +343,10 @@ export class FishingPresentation {
   private readonly lineOriginWorld = new Vector3();
   private readonly lineEndWorld = new Vector3();
   private readonly reelStartWorld = new Vector3();
+  private readonly reelNearWorld = new Vector3();
+  private reelStartViewScale = 1;
   private readonly catchTargetWorld = new Vector3();
-  private readonly catchApproachWorld = new Vector3();
+  private readonly catchTargetQuaternion = new Quaternion();
   private readonly projectionWorld = new Vector3();
   private readonly projectionCamera = new Vector3();
   private readonly catchBounds = new Box3();
@@ -434,14 +427,8 @@ export class FishingPresentation {
     this.root.name = 'fishing-presentation';
     this.lineOrigin.name = 'fishing-line-origin';
     this.catchRest.name = 'fishing-catch-rest';
-    this.catchRest.position.set(
-      FISHING_CATCH_REST.x,
-      FISHING_CATCH_REST.y,
-      FISHING_CATCH_REST.z,
-    );
     this.baseRodPivotRotationX = dependencies.rodPivot.rotation.x;
-    this.baseRodPivotRotationY = dependencies.rodPivot.rotation.y;
-    this.baseRodPivotPositionX = dependencies.rodPivot.position.x;
+    this.baseRodPivotRotationZ = dependencies.rodPivot.rotation.z;
     try {
       this.fishing = createFishingVisuals(
         this.root,
@@ -450,7 +437,6 @@ export class FishingPresentation {
       );
       this.lineOrigin.position.copy(localTipOf(dependencies.rod));
       dependencies.rod.add(this.lineOrigin);
-      this.rodBend = new FishingRodBend(dependencies.rod, this.lineOrigin);
       dependencies.boatRoot.add(this.catchRest);
       dependencies.worldRoot.add(this.root, dependencies.biteParticles.points);
       this.matrixScratch.lookAt(
@@ -459,11 +445,9 @@ export class FishingPresentation {
         dependencies.camera.up,
       );
       this.cameraQuaternion.setFromRotationMatrix(this.matrixScratch);
-      this.catchRest.position.applyQuaternion(this.cameraQuaternion).add(this.cameraPosition);
     } catch (error) {
       try {
         runCleanupSteps([
-          () => this.rodBend?.dispose(),
           () => dependencies.catches.dispose(),
           () => dependencies.biteParticles.dispose(),
           () => this.lineOrigin.removeFromParent(),
@@ -556,19 +540,11 @@ export class FishingPresentation {
     this.updateBiteParticles(0);
   }
 
-  updateFight(view: FishingAttemptView): void {
-    if (this.disposed || !this.hasCast) return;
-    const fighting = view.state === 'fighting';
-    if (fighting && this.phase !== 'fighting') this.fightStartX = this.castPosition.x;
-    if (fighting) this.phase = 'fighting';
-    this.castPosition.x = fighting
-      ? this.fightStartX + view.fishOffset * 1.65
-      : clamp(this.castAnchor.x + view.fishOffset * 1.65, FISHING_CAST_MIN_X, FISHING_CAST_MAX_X);
-    this.castPosition.z = this.castAnchor.z + (fighting ? Math.min(1, view.fightSeconds / 4) * 0.8 : 0);
-    this.fightStrain = fighting ? 0.35 + Math.min(1, Math.abs(view.fishOffset)) * 0.6 : 0;
-    this.fightRodPull = view.rodPull;
+  moveBite(point: FishingCastPoint, offset: number): void {
+    if (this.disposed || this.phase !== 'bite') return;
+    const direction = point.x > 0 ? -1 : 1;
+    this.castPosition.x = clamp(point.x + offset * direction, FISHING_CAST_MIN_X, FISHING_CAST_MAX_X);
     this.updateWave(this.currentTime);
-    this.applyPhasePresentation();
     this.updateLine();
   }
 
@@ -629,12 +605,17 @@ export class FishingPresentation {
       this.catchBounds.setFromObject(this.activeCatch, true);
     }
     this.catchBounds.getCenter(this.activeCatch.position).negate();
+    const viewHalfHeight = FISHING_CATCH_VIEW_DEPTH
+      * Math.tan(this.dependencies.camera.getEffectiveFOV() * Math.PI / 360);
+    // Hold the catch near the camera, centered in the space below the result popup.
+    this.catchRest.position.set(0, -viewHalfHeight * 0.5, -FISHING_CATCH_VIEW_DEPTH)
+      .applyQuaternion(this.cameraQuaternion).add(this.cameraPosition);
+    this.catchBounds.getSize(this.projectionWorld);
+    this.catchRestScale = viewHalfHeight * 0.5 / this.projectionWorld.length();
     this.fishing.catchDisplay.add(this.activeCatch);
-    this.reelStartWorld.set(
-      this.castPosition.x,
-      this.waveHeight,
-      this.castPosition.z,
-    );
+    this.reelStartWorld.copy(this.fishing.bobber.position);
+    this.dependencies.camera.worldToLocal(this.projectionWorld.copy(this.reelStartWorld));
+    this.reelStartViewScale = 1 / Math.max(0.01, -this.projectionWorld.z);
     this.fishing.catchDisplay.position.copy(this.reelStartWorld);
     this.phase = 'reeling';
     await this.startAnimation('reel', FISHING_REEL_DURATION);
@@ -782,7 +763,6 @@ export class FishingPresentation {
     if (this.visualResourcesDisposed) return;
     this.visualResourcesDisposed = true;
     this.disposed = true;
-    this.rodBend?.dispose();
     disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
   }
 
@@ -829,13 +809,14 @@ export class FishingPresentation {
   }
 
   private applyPhasePresentation(): void {
-    this.applyRodStrain();
+    this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX;
+    this.dependencies.rodPivot.rotation.z = this.baseRodPivotRotationZ;
     if (this.usingNet) this.dependencies.rod.visible = false;
     this.fishing.line.visible = false;
     this.fishing.bobber.visible = false;
     this.fishing.splash.visible = false;
     this.fishing.catchDisplay.visible = false;
-    this.clearInactiveBiteParticles();
+    if (this.phase !== 'bite') this.clearBiteParticles();
     if (this.phase === 'idle') return;
 
     if (this.phase === 'entering' || this.phase === 'returning') return;
@@ -846,7 +827,6 @@ export class FishingPresentation {
 
     if (this.phase === 'landed') {
       this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX;
-      this.dependencies.rodPivot.position.x = this.baseRodPivotPositionX + FISHING_RESULT_ROD_OFFSET;
       this.fishing.catchDisplay.visible = this.activeCatch !== null;
       return;
     }
@@ -855,27 +835,6 @@ export class FishingPresentation {
     if (this.phase === 'waiting' && this.splashHoldRemaining > 0) {
       this.fishing.splash.visible = true;
     }
-    if (this.phase === 'reeling') {
-      this.fishing.catchDisplay.visible = this.activeCatch !== null;
-    }
-  }
-
-  private clearInactiveBiteParticles(): void {
-    if (this.phase !== 'bite' && this.phase !== 'fighting') this.clearBiteParticles();
-  }
-
-  private applyRodStrain(): void {
-    this.dependencies.rodPivot.position.x = this.baseRodPivotPositionX;
-    this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX;
-    this.dependencies.rodPivot.rotation.y = this.baseRodPivotRotationY;
-    if (this.phase !== 'fighting') {
-      this.rodBend?.update(0, this.strainTarget);
-      return;
-    }
-    this.dependencies.rodPivot.rotation.x -= 0.1 + this.fightStrain * 0.12;
-    this.dependencies.rodPivot.rotation.y -= this.fightRodPull * 0.28;
-    this.strainTarget.copy(this.fishing.bobber.position);
-    this.rodBend?.update(this.fightStrain, this.strainTarget);
   }
 
   private applyAnimation(kind: FishingAnimationKind, progress: number): void {
@@ -940,24 +899,58 @@ export class FishingPresentation {
   }
 
   private applyReelAnimation(normalized: number): void {
-    this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX;
-    this.dependencies.rodPivot.position.x = this.baseRodPivotPositionX
-      + FISHING_RESULT_ROD_OFFSET * easeOut(normalized);
     if (this.activeCatch === null) return;
     this.catchRest.getWorldPosition(this.catchTargetWorld);
-    this.catchApproachWorld.copy(this.catchTargetWorld);
-    this.catchApproachWorld.x += 0.75;
-    this.catchApproachWorld.y += 0.72;
-    if (normalized < 0.72) {
-      const haul = easeOut(normalized / 0.72);
-      this.fishing.catchDisplay.position.lerpVectors(this.reelStartWorld, this.catchApproachWorld, haul);
-      this.fishing.catchDisplay.position.y += Math.sin(Math.PI * haul) * 0.95;
-    } else {
-      const drop = easeInOut((normalized - 0.72) / 0.28);
-      this.fishing.catchDisplay.position.lerpVectors(this.catchApproachWorld, this.catchTargetWorld, drop);
-      this.fishing.catchDisplay.position.y -= Math.sin(Math.PI * drop) * 0.045;
-    }
-    this.fishing.catchDisplay.rotation.z = Math.sin(normalized * Math.PI * 2) * 0.16 * (1 - normalized);
+    this.catchRest.getWorldQuaternion(this.catchTargetQuaternion);
+    // Retrieve beyond the bow on the centerline, then lift before bringing the catch aboard.
+    const elapsed = normalized * FISHING_REEL_DURATION;
+    const retrieve = smootherStep(clamp(elapsed / 1.5, 0, 1));
+    const lift = smootherStep(clamp((elapsed - 1.5) / 0.8, 0, 1));
+    const settle = smootherStep(clamp((elapsed - 2.3) / 0.9, 0, 1));
+    this.reelNearWorld.set(0, 0, -3.5);
+    this.dependencies.boatRoot.localToWorld(this.reelNearWorld);
+    const position = this.fishing.catchDisplay.position;
+    position.lerpVectors(this.reelStartWorld, this.reelNearWorld, retrieve);
+    this.dependencies.sampleWaveInto(
+      this.waveSample, this.currentTime, position.x, position.z,
+      this.dependencies.waveAmplitudeScale(),
+    );
+    const surfaceBlend = smootherStep(clamp(normalized / 0.15, 0, 1));
+    const surfaceY = this.reelStartWorld.y
+      + (this.waveSample.height - this.reelStartWorld.y) * surfaceBlend;
+    const liftedY = Math.max(this.catchTargetWorld.y + 0.6, surfaceY + 1.1);
+    position.y = surfaceY + (liftedY - surfaceY) * lift;
+    const approachY = position.y;
+    position.lerp(this.catchTargetWorld, settle);
+    // Keep the catch above the tip as it passes over the rod, then lower it into view.
+    const lower = smootherStep(clamp((settle - 0.15) / 0.85, 0, 1));
+    position.y = approachY + (this.catchTargetWorld.y - approachY) * lower;
+    // Keep the lift on the camera centerline even when the boat rolls beneath it.
+    this.dependencies.camera.getWorldPosition(this.projectionCamera);
+    const cameraMatrix = this.dependencies.camera.matrixWorld.elements;
+    const centeredX = this.projectionCamera.x
+      - (cameraMatrix[1]! * (position.y - this.projectionCamera.y)
+        + cameraMatrix[2]! * (position.z - this.projectionCamera.z)) / cameraMatrix[0]!;
+    if (retrieve === 1) position.x = centeredX;
+    // Keep the bobber during retrieval; reveal the catch just after it clears the water.
+    const emerged = lift >= 0.05;
+    this.fishing.bobber.position.copy(position);
+    this.fishing.bobber.visible = !emerged;
+    this.fishing.catchDisplay.visible = emerged;
+    // Lift, then ease the tip forward under the catch while bringing it aboard.
+    const rodForward = smootherStep(clamp((elapsed - 2.0) / 0.3, 0, 1))
+      * (1 - smootherStep(clamp((settle - 0.85) / 0.15, 0, 1)));
+    this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX
+      + lift * (1 - settle) * 0.2 - rodForward * 0.35;
+    const reveal = smootherStep(clamp((normalized - 0.45) / 0.55, 0, 1));
+    // Grow on screen throughout the haul; shrinking during the lift makes the catch appear to retreat.
+    this.dependencies.camera.worldToLocal(this.projectionWorld.copy(position));
+    this.dependencies.camera.worldToLocal(this.projectionCamera.copy(this.catchTargetWorld));
+    const viewScale = this.reelStartViewScale
+      + (this.catchRestScale / Math.max(0.01, -this.projectionCamera.z) - this.reelStartViewScale)
+        * smootherStep(normalized);
+    this.fishing.catchDisplay.scale.setScalar(Math.max(0.01, -this.projectionWorld.z) * viewScale);
+    this.fishing.catchDisplay.quaternion.identity().slerp(this.catchTargetQuaternion, reveal);
   }
 
   private finishAnimation(kind: FishingAnimationKind): void {
@@ -990,9 +983,6 @@ export class FishingPresentation {
   }
 
   private resetVisuals(): void {
-    this.dependencies.rodPivot.position.x = this.baseRodPivotPositionX;
-    this.rodBend?.update(0, this.strainTarget);
-    this.dependencies.rodPivot.rotation.y = this.baseRodPivotRotationY;
     this.net?.clear();
     this.fishing.line.visible = false;
     this.fishing.bobber.visible = false;
@@ -1001,6 +991,7 @@ export class FishingPresentation {
     this.root.add(this.fishing.catchDisplay);
     this.fishing.catchDisplay.position.set(0, 0, 0);
     this.fishing.catchDisplay.rotation.set(0, 0, 0);
+    this.fishing.catchDisplay.scale.setScalar(1);
     this.clearBiteParticles();
     this.dependencies.catches.hide();
     this.activeCatch = null;
@@ -1017,7 +1008,6 @@ export class FishingPresentation {
       throw new RangeError('Fishing cast point is outside the authored water region.');
     }
     this.castPosition.set(point.x, 0, point.z);
-    this.castAnchor.copy(this.castPosition);
     this.hasCast = true;
     this.updateWave(this.currentTime);
   }
@@ -1033,7 +1023,7 @@ export class FishingPresentation {
     time: number,
     amplitudeScale = this.dependencies.waveAmplitudeScale(),
   ): void {
-    if (!this.hasCast) return;
+    if (!this.hasCast || this.phase === 'reeling') return;
     this.dependencies.sampleWaveInto(
       this.waveSample,
       time,
@@ -1056,7 +1046,7 @@ export class FishingPresentation {
       );
       this.fishing.splash.position.copy(this.fishing.bobber.position);
     }
-    if (this.phase !== 'reeling' && this.phase !== 'landed') {
+    if (this.phase !== 'landed') {
       this.fishing.catchDisplay.position.copy(this.fishing.bobber.position);
     }
   }
@@ -1072,7 +1062,7 @@ export class FishingPresentation {
   }
 
   private updateBiteParticles(delta: number): void {
-    if (this.phase !== 'bite' && this.phase !== 'fighting') {
+    if (this.phase !== 'bite') {
       this.clearBiteParticles();
       return;
     }
@@ -1083,7 +1073,7 @@ export class FishingPresentation {
     if (this.biteParticleCooldown > 0) return;
     this.dependencies.biteParticles.emit(
       this.fishing.bobber.position,
-      FISHING_BITE_PARTICLE_INTENSITY + (this.phase === 'fighting' ? this.fightStrain * 0.7 : 0),
+      FISHING_BITE_PARTICLE_INTENSITY,
     );
     this.biteParticleCooldown = FISHING_BITE_PARTICLE_INTERVAL_SECONDS;
   }
@@ -1121,8 +1111,6 @@ export class FishingPresentation {
 
     const slack = this.phase === 'missing'
       ? 0.42
-      : this.phase === 'fighting'
-        ? 0.008 + (1 - this.fightStrain) * 0.025
       : this.phase === 'waiting' || this.phase === 'bite'
         ? 0.1
         : 0.025;

@@ -224,7 +224,6 @@ function snapshot(
     recoveredFood: 0,
     recoveredBait: 0,
     rescueLead: 0,
-    rescueTraceFinds: 0,
     radioSignalAvailable: false,
     radioSignalsSent: 0,
     heartPieces: { flowers: false, blood: false, chest: false },
@@ -800,6 +799,7 @@ describe('BoatWorld helpers', () => {
       ['net-scoop', 'flowers', 'fishingNet', 'fishingNet', eventItemUseDuration('net-scoop')],
       ['bucket-scoop', 'leak', 'bucket', 'bucket', LEAK_ITEM_DURATION],
       ['bucket-helmet', 'eerie-melody', 'bucket', 'bucket', supernaturalItemUseDuration('eerie-melody', 'bucket')!],
+      ['bucket-helmet', 'face-on-the-moon', 'bucket', 'bucket', eventItemUseDuration('bucket-helmet')],
       ['flare-target', 'ghosts', 'flareGun', 'flareGun', supernaturalItemUseDuration('ghosts', 'flareGun')!],
       ['flare-sky', 'other-people', 'flareGun', 'flareGun', eventItemUseDuration('flare-sky')],
       ['anchor-drop', 'tornado', 'anchor', 'anchor', TORNADO_ITEM_DURATION],
@@ -1379,14 +1379,7 @@ describe('BoatWorld helpers', () => {
     world.stageEvent('eerie-melody');
     await reveal;
     const sirenMist = world.scene.getObjectByName('supernatural-sea-mist') as Group;
-    const sirenMistLayer = world.scene.getObjectByName(
-      'supernatural-sea-mist-layer-1',
-    ) as Mesh<BufferGeometry, ShaderMaterial>;
-    expect(sirenMist.scale.x).toBeGreaterThan(1);
-    expect(sirenMist.scale.y).toBeGreaterThan(3);
-    expect(sirenMistLayer.material.uniforms.uOpacity!.value).toBeGreaterThan(
-      ghostMistOpacity,
-    );
+    expect(sirenMist.visible).toBe(false);
     world.stageEvent('ghosts');
 
     const itemUse = world.playEventItemUse('ghosts', 'flareGun', flare.instanceId);

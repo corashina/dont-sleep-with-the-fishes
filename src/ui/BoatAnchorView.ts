@@ -77,7 +77,7 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'treat', get label() { return uiText('treat'); }, get cost() { return uiText('oneMedkit'); }, energyCost: 0, get effect() { return uiText('restoreHealth'); }, risk: 'safe' },
   { id: 'endDay', get label() { return uiText('endDay'); }, get cost() { return uiText('rest'); }, energyCost: 0, get effect() { return uiText('restoreDawn'); }, risk: 'safe' },
   { id: 'repairItem', get label() { return uiText('repairItem'); }, get cost() { return uiText('oneTape'); }, energyCost: 0, get effect() { return uiText('restoreItem'); }, risk: 'safe' },
-  { id: 'answerRadio', get label() { return uiText('answerRadio'); }, get cost() { return uiText('oneEnergy'); }, energyCost: SURVIVAL_BALANCE.radio.energy, get effect() { return uiText('rescueLead'); }, risk: 'safe' },
+  { id: 'answerRadio', get label() { return uiText('answerRadio'); }, get cost() { return uiText('oneEnergy'); }, energyCost: SURVIVAL_BALANCE.radio.energy, get effect() { return uiText('transmitPosition'); }, risk: 'safe' },
   { id: 'useEnergyBar', get label() { return uiText('eatBar'); }, get cost() { return uiText('oneBar'); }, energyCost: 0, get effect() { return uiText('energyThree'); }, risk: 'safe' },
   { id: 'openChest', get label() { return uiText('openChest'); }, get cost() { return uiText('threeEnergy'); }, energyCost: SURVIVAL_BALANCE.actions.openChestEnergy, get effect() { return uiText('recoverSupply'); }, risk: 'uncertain' },
   { id: 'petCarlitos', get label() { return uiText('pet'); }, get cost() { return uiText('free'); }, energyCost: 0, get effect() { return uiText('easeLonely'); }, risk: 'safe' },

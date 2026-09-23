@@ -1,3 +1,4 @@
+import { starryNightChoices } from './starryNight';
 import type { ItemId } from '../game/ItemState';
 import { nightTraderChoices, nightTraderEventForSeed } from './nightTraderTrades';
 import { HANDYMAN_ITEM_IDS } from './tradeRules';
@@ -411,8 +412,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(20, 'eventText154', effects(undefined, [breakItem('fishingNet')]))),
     choice('map', 'eventText060', 'map', outcome(1, 'eventText155', effects([add('food', 1)], [lose('map')]))),
     choice('umbrella', 'eventText072', 'umbrella',
-      outcome(50, 'eventText156'),
-      outcome(50, 'eventText157', effects(undefined, [lose('umbrella')]))),
+      outcome(1, 'eventText157', effects(undefined, [lose('umbrella')]))),
     choice('sleep', 'eventText063', undefined,
       outcome(80, 'eventText158', effects([subtract('hull', { min: 10, max: 30 })], [breakRandom(2)])),
       outcome(20, 'eventText158', atNextDawn(1, effects([subtract('hull', { min: 10, max: 30 })])))),
@@ -497,6 +497,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(40, 'eventText181', atNextDawn(1, effects([subtract('hull', { min: 30, max: 40 }), subtract('health', 20)])))),
   ], undefined, { minimumPressure: 2 }),
   event('face-on-the-moon', 'night', 'eventText046', 'uncertain', 'darkness', 1, 17, 5, [
+    choice('bucket', 'moonBucketHelmet', 'bucket', outcome(1, 'eventText152', atNextDawn(2))),
     choice('umbrella', 'eventText072', 'umbrella', outcome(1, 'eventText152', atNextDawn(2))),
     choice('spyglass', 'eventText067', 'spyglass',
       outcome(60, 'eventText180', atNextDawn(1, effects(undefined, [breakItem('spyglass')]))),
@@ -627,12 +628,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
         items: [gainChest()],
       }, 'tour-chest'),
       outcome(20, 'midnightGraveResult', atNextDawn(2), 'tour-grave'),
-      outcome(15, 'midnightCampResult', {
-        resources: [add('food', { min: 0, max: 2 }), add('bait', { min: 0, max: 2 })],
-      }, 'tour-camp'),
-      outcome(5, 'midnightCampBackpackResult', {
-        resources: [add('food', { min: 0, max: 2 }), add('bait', { min: 0, max: 2 })],
-      }, 'tour-camp-backpack'),
+      outcome(20, 'midnightCampResult', {}, 'tour-camp'),
       outcome(20, 'eventText243', {
         resources: [subtract('health', { min: 25, max: 45 })],
       }, 'tour-attack'),
@@ -748,8 +744,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
   ], undefined, { minimumPressure: 1, maximumAppearances: 2 }),
   {
     ...event('starry-night', 'night', 'starryNightTitle', 'safe', 'sighting', 1, 3, 14, [
-      contextualChoice('wish', 'starryNightWish',
-        outcome(1, 'starryNightRestored', { restoreCrew: true }, 'starry-night-miracle')),
+      ...starryNightChoices(),
       contextualChoice('sleep', 'eventText063',
         outcome(1, 'starryNightSlept', {}, 'starry-night-sleep')),
     ]),

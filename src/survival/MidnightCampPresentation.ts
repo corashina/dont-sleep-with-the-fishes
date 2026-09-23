@@ -1,5 +1,5 @@
 import {
-  CircleGeometry, Group, LatheGeometry, Mesh, MeshBasicMaterial, MeshStandardMaterial, PointLight, Vector2,
+  Box3, CircleGeometry, Group, LatheGeometry, Mesh, MeshBasicMaterial, MeshStandardMaterial, PointLight, Vector2,
 } from 'three';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import { EVENT_MODEL_SPECS } from '../world/eventModelManifest';
@@ -33,6 +33,13 @@ export class MidnightCampPresentation {
       log.root.position.set(x, -EVENT_MODEL_SPECS.midnightWoodLog.normalizedBounds.min[1] * scale, z);
       this.root.add(log.root);
     }
+    const backpack = propModels.createEventModel('midnightBackpack');
+    if (backpack === null) throw new Error('Missing required Midnight Tour backpack model.');
+    backpack.root.name = 'midnight-tour-camp-backpack';
+    backpack.root.rotation.set(-Math.PI / 2, 0, -0.35);
+    backpack.root.position.set(0.85, 0, -0.95);
+    backpack.root.position.y = -new Box3().setFromObject(backpack.root).min.y;
+    this.root.add(backpack.root);
     this.buildFire();
     this.update(0);
   }

@@ -145,7 +145,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private digCueEmitted = false;
   private digContacts = 0;
   private chestBuriedY = 0;
-  private preparedResultId: 'tour-camp' | 'tour-camp-backpack' | 'tour-grave' | null = null;
+  private preparedResultId: 'tour-camp' | 'tour-grave' | null = null;
   private staged = false;
   private disposed = false;
 
@@ -243,7 +243,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       throw new Error(`Midnight Tour received result for ${result.eventId}.`);
     }
     void outcome;
-    if (result.resultId === 'tour-camp' || result.resultId === 'tour-camp-backpack') {
+    if (result.resultId === 'tour-camp') {
       if (this.preparedResultId === result.resultId) return;
       this.clearResultActors();
       this.resetResultCounters();
@@ -273,7 +273,6 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     else this.animation.settle();
     this.activeResultTimeline = false;
     switch (result.resultId) {
-      case 'tour-camp-backpack':
       case 'tour-camp': {
         return this.playCampResult();
       }
@@ -695,6 +694,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     try {
       for (const [id, label] of [
         ['midnightCampfire', 'campfire'], ['midnightWoodLog', 'wood log'],
+        ['midnightBackpack', 'backpack'],
       ] as const) {
         const model = this.dependencies.propModels.createEventModel(id);
         if (model === null) throw new Error(`Missing required Midnight Tour ${label} model.`);

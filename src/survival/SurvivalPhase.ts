@@ -2,6 +2,7 @@ import { COMPLETE_HEART } from './heartOfTheSea';
 import { PerspectiveCamera } from 'three';
 import type { SurvivalPhaseContext, GamePhase } from '../app/GamePhase';
 import { prepareScene } from '../rendering/prepareScene';
+import { reportLoadingStage, type ReportLoadingProgress } from '../app/LoadingProgress';
 import type { SurvivalContent } from './SurvivalContent';
 import { AudioSystem } from '../audio/AudioSystem';
 import { SurvivalAudio } from '../audio/SurvivalAudio';
@@ -490,12 +491,13 @@ export class SurvivalPhase implements GamePhase {
     this.eventFlow.resize(width, height);
   }
 
-  async prepare(): Promise<void> {
+  async prepare(report?: ReportLoadingProgress): Promise<void> {
     if (this.world.scene === undefined || this.disposed) return;
     const snapshot = this.session.snapshot();
     this.syncVisualState(snapshot);
     this.world.setPhase?.(this.visualState.phase);
     if (!this.itemAnimationLab && snapshot.pendingEventId !== null && !isTerminal(snapshot.state)) {
+      report?.({ stage: 'loadingAssets' });
       await this.eventBundles.beginLoad(snapshot.pendingEventId as Parameters<EventBundleManager['beginLoad']>[0]);
       if (this.disposed) return;
       await this.eventBundles.activate(snapshot.pendingEventId as Parameters<EventBundleManager['activate']>[0]);
@@ -506,9 +508,19 @@ export class SurvivalPhase implements GamePhase {
       ...this.context.survivalContent.preparationRoots(),
     ];
     await prepareScene(this.context.renderer, this.world.scene, this.context.camera,
-      templates, () => !this.disposed);
+      templates, () => !this.disposed, report);
+    if (this.disposed) return;
+    await reportLoadingStage(report, 'preparingEffects');
     if (!this.disposed) await this.context.sceneRenderer.prepare(this.world.scene, this.context.camera, this.visualState);
-    if (!this.disposed) this.render();
+    await this.renderPreparedScene(report);
+  }
+
+  private async renderPreparedScene(report?: ReportLoadingProgress): Promise<void> {
+    if (!this.disposed) {
+      report?.({ stage: 'startingScene' });
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      if (!this.disposed) this.render();
+    }
   }
 
   render(): void {
@@ -859,8 +871,6 @@ export class SurvivalPhase implements GamePhase {
       this.viewportHeight,
     );
     this.ui.onFishingReel = () => this.fishingFlow.reel();
-    this.ui.onFishingCounterPull = (movementX) => this.fishingFlow.counterPull(movementX);
-    this.ui.onFishingControlActive = (active) => this.fishingFlow.setControlActive(active);
     this.ui.onFishingResultContinue = () => this.fishingFlow.continueResult();
     this.ui.onFishingViewExit = () => this.fishingFlow.exitView();
     this.ui.onFocusedEventSelect = (eventId) => { void this.eventFlow.focusEvent(eventId); };

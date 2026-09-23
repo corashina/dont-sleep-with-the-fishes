@@ -279,10 +279,8 @@ export class SurvivalAudio {
     if (!this.disposed) this.scope.play('fishingBite');
   }
 
-  setFishingReeling(active: boolean): void {
-    if (this.disposed) return;
-    if (active) this.scope.startLoop('fishingReel');
-    else this.scope.stopLoop('fishingReel', 0.08);
+  fishingReel(): void {
+    if (!this.disposed) this.scope.play('fishingReel');
   }
 
   fishingNet(): void {

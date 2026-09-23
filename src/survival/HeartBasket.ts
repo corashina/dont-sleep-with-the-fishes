@@ -30,7 +30,7 @@ function strip(parts: BufferGeometry[], x: number, y: number, z: number,
   parts.push(geometry);
 }
 
-/** An open woven tray with a low front, rounded corners, and a bound rim. */
+/** An open woven tray with level sides, rounded corners, and a bound rim. */
 export class HeartBasket {
   readonly root = new Group();
   private readonly meshes: Mesh[] = [];
@@ -80,14 +80,11 @@ export class HeartBasket {
       const after = perimeter[(index + 1) % count]!;
       return new Vector3(after.y - before.y, 0, before.x - after.x).normalize();
     });
-    const heights = perimeter.map(point => {
-      const back = Math.max(0, Math.min(1, (depth / 2 - point.y) / depth));
-      return 0.050 + 0.075 * back * back * (3 - 2 * back);
-    });
+    const height = 0.085;
     // Continuous reeds pass alternately inside and outside the upright stakes.
     for (let row = 0; row < 6; row++) {
       const points = perimeter.map((point, index) => {
-        const y = 0.030 + (heights[index]! - 0.037) * row / 5;
+        const y = 0.030 + (height - 0.037) * row / 5;
         const offset = Math.cos(index * Math.PI / 2 + row * Math.PI) * 0.0025;
         return new Vector3(point.x, y, point.y).addScaledVector(normals[index]!, offset);
       });
@@ -97,11 +94,11 @@ export class HeartBasket {
       const point = perimeter[index]!;
       reed(bindings, [
         new Vector3(point.x, 0.022, point.y),
-        new Vector3(point.x, heights[index]! * 0.58, point.y),
-        new Vector3(point.x, heights[index]!, point.y),
+        new Vector3(point.x, height * 0.58, point.y),
+        new Vector3(point.x, height, point.y),
       ], 0.0023);
     }
-    const rim = perimeter.map((point, index) => new Vector3(point.x, heights[index]!, point.y));
+    const rim = perimeter.map(point => new Vector3(point.x, height, point.y));
     reed(reeds, rim, 0.006, true);
     reed(lining, rim.map(point => point.clone().add(new Vector3(0, 0.004, 0))), 0.0018, true);
     // Lashings secure the rolled rim to the stakes without covering the opening.

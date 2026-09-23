@@ -1,3 +1,4 @@
+import type { ItemId } from '../game/ItemState';
 import { defineMessages } from './messages';
 import { itemLabel } from './itemMessages';
 import { nightTraderTrade } from '../survival/nightTraderTrades';
@@ -7,6 +8,7 @@ import type {
 } from '../survival/survivalTypes';
 
 const EVENT_TEXT = {
+  moonBucketHelmet: { en: 'Put the bucket on your head', pl: 'Załóż wiadro na głowę', 'es-AR': 'Ponete el balde en la cabeza' },
   eventTestKraken: { en: 'Kraken', pl: 'Kraken', 'es-AR': 'Kraken' },
   krakenTitle: { en: 'Kraken', pl: 'Kraken', 'es-AR': 'Kraken' },
   krakenReveal: { en: 'Eight scarred arms rise around the boat. The pieces beat together. The sea has come for its heart.', pl: 'Osiem ramion pokrytych bliznami otacza łódź. Fragmenty biją jednym rytmem. Morze przyszło po swoje serce.', 'es-AR': 'Ocho brazos llenos de cicatrices rodean el bote. Los fragmentos laten juntos. El mar vino por su corazón.' },
@@ -25,11 +27,11 @@ const EVENT_TEXT = {
   seagullTheftChoice: { en: 'Lose a food can', pl: 'Strać puszkę jedzenia', 'es-AR': 'Perder una lata de comida' },
   seagullTheftResult: { en: 'A gull snatches a food can and flies away. −1 Food.', pl: 'Mewa porywa puszkę jedzenia i odlatuje. −1 Jedzenie.', 'es-AR': 'Una gaviota se lleva una lata. −1 Comida.' },
   starryNightTitle: { en: 'Starry Night', pl: 'Gwiaździsta noc', 'es-AR': 'Noche estrellada' },
-  starryNightReveal: { en: 'One star wakes another. Silver threads join them into a great whale above the sea. Its heart shines for you.', pl: 'Jedna gwiazda budzi drugą. Srebrne nici łączą je w wieloryba nad morzem. Jego serce świeci dla ciebie.', 'es-AR': 'Una estrella despierta a otra. Hilos de plata forman una gran ballena sobre el mar. Su corazón brilla para vos.' },
-  starryNightWish: { en: 'Touch the stars', pl: 'Dotknij gwiazd', 'es-AR': 'Tocá las estrellas' },
-  starryNightDescription: { en: 'A miracle. Touch the constellation to fully restore yourself and Carlitos.', pl: 'Cud. Dotknij konstelacji, aby całkowicie odzyskać siły razem z Carlitosem.', 'es-AR': 'Un milagro. Tocá la constelación para recuperar todas tus fuerzas y las de Carlitos.' },
-  starryNightRestored: { en: 'Warm starlight reaches the boat. Pain, hunger, and weariness fall away. The gift lasts through dawn.', pl: 'Ciepłe światło gwiazd dociera do łodzi. Ból, głód i zmęczenie znikają. Dar trwa aż do świtu.', 'es-AR': 'La luz cálida llega al bote. El dolor, el hambre y el cansancio desaparecen. El regalo dura hasta el amanecer.' },
-  starryNightSlept: { en: 'You close your eyes. The whale crosses the sky without you.', pl: 'Zamykasz oczy. Wieloryb przemierza niebo bez ciebie.', 'es-AR': 'Cerrás los ojos. La ballena cruza el cielo sin vos.' },
+  starryNightReveal: {"en":"Two shapes gather above the sea. Each is a gift. Choose one constellation.","pl":"Dwa kształty pojawiają się nad morzem. Każdy jest darem. Wybierz jedną konstelację.","es-AR":"Dos formas aparecen sobre el mar. Cada una es un regalo. Elegí una constelación."},
+  starryNightWish: {"en":"Choose","pl":"Wybierz","es-AR":"Elegir"},
+  starryNightDescription: {"en":"Choose this constellation to receive its item.","pl":"Wybierz tę konstelację, aby otrzymać jej przedmiot.","es-AR":"Elegí esta constelación para recibir su objeto."},
+  starryNightGift: {"en":"The stars fade. Their gift rests in your boat.","pl":"Gwiazdy gasną. Ich dar spoczywa w twojej łodzi.","es-AR":"Las estrellas se apagan. Su regalo descansa en tu bote."},
+  starryNightSlept: {"en":"You close your eyes. The two constellations fade above the sea.","pl":"Zamykasz oczy. Dwie konstelacje gasną nad morzem.","es-AR":"Cerrás los ojos. Las dos constelaciones se apagan sobre el mar."},
   snatcherNetChoice: { en: 'Strike the tentacle with the Net — may tear', pl: 'Uderz mackę siecią — może się rozerwać', 'es-AR': 'Golpeá el tentáculo con la red — puede romperse' },
   snatcherNetHeld: { en: 'The net drives the tentacle away. Your supplies stay aboard.', pl: 'Sieć odpędza mackę. Zapasy zostają na pokładzie.', 'es-AR': 'La red aleja al tentáculo. Tus provisiones quedan a bordo.' },
   snatcherNetTorn: { en: 'The net tears as you strike. The tentacle retreats without your supplies.', pl: 'Sieć pęka przy uderzeniu. Macka wycofuje się bez zapasów.', 'es-AR': 'La red se rompe con el golpe. El tentáculo se retira sin tus provisiones.' },
@@ -347,8 +349,7 @@ const EVENT_TEXT = {
   eventTestCheckBackBad: { en: 'Check the Back: Anglerfish', pl: 'Sprawdź tył łodzi: żabnica', 'es-AR': 'Revisá atrás: pez abisal' },
   midnightGraveResult: { en: 'You dug up a coffin and brought its supplies back to the boat.', pl: 'Wykopano trumnę i zabrano z niej zapasy na łódź.', 'es-AR': 'Desenterraste un ataúd y llevaste sus provisiones al bote.' },
   eventTestMidnightGrave: { en: 'Midnight Tour: Grave', pl: 'Nocna wyprawa: grób', 'es-AR': 'Paseo de medianoche: tumba' },
-  midnightCampResult: { en: 'An abandoned camp. A small fire still burns among the logs. You search for supplies.', pl: 'Opuszczone obozowisko. Między polanami wciąż tli się mały ogień. Szukasz zapasów.', 'es-AR': 'Un campamento abandonado. Todavía arde un fuego pequeño entre los troncos. Buscás provisiones.' },
-  midnightCampBackpackResult: { en: 'An abandoned camp. A small fire still burns. You search the supplies and a forgotten backpack.', pl: 'Opuszczone obozowisko. Wciąż tli się mały ogień. Przeszukujesz zapasy i zapomniany plecak.', 'es-AR': 'Un campamento abandonado. Todavía arde un fuego pequeño. Revisás las provisiones y una mochila olvidada.' },
+  midnightCampResult: { en: 'An abandoned camp. A small fire still burns. You find a forgotten backpack beside a log.', pl: 'Opuszczone obozowisko. Wciąż tli się mały ogień. Obok kłody znajdujesz zapomniany plecak.', 'es-AR': 'Un campamento abandonado. Todavía arde un fuego pequeño. Encontrás una mochila olvidada junto a un tronco.' },
   eventTestMidnightCamp: { en: 'Midnight Tour: Abandoned camp', pl: 'Nocna wyprawa: opuszczone obozowisko', 'es-AR': 'Paseo de medianoche: campamento abandonado' },
   eventTestMidnightChest: { en: 'Midnight Tour: Chest', pl: 'Nocna wyprawa: skrzynia', 'es-AR': 'Paseo de medianoche: cofre' },
   eventTestMidnightMonster: { en: 'Midnight Tour: Monster', pl: 'Nocna wyprawa: potwór', 'es-AR': 'Paseo de medianoche: monstruo' },
@@ -400,7 +401,9 @@ export function localizeEventDefinitionText(event: SurvivalEventDefinition): voi
   localizedProperty(event, 'prompt', `${event.id}.prompt`);
   for (const choice of event.choices) {
     const trade = event.id === 'night-trader' && choice.itemId !== undefined ? nightTraderTrade(choice.id) : undefined;
-    localizedProperty(choice, 'label', `${event.id}.${choice.id}.label`, trade === undefined ? undefined
+    localizedProperty(choice, 'label', `${event.id}.${choice.id}.label`, event.id === 'starry-night' && choice.id !== 'sleep'
+      ? () => ': ' + itemLabel(choice.id as ItemId)
+      : trade === undefined ? undefined
       : () => `: ${itemLabel(trade.payment)} → ${itemLabel(trade.reward)}`);
     choice.outcomes.forEach((outcome, index) => {
       const resultId = outcome.resultId ?? `${event.id}.${choice.id}.${index}`;

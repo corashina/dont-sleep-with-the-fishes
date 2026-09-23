@@ -61,7 +61,7 @@ describe('phase-based launch', () => {
     expect(progress.position).toBe(-1);
     await flushPhases();
     expect(progress.position).toBe(-1);
-    expect(progress.getAttribute('aria-valuetext')).toBe('Preparing scene');
+    expect(progress.getAttribute('aria-valuetext')).toBe('Loading assets');
 
     font.resolve();
     await flushPhases();
