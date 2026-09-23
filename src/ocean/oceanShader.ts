@@ -1,5 +1,6 @@
 import { seaFogShader } from '../world/seaFogShader';
 import { MODULATED_WAVE_GLSL } from './waveModulation';
+import { OCEAN_FOAM_FUNCTIONS } from './oceanFoam';
 import {
   Color,
   type IUniform,
@@ -229,15 +230,22 @@ export const OCEAN_FRAGMENT_SHADER = `
   void sampleSurfaceWave(
     vec2 worldPosition,
     out float height,
-    out vec2 derivative
+    out vec2 derivative,
+    out float compression
   ) {
     height = 0.0;
     derivative = vec2(0.0);
+    vec2 tangentX = vec2(1.0, 0.0);
+    vec2 tangentZ = vec2(0.0, 1.0);
     for (int i = 0; i < 4; i++) {
       OceanWaveSample wave = sampleOceanWave(i, worldPosition);
       height += wave.height;
       derivative += wave.slope;
+      vec2 direction = normalize(uDirections[i]);
+      tangentX += direction * wave.horizontalSlope.x;
+      tangentZ += direction * wave.horizontalSlope.y;
     }
+    compression = 1.0 - (tangentX.x * tangentZ.y - tangentX.y * tangentZ.x);
     applyVortexDepression(worldPosition, height, derivative);
   }
 
@@ -285,6 +293,7 @@ export const OCEAN_FRAGMENT_SHADER = `
 
 
 
+  ${OCEAN_FOAM_FUNCTIONS}
   ${OCEAN_OPTICS_FUNCTIONS}
 
   void main() {
@@ -297,6 +306,7 @@ export const OCEAN_FRAGMENT_SHADER = `
     ) {
       discard;
     }
+    float hullFoam = 0.0;
     for (int i = 0; i < 2; i++) {
       if (i < uExclusionCount) {
         vec3 exclusionLocal = (uExclusionWorldToLocal[i] * vec4(vWorldPosition, 1.0)).xyz;
@@ -315,6 +325,9 @@ export const OCEAN_FRAGMENT_SHADER = `
           uExclusionTaperStarts[i],
           profileProgress
         );
+        hullFoam = max(hullFoam, hullFoamSource(
+          exclusionLocal, localBounds, localTaperStarts, minimumLocalY, uExclusionUpperLocalYs[i]
+        ));
         float localHalfWidth = (localBounds.y - localBounds.x) * 0.5;
         float localCenterX = (localBounds.x + localBounds.y) * 0.5;
         float taperProgress = 0.0;
@@ -351,12 +364,13 @@ export const OCEAN_FRAGMENT_SHADER = `
       }
     }
     #ifdef HIGH_QUALITY_WATER
-    vec3 color = shadeHighWater();
+    vec3 color = shadeHighWater(hullFoam);
     #else
     vec2 detailSlope = warpedDetailSlope(vWorldPosition.xz);
     float waveHeight;
     vec2 waveDerivative;
-    sampleSurfaceWave(vOceanPosition, waveHeight, waveDerivative);
+    float waveCompression;
+    sampleSurfaceWave(vOceanPosition, waveHeight, waveDerivative, waveCompression);
     float waveSlope = length(waveDerivative);
     vec3 normal = normalize(vec3(
       -waveDerivative.x - detailSlope.x,
@@ -395,6 +409,7 @@ export const OCEAN_FRAGMENT_SHADER = `
     float sunSheen = pow(specularFacing, 38.0) * mix(0.10, 0.24, windAlignment);
 
     color += uSunColor * (sunCore + sunSheen) * uDirectLightStrength;
+    color = applyOceanFoam(color, normal, waveHeight, waveCompression, hullFoam);
 
     #endif
 

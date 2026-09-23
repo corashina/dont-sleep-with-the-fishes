@@ -108,7 +108,7 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
     return mix(texture2D(uWaterReflection, uv).rgb, uWaterReflectionSky, sky);
   }
 
-  vec3 shadeHighWater() {
+  vec3 shadeHighWater(float hullFoam) {
     float height;
     float compression;
     vec3 n = displacedWaterNormal(height, compression);
@@ -189,7 +189,7 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
     vec3 color = mix(body, reflection, fresnel);
     color += uSunColor * waterHighlight(n, v, l, roughness) * daylight * 2.2;
 
-    return color;
+    return applyOceanFoam(color, n, height, compression, hullFoam);
   }
   #endif
 `;

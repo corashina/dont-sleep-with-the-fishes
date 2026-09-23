@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ocean foam lab</title>
+<style>
+  :root { color-scheme: dark; font: 15px system-ui, sans-serif; background: #0d2029; color: #d9e6e6; }
+  body { margin: 0; } header { padding: 20px 24px; } h1 { font-size: 23px; margin: 0 0 8px; }
+  p { margin: 6px 0 14px; color: #a9c5c8; } select, button { font: inherit; padding: 7px 12px; margin-right: 8px; }
+  canvas { display: block; width: 100%; height: auto; } #status { white-space: pre-wrap; }
+</style>
+<header>
+  <h1>Ocean foam lab</h1>
+  <p>Production foam shaders. Compare crest foam and hull foam at the same wave time.</p>
+  <label>Effect <select id="effect"></select></label>
+  <button id="motion">Play</button>
+  <span id="status">Starting…</span>
+</header>
+<main id="stage"></main>
+<script type="module" src="./main.ts"></script>
+</html>
