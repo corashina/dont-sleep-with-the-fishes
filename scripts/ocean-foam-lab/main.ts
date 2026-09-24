@@ -1,3 +1,4 @@
+import { runFoamChecks } from './foamChecks';
 import {
   AmbientLight, Color, DirectionalLight, Fog, PerspectiveCamera, Scene, Vector2, WebGLRenderer,
 } from 'three';
@@ -177,6 +178,7 @@ async function captureAll(): Promise<void> {
   sheet.width = 1920; sheet.height = 1736;
   const context = sheet.getContext('2d')!;
   const records = [];
+  const fieldChecks = await runFoamChecks(renderer);
   for (const [index, preview] of previews.entries()) {
     configure(preview);
     time = fixedTime - 6;
@@ -200,7 +202,7 @@ async function captureAll(): Promise<void> {
   }
   await upload('motion', motion);
   await fetch('/__ocean-preview-complete', { method: 'POST', body: JSON.stringify({
-    width, height, shaderErrors: failures, cases: records,
+    width, height, shaderErrors: failures, cases: records, fieldChecks,
     note: 'Production foam shader. Only the A/B switches are lab-specific.',
   }) });
 }
