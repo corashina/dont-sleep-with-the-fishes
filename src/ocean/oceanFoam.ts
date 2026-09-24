@@ -1,5 +1,6 @@
-/** Thin, broken cartoon ribbons at the hull's water contact. */
+/** Branching white foam strands following the projected hull through wave motion. */
 export const OCEAN_FOAM_FUNCTIONS = /* glsl */ `
+  const vec2 oceanEffectVisibility = vec2(1.0);
   float foamHash(vec2 p) {
     vec3 q = fract(vec3(p.xyx) * 0.1031);
     q += dot(q, q.yzx + 33.33);
@@ -11,8 +12,30 @@ export const OCEAN_FOAM_FUNCTIONS = /* glsl */ `
       mix(foamHash(cell + vec2(0.0, 1.0)), foamHash(cell + vec2(1.0)), f.x), f.y);
   }
 
+  float foamFilament(vec2 p) {
+    vec2 cell = floor(p), f = fract(p);
+    float first = 8.0, second = 8.0;
+    for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+      vec2 offset = vec2(float(x), float(y));
+      vec2 id = cell + offset;
+      vec2 seed = vec2(foamHash(id), foamHash(id + vec2(37.1, 91.7)));
+      vec2 delta = offset + 0.15 + seed * 0.7 - f;
+      float d = dot(delta, delta);
+      second = min(second, max(first, d));
+      first = min(first, d);
+    }
+    return sqrt(second) - sqrt(first);
+  }
+
+  vec2 foamFlow(vec2 p) {
+    vec2 broad = vec2(foamNoise(p * 0.8), foamNoise(p * 0.83 + 17.2));
+    vec2 medium = vec2(foamNoise(p * 2.9 + broad), foamNoise(p * 3.1 + broad + 31.4));
+    vec2 fine = vec2(foamNoise(p * 9.7 + medium), foamNoise(p * 10.3 + medium + 47.2));
+    return p + (broad - 0.5) * 1.3 + (medium - 0.5) * 0.44 + (fine - 0.5) * 0.11;
+  }
+
   vec3 applyOceanFoam(vec3 water, vec3 normal) {
-    const float hullFoamVisibility = 1.0;
+    float hullFoamVisibility = oceanEffectVisibility.y;
     float foam = 0.0;
     for (int i = 0; i < 2; i++) {
       if (i >= uExclusionCount) break;
@@ -25,23 +48,27 @@ export const OCEAN_FOAM_FUNCTIONS = /* glsl */ `
       // Extend the outer edge past the timber, without shifting the inner edge.
       float distanceToHull = hullDistance - 0.14;
       float aa = max(fwidth(distanceToHull), 0.008);
-      vec2 drift = local.xz * 2.0 + vec2(uTime * 0.24, -uTime * 0.16);
-      float shape = foamNoise(drift);
-      float fine = foamNoise(drift * 2.7 + vec2(7.1, 3.4));
-      float width = 0.09 + shape * 0.10 + fine * 0.025;
-      float ribbon = 1.0 - smoothstep(width - aa, width + aa, distanceToHull);
-      float breaks = smoothstep(0.27, 0.43, shape);
-      float seam = 1.0 - smoothstep(0.025, 0.05 + aa, distanceToHull);
-      ribbon = max(seam, ribbon * breaks);
-      float outerDistance = 0.29 + (shape - 0.5) * 0.12;
-      float outerWidth = 0.015 + fine * 0.018;
-      float outer = 1.0 - smoothstep(outerWidth, outerWidth + aa,
-        abs(distanceToHull - outerDistance));
-      outer *= smoothstep(0.53, 0.68, shape) * smoothstep(0.28, 0.5, fine);
-      float contact = smoothstep(minY - 0.22, minY - 0.06, local.y)
-        * (1.0 - smoothstep(maxY - 0.025, maxY + 0.035, local.y));
+      float footprint = max(length(dFdx(local.xz)), length(dFdy(local.xz)));
+      // Compute derivatives before limiting the cellular detail to the hull edge.
+      if (distanceToHull > 0.95 + aa) continue;
+      vec2 drift = local.xz * vec2(3.6, 2.4) + vec2(uTime * 0.12, -uTime * 0.09);
+      vec2 flow = foamFlow(drift);
+      float shape = foamNoise(drift * 0.8 + 7.1);
+      float gap = foamFilament(flow);
+      float fineGap = foamFilament(foamFlow(drift * 2.5 + vec2(13.1, 29.3)));
+      float width = mix(0.085, 0.170, shape);
+      float threadAA = max(footprint * 4.5, 0.008);
+      float thread = (1.0 - smoothstep(width - threadAA, width + threadAA, gap))
+        * width / max(width, threadAA);
+      float fiberAA = max(footprint * 11.25, 0.008);
+      float fibers = (1.0 - smoothstep(0.065 - fiberAA, 0.065 + fiberAA, fineGap))
+        * 0.065 / max(0.065, fiberAA);
+      float broken = smoothstep(0.23, 0.66, foamNoise(flow * 4.3 + 13.0));
+      float strands = thread * mix(0.65, 1.0, broken) + fibers * 0.50;
+      // A soft, uneven footprint lets branches fade into the surrounding water.
+      float edge = 1.0 - smoothstep(0.16, 0.48 + shape * 0.40 + aa, distanceToHull);
       // The hull depth and water exclusion hide the inner film. Do not cut a second hole.
-      foam = max(foam, max(ribbon, outer) * contact);
+      foam = max(foam, strands * edge);
     }
     float daylight = clamp(uDirectLightStrength, 0.0, 1.0);
     float lightFacing = max(dot(normal, normalize(uLightDirection)), 0.0);

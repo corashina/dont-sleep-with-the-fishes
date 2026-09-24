@@ -1,15 +1,16 @@
-# Cartoon hull foam and water prototype
+# Integrated ocean material and hull foam
 
-The game now uses a narrow, broken cartoon foam edge around water contact.
-Crest patches, persistent foam targets, and the porous foam texture were removed.
-The hull edge uses the existing exclusion profile, with an offset for the outer timber.
-It has a solid inner edge and small broken outer ribbons. Its visible width is about 10–25 cm.
-Rough waves can lift sections of the hull clear of water. Those sections have no foam.
-The same shader works in High and Low quality. No foam simulation or per-frame allocations remain.
+The latest full-water material is active in the game, in both High and Low quality.
+It adds dark blue water, branching surface streaks, and fine ripple normals.
+The production formulas match the latest prototype. The old lab-only shader path is removed.
 
-## Lab
+Hull foam is wider and denser. It follows the projected hull through wave motion.
+Local water height no longer turns it off. It remains on the water when a hull rises above a trough.
+This is a stylized surface footprint. Geometry can still hide foam behind the boat or a wave.
+The inner mask stays open to avoid a gap between hull and foam.
+No simulation targets, textures, or per-frame allocations are added.
 
-Run the worktree server:
+## Run and compare
 
 ```powershell
 node node_modules/vite/bin/vite.js --port 5188
@@ -17,31 +18,25 @@ node node_modules/vite/bin/vite.js --port 5188
 
 Game: http://127.0.0.1:5188/dont-sleep-with-the-fishes/
 
-Cartoon contact: http://127.0.0.1:5188/dont-sleep-with-the-fishes/scripts/ocean-foam-lab/index.html?view=17-contact-close
+Integrated water: http://127.0.0.1:5188/dont-sleep-with-the-fishes/scripts/ocean-foam-lab/index.html?view=06-water-close
 
-Water prototype: http://127.0.0.1:5188/dont-sleep-with-the-fishes/scripts/ocean-foam-lab/index.html?view=06-prototype-close
+Hull-only inspection: http://127.0.0.1:5188/dont-sleep-with-the-fishes/scripts/ocean-foam-lab/index.html?view=17-contact-close
 
-Select a case and press Play to inspect motion. Both views use the real lifeboat and production ocean.
-The whole-water prototype adds dark blue water and fine, branching surface streaks.
-It uses warped cellular lines with thin, broken secondary fibers. The pattern follows displaced wave coordinates.
-It is installed only in the lab. The game does not use this prototype.
+The lab uses production shader code. Only A/B visibility switches are lab-specific.
+Select a case and press Play to inspect motion.
 
-## Capture and verify
+## Verification
 
 ```powershell
-node scripts/render-ocean-foam.mjs artifacts/ocean-foam/cartoon-final
+node scripts/render-ocean-foam.mjs artifacts/ocean-foam/integrated-final
 ```
 
-The script saves 17 cases and three comparison or motion sheets.
-GPU checks compare each frame with effects disabled at the same time and camera.
-They verify contact visibility, no foam without a hull, no foam beneath an airborne hull,
-High and Low shader compilation, pause stability, and actual production context restoration.
-Importance: 95/100. Shader compilation alone cannot prove correct placement.
-The unwanted crest check failed before the change and now passes.
-An unavailable restoration extension produces a labeled placeholder.
+This saves 18 cases and three comparison or motion sheets.
+Checks cover High and Low, night, blood, fog, pause, and production context recovery.
+A 48-frame check covers twelve seconds of rough wave motion and requires visible hull foam in every sample.
+A raised-hull check reproduced the missing foam before the fix and passes after it.
+Importance: 95/100. Single still images miss height-dependent foam dropout.
+An unavailable context restoration extension produces a labeled placeholder.
 
-Old screenshots remain in artifacts/ocean-foam/persistent-final for comparison.
-Old simulation timing does not describe these revised shaders.
-Full-game 60 FPS remains unverified. Use scripts/ocean-foam-game-benchmark.html for a visible gameplay timing run.
-
-Verification: lint, types, build, and all 20 captures pass. The full suite has 1291 passes and one existing AnchorItem pose failure.
+Lint, type checking, production build, and 15 ocean tests pass.
+Full-game 60 FPS remains unverified. Previous foam simulation timings do not describe this shader.

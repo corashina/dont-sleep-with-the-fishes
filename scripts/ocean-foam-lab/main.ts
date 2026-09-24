@@ -1,4 +1,3 @@
-import { installWaterPrototype } from './waterPrototype';
 import {
   AmbientLight, Color, DirectionalLight, Fog, PerspectiveCamera, Scene, Vector2, WebGLRenderer,
 } from 'three';
@@ -14,21 +13,22 @@ type Preview = { id: string; title: string; flags: readonly number[]; sea?: numb
 const previews: readonly Preview[] = [
   { id: '01-baseline', title: 'Water without foam', flags: [0, 0] },
   { id: '02-open-water', title: 'Crest foam removed · open water unchanged', flags: [0, 1] },
-  { id: '03-hull-foam', title: 'Cartoon hull foam · thin contact ribbon', flags: [0, 1] },
-  { id: '04-close', title: 'Cartoon hull foam · close view', flags: [0, 1], close: true },
-  { id: '05-prototype', title: 'PROTOTYPE · flowing filaments across all water', flags: [1, 1] },
-  { id: '06-prototype-close', title: 'PROTOTYPE · close view', flags: [1, 1], close: true },
-  { id: '07-night', title: 'Cartoon hull foam · night', flags: [0, 1], night: true },
-  { id: '08-low', title: 'Cartoon hull foam · Low quality', flags: [0, 1], low: true },
-  { id: '09-blood', title: 'Cartoon hull foam · blood ocean', flags: [0, 1], blood: true },
-  { id: '10-fog', title: 'Cartoon hull foam · fog', flags: [0, 1], fog: true },
-  { id: '11-raised-hull', title: 'Airborne hull · no foam', flags: [0, 1], raised: true },
-  { id: '12-moved-hull', title: 'Cartoon hull foam · translated and rotated hull', flags: [0, 1], moved: true },
-  { id: '13-calm', title: 'Cartoon hull foam · calm sea', flags: [0, 1], sea: 0.62 },
-  { id: '14-prototype-calm', title: 'PROTOTYPE · calm sea', flags: [1, 1], sea: 0.62 },
+  { id: '03-hull-foam', title: 'Filament hull foam · branching contact strands', flags: [0, 1] },
+  { id: '04-close', title: 'Filament hull foam · close view', flags: [0, 1], close: true },
+  { id: '05-water', title: 'Integrated water · flowing filaments across all water', flags: [1, 1] },
+  { id: '06-water-close', title: 'Integrated water · close view', flags: [1, 1], close: true },
+  { id: '07-night', title: 'Filament hull foam · night', flags: [1, 1], night: true },
+  { id: '08-low', title: 'Filament hull foam · Low quality', flags: [0, 1], low: true },
+  { id: '09-blood', title: 'Filament hull foam · blood ocean', flags: [1, 1], blood: true },
+  { id: '10-fog', title: 'Filament hull foam · fog', flags: [1, 1], fog: true },
+  { id: '11-raised-hull', title: 'Water below hull · foam remains visible', flags: [0, 1], raised: true },
+  { id: '12-moved-hull', title: 'Filament hull foam · translated and rotated hull', flags: [0, 1], moved: true },
+  { id: '13-calm', title: 'Filament hull foam · calm sea', flags: [0, 1], sea: 0.62 },
+  { id: '14-water-calm', title: 'Integrated water · calm sea', flags: [1, 1], sea: 0.62 },
   { id: '15-paused', title: 'Paused clock · stable edge', flags: [0, 1] },
-  { id: '17-contact-close', title: 'Cartoon hull foam · calm close view', flags: [0, 1], sea: 0.62, close: true },
-  { id: '16-context-restored', title: 'Context restored · cartoon hull foam', flags: [0, 1] },
+  { id: '17-contact-close', title: 'Filament hull foam · calm close view', flags: [0, 1], sea: 0.62, close: true },
+  { id: '18-integrated-low', title: 'Integrated water · Low quality', flags: [1,1], low: true },
+  { id: '16-context-restored', title: 'Context restored · filament hull foam', flags: [0, 1] },
 ];
 const width = 1440, height = 900, fixedTime = 18.4;
 const scene = new Scene();
@@ -38,9 +38,11 @@ renderer.setPixelRatio(1);
 renderer.setSize(width, height);
 document.querySelector('#stage')!.append(renderer.domElement);
 const ocean = new OceanRenderer('high');
-// Lab-only comparison of the production hull edge and the whole-water prototype.
+// Lab-only A/B switches. All shading comes from the production material.
 ocean.material.uniforms.uFoamPreviewMask = { value: new Vector2(0, 1) };
-installWaterPrototype(ocean.material);
+ocean.material.fragmentShader = ocean.material.fragmentShader.replace(
+  'const vec2 oceanEffectVisibility = vec2(1.0);',
+  'uniform vec2 uFoamPreviewMask;\n#define oceanEffectVisibility uFoamPreviewMask');
 window.addEventListener('pagehide', () => ocean.dispose(), { once: true });
 scene.add(ocean.mesh);
 const assets = await LifeboatAssets.load();
@@ -69,7 +71,7 @@ renderer.debug.onShaderError = (gl, program, vertex, fragment) => {
   failures.push([gl.getProgramInfoLog(program), gl.getShaderInfoLog(vertex), gl.getShaderInfoLog(fragment)].join('\n'));
 };
 const status = document.querySelector<HTMLElement>('#status')!;
-let selected = previews.find(preview => preview.id === new URLSearchParams(location.search).get('view')) ?? previews[15]!;
+let selected = previews.find(preview => preview.id === new URLSearchParams(location.search).get('view')) ?? previews[5]!;
 let time = fixedTime;
 let playing = false;
 let lastTime = 0;
@@ -138,7 +140,7 @@ function labeledCapture(title: string): HTMLCanvasElement {
   context.fillStyle = '#0d2029'; context.fillRect(0, 0, width, canvas.height);
   context.fillStyle = '#dceae8'; context.font = '26px sans-serif'; context.fillText(title, 26, 33);
   context.fillStyle = '#9cb8bd'; context.font = '16px sans-serif';
-  context.fillText('Thin cartoon hull contact · prototype water is lab-only', 26, 60);
+  context.fillText('Thicker hull foam · full-water material is active in the game', 26, 60);
   context.drawImage(renderer.domElement, 0, 76);
   return canvas;
 }
@@ -151,7 +153,7 @@ async function upload(id: string, canvas: HTMLCanvasElement): Promise<void> {
 }
 
 // Importance: 95/100. A compiling shader can still silently omit foam or leave
-// foam below an airborne hull. Compare rendered pixels against foam disabled.
+// foam dropouts on falling waves. Compare rendered pixels against foam disabled.
 function readPixels(): Uint8Array {
   const pixels = new Uint8Array(width * height * 4);
   renderer.getContext().readPixels(0, 0, width, height, renderer.getContext().RGBA,
@@ -175,7 +177,7 @@ function verifyCoverage(preview: Preview): number {
       + Math.abs(enabled[i + 2]! - disabled[i + 2]!);
     if (delta > 6) changed++;
   }
-  const mustBeClear = preview.id === '01-baseline' || preview.id === '02-open-water' || preview.raised;
+  const mustBeClear = preview.id === '01-baseline' || preview.id === '02-open-water';
   if (mustBeClear && changed !== 0) throw new Error(preview.id + ': unexpected foam');
   if (!mustBeClear && changed < 50) throw new Error(preview.id + ': foam is missing (' + changed + ' pixels)');
   return changed;
@@ -225,6 +227,18 @@ function captureCase(preview: Preview, checks: Record<string, number | string>):
   return canvas;
 }
 
+// Importance: 95/100. A single screenshot misses height-dependent foam dropout.
+function verifyHullThroughWaves(): Record<string, number> {
+  configure({id: 'wave-cycle', title: 'Wave cycle', flags: [0,1], sea: 1.45, close: true});
+  let minimum = Infinity, maximum = 0;
+  for (let frame = 0; frame < 48; frame++) {
+    time = fixedTime + frame * 0.25; render();
+    const visible = verifyCoverage(selected);
+    minimum = Math.min(minimum, visible); maximum = Math.max(maximum, visible);
+  }
+  return {waveCycleFrames: 48, minimumHullPixels: minimum, maximumHullPixels: maximum};
+}
+
 async function captureAll(): Promise<void> {
   const sheet = document.createElement('canvas');
   sheet.width = 1920; sheet.height = 1736;
@@ -256,16 +270,17 @@ async function captureAll(): Promise<void> {
       (index % 2) * 720, Math.floor(index / 2) * 488, 720, 488);
   }
   await upload('motion', motion);
-  configure({id: 'prototype-motion', title: 'Prototype motion', flags: [1,1], close: true});
+  configure({id: 'water-motion', title: 'Water motion', flags: [1,1], close: true});
   for (let index=0; index<4; index++) {
     time = fixedTime + index * 0.6; render();
-    motionContext.drawImage(labeledCapture('PROTOTYPE · ' + time.toFixed(1) + ' seconds'),
+    motionContext.drawImage(labeledCapture('Integrated water · ' + time.toFixed(1) + ' seconds'),
       (index % 2)*720, Math.floor(index/2)*488, 720, 488);
   }
-  await upload('prototype-motion', motion);
+  await upload('water-motion', motion);
+  Object.assign(fieldChecks, verifyHullThroughWaves());
   await fetch('/__ocean-preview-complete', { method: 'POST', body: JSON.stringify({
     width, height, shaderErrors: failures, cases: records, fieldChecks,
-    note: 'Production cartoon hull foam. Whole-water material remains a lab-only prototype.',
+    note: 'Production hull foam and full-water material. Only the A/B switches are lab-specific.',
   }) });
 }
 

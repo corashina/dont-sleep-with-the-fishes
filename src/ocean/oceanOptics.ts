@@ -112,6 +112,7 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
     float height;
     float compression;
     vec3 n = displacedWaterNormal(height, compression);
+    if (oceanEffectVisibility.x > 0.5) n = surfaceRippleNormal(n);
     vec3 v = normalize(cameraPosition - vWorldPosition);
     vec3 l = normalize(uLightDirection);
     float nv = max(dot(n, v), 0.001);
@@ -189,7 +190,7 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
     vec3 color = mix(body, reflection, fresnel);
     color += uSunColor * waterHighlight(n, v, l, roughness) * daylight * 2.2;
 
-    return applyOceanFoam(color, n);
+    return applyOceanSurface(color, n);
   }
   #endif
 `;

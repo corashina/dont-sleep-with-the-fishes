@@ -7,9 +7,9 @@ import { createServer } from 'vite';
 
 const output = resolve(process.argv[2] ?? 'artifacts/ocean-foam');
 const expected = new Set([
-  '01-baseline', '02-open-water', '03-hull-foam', '04-close', '05-prototype', '06-prototype-close',
+  '01-baseline', '02-open-water', '03-hull-foam', '04-close', '05-water', '06-water-close',
   '07-night', '08-low', '09-blood', '10-fog', '11-raised-hull', '12-moved-hull', '13-calm',
-  '14-prototype-calm', '17-contact-close', '15-paused', '16-context-restored', 'comparison', 'motion', 'prototype-motion',
+  '14-water-calm', '17-contact-close', '18-integrated-low', '15-paused', '16-context-restored', 'comparison', 'motion', 'water-motion',
 ]);
 const received = new Set();
 await mkdir(output, { recursive: true });

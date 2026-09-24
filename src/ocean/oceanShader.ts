@@ -1,3 +1,4 @@
+import { OCEAN_SURFACE_DETAIL_FUNCTIONS } from './oceanSurfaceDetail';
 import { OCEAN_SURFACE_SAMPLING_GLSL } from './oceanSurfaceSampling';
 import { OCEAN_HULL_PROFILE_GLSL } from './oceanHullProfile';
 import { seaFogShader } from '../world/seaFogShader';
@@ -271,6 +272,7 @@ export const OCEAN_FRAGMENT_SHADER = `
 
   ${OCEAN_HULL_PROFILE_GLSL}
   ${OCEAN_FOAM_FUNCTIONS}
+  ${OCEAN_SURFACE_DETAIL_FUNCTIONS}
   ${OCEAN_OPTICS_FUNCTIONS}
 
   void main() {
@@ -313,6 +315,7 @@ export const OCEAN_FRAGMENT_SHADER = `
       1.0,
       -waveDerivative.y - detailSlope.y
     ));
+    if (oceanEffectVisibility.x > 0.5) normal = surfaceRippleNormal(normal);
     vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
     vec3 lightDirection = normalize(uLightDirection);
     float lightFacing = clamp(dot(normal, lightDirection), 0.0, 1.0);
@@ -345,7 +348,7 @@ export const OCEAN_FRAGMENT_SHADER = `
     float sunSheen = pow(specularFacing, 38.0) * mix(0.10, 0.24, windAlignment);
 
     color += uSunColor * (sunCore + sunSheen) * uDirectLightStrength;
-    color = applyOceanFoam(color, normal);
+    color = applyOceanSurface(color, normal);
 
     #endif
 
