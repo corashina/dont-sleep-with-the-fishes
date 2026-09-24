@@ -1,3 +1,5 @@
+import { OCEAN_SURFACE_SAMPLING_GLSL } from './oceanSurfaceSampling';
+import { OCEAN_HULL_PROFILE_GLSL } from './oceanHullProfile';
 import { seaFogShader } from '../world/seaFogShader';
 import { MODULATED_WAVE_GLSL } from './waveModulation';
 import { OCEAN_FOAM_FUNCTIONS } from './oceanFoam';
@@ -119,39 +121,13 @@ export const OCEAN_VERTEX_SHADER = `
   varying vec3 vWorldPosition;
 
   ${MODULATED_WAVE_GLSL}
+  ${OCEAN_SURFACE_SAMPLING_GLSL}
 
   void main() {
     vec3 displaced = position;
     vec2 worldXZ = position.xz + uOrigin;
-    vec4 baseWorldPosition = modelMatrix * vec4(position, 1.0);
-    float geometryLod = smoothstep(
-      55.0,
-      140.0,
-      length(cameraPosition - baseWorldPosition.xyz)
-    );
-    float height = 0.0;
-    for (int i = 0; i < 4; i++) {
-      float wavelength = uParameters[i].y;
-      float resolvedGeometryWave = smoothstep(4.0, 11.0, wavelength);
-      float geometryWeight = mix(1.0, resolvedGeometryWave, geometryLod);
-      OceanWaveSample wave = sampleOceanWave(i, worldXZ);
-      height += wave.height * geometryWeight;
-      displaced.xz += wave.displacement * geometryWeight;
-    }
-    if (uVortexStrength != 0.0) {
-      vec2 vortexDelta = worldXZ - uVortexCenter;
-      float vortexDistance = length(vortexDelta);
-      float vortexRadius = max(0.001, uVortexRadius);
-      float envelopeT = clamp(1.0 - vortexDistance / vortexRadius, 0.0, 1.0);
-      float envelope = envelopeT * envelopeT * (3.0 - 2.0 * envelopeT) * uVortexStrength;
-      float inverseDistance = vortexDistance > 0.0001 ? 1.0 / vortexDistance : 0.0;
-      vec2 radial = vortexDelta * inverseDistance;
-      float swirl = 0.78 + 0.22 * sin(uVortexPhase + vortexDistance * 0.65);
-      height -= uVortexDepression * envelope;
-      displaced.x += -radial.y * uVortexTangentStrength * envelope * swirl;
-      displaced.z += radial.x * uVortexTangentStrength * envelope * swirl;
-    }
-    displaced.y += height;
+    vec3 surface = oceanGeometryPosition(worldXZ, cameraPosition);
+    displaced += surface - vec3(worldXZ.x, 0.0, worldXZ.y);
     vec4 worldPosition = modelMatrix * vec4(displaced, 1.0);
     vViewDepth = length(cameraPosition - worldPosition.xyz);
     vOceanPosition = worldXZ;
@@ -293,6 +269,7 @@ export const OCEAN_FRAGMENT_SHADER = `
 
 
 
+  ${OCEAN_HULL_PROFILE_GLSL}
   ${OCEAN_FOAM_FUNCTIONS}
   ${OCEAN_OPTICS_FUNCTIONS}
 
@@ -312,53 +289,16 @@ export const OCEAN_FRAGMENT_SHADER = `
         vec3 exclusionLocal = (uExclusionWorldToLocal[i] * vec4(vWorldPosition, 1.0)).xyz;
         vec4 exclusionBounds = uExclusionBounds[i];
         float minimumLocalY = uExclusionMinimumLocalYs[i];
-        float heightSpan = max(uExclusionUpperLocalYs[i] - minimumLocalY, 0.0001);
-        float profileProgress = clamp(
-          (exclusionLocal.y - minimumLocalY) / heightSpan,
-          0.0,
-          1.0
-        );
-        vec4 lowerBounds = uExclusionLowerBounds[i];
-        vec4 localBounds = mix(lowerBounds, exclusionBounds, profileProgress);
-        vec2 localTaperStarts = mix(
-          uExclusionLowerTaperStarts[i],
-          uExclusionTaperStarts[i],
-          profileProgress
-        );
+        vec4 localBounds;
+        vec2 localTaperStarts;
+        oceanHullProfile(exclusionLocal, uExclusionLowerBounds[i], exclusionBounds,
+          uExclusionLowerTaperStarts[i], uExclusionTaperStarts[i], minimumLocalY,
+          uExclusionUpperLocalYs[i], localBounds, localTaperStarts);
         hullFoam = max(hullFoam, hullFoamSource(
           exclusionLocal, localBounds, localTaperStarts, minimumLocalY, uExclusionUpperLocalYs[i]
         ));
-        float localHalfWidth = (localBounds.y - localBounds.x) * 0.5;
-        float localCenterX = (localBounds.x + localBounds.y) * 0.5;
-        float taperProgress = 0.0;
-        if (exclusionLocal.z < localTaperStarts.x) {
-          float taperSpan = max(localTaperStarts.x - localBounds.z, 0.0);
-          if (taperSpan > 0.0) {
-            taperProgress = clamp(
-              (localTaperStarts.x - exclusionLocal.z) / taperSpan,
-              0.0,
-              1.0
-            );
-          }
-        } else if (exclusionLocal.z > localTaperStarts.y) {
-          float taperSpan = max(localBounds.w - localTaperStarts.y, 0.0);
-          if (taperSpan > 0.0) {
-            taperProgress = clamp(
-              (exclusionLocal.z - localTaperStarts.y) / taperSpan,
-              0.0,
-              1.0
-            );
-          }
-        }
-        localHalfWidth = localHalfWidth
-          * sqrt(max(0.0, 1.0 - taperProgress * taperProgress));
-        if (
-          exclusionLocal.y >= uExclusionMinimumLocalYs[i]
-          && exclusionLocal.y <= uExclusionUpperLocalYs[i]
-          && exclusionLocal.z >= localBounds.z
-          && exclusionLocal.z <= localBounds.w
-          && abs(exclusionLocal.x - localCenterX) <= localHalfWidth
-        ) {
+        if (oceanInsideHull(exclusionLocal, localBounds, localTaperStarts,
+          minimumLocalY, uExclusionUpperLocalYs[i])) {
           discard;
         }
       }

@@ -51,23 +51,6 @@ export const OCEAN_FOAM_FUNCTIONS = /* glsl */ `
 
   // Signed distance approximation to the same straight sides and elliptical ends
   // used by the water exclusion. Works with asymmetric bow/stern profiles.
-  float foamHullDistance(vec2 p, vec4 bounds, vec2 taperStarts) {
-    float halfWidth = max((bounds.y - bounds.x) * 0.5, 0.001);
-    float x = abs(p.x - (bounds.x + bounds.y) * 0.5);
-    float end = p.y < taperStarts.x ? taperStarts.x : taperStarts.y;
-    float span = p.y < taperStarts.x ? end - bounds.z : bounds.w - end;
-    float along = abs(p.y - end);
-    if (p.y >= taperStarts.x && p.y <= taperStarts.y) return x - halfWidth;
-    if (span < 0.001) {
-      vec2 delta = vec2(x - halfWidth, along);
-      return length(max(delta, 0.0)) + min(max(delta.x, delta.y), 0.0);
-    }
-    vec2 q = vec2(x / halfWidth, along / span);
-    float radius = length(q);
-    float gradient = length(q / vec2(halfWidth, span));
-    return (radius - 1.0) * radius / max(gradient, 0.001);
-  }
-
   float hullFoamSource(vec3 local, vec4 bounds, vec2 taperStarts, float minY, float maxY) {
     float distanceToHull = max(0.0, foamHullDistance(local.xz, bounds, taperStarts));
     float contact = smoothstep(minY - 0.16, minY + 0.08, local.y)

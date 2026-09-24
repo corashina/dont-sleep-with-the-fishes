@@ -24,6 +24,7 @@ export const MODULATED_WAVE_GLSL = /* glsl */ `
     vec2 displacement;
     vec2 slope;
     vec2 horizontalSlope;
+    vec3 velocity;
   };
 
   OceanWaveSample sampleOceanWave(int index, vec2 position) {
@@ -53,6 +54,12 @@ export const MODULATED_WAVE_GLSL = /* glsl */ `
     wave.slope = amplitudeGradient * waveSin + amplitude * waveCos * phaseGradient;
     wave.horizontalSlope = parameters.w
       * (amplitudeGradient * waveCos - amplitude * waveSin * phaseGradient);
+    float thetaRate = parameters.z + ${m.bendStrength} * cos(bend) * parameters.z * ${m.bendSpeed};
+    float amplitudeRate = baseAmplitude * ${m.groupRange} * packet * cos(group) * parameters.z * ${m.groupSpeed};
+    vec2 horizontalVelocity = parameters.w * direction
+      * (amplitudeRate * waveCos - amplitude * waveSin * thetaRate);
+    wave.velocity = vec3(horizontalVelocity.x,
+      amplitudeRate * waveSin + amplitude * waveCos * thetaRate, horizontalVelocity.y);
     return wave;
   }
 `;
