@@ -57,13 +57,13 @@ try {
   const profile = await mkdtemp(resolve(tmpdir(), 'ocean-preview-'));
   browser = spawn(executable, ['--headless=new', '--disable-gpu-sandbox', '--no-first-run',
     '--no-default-browser-check', `--user-data-dir=${profile}`,
-    `http://127.0.0.1:${address.port}/dont-sleep-with-the-fishes/scripts/ocean-foam-lab/index.html?capture`,
+    `http://127.0.0.1:${address.port}/dont-sleep-with-the-fishes/scripts/ocean-foam-lab/index.html?capture${process.argv.includes('--benchmark') ? '&benchmark' : ''}`,
   ], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
   let browserLog = '';
   browser.stderr.on('data', chunk => { browserLog = (browserLog + chunk).slice(-12000); });
   browser.once('error', fail);
   browser.once('exit', code => { if (code) fail(new Error(`Browser exited ${code}\n${browserLog}`)); });
-  timeout = setTimeout(() => fail(new Error(`Preview timed out\n${browserLog}`)), 120000);
+  timeout = setTimeout(() => fail(new Error(`Preview timed out\n${browserLog}`)), process.argv.includes('--benchmark') ? 300000 : 120000);
   await completed;
   const missing = [...expected].filter(id => !received.has(id));
   if (missing.length) throw new Error(`Missing captures: ${missing.join(', ')}`);

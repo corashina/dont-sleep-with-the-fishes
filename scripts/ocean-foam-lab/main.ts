@@ -1,3 +1,5 @@
+import { instrumentFoamGpu } from './gpuTiming';
+import { summarizeFrameTimes } from './frameTiming';
 import { runFoamChecks } from './foamChecks';
 import {
   AmbientLight, Color, DirectionalLight, Fog, PerspectiveCamera, Scene, Vector2, WebGLRenderer,
@@ -194,6 +196,41 @@ function prepareSpecialCapture(preview: Preview): void {
     }
 }
 
+async function measureLabPerformance() {
+  const gpu = instrumentFoamGpu();
+  const results = [];
+  try {
+    for (const low of [false, true]) for (const sea of [0.45, 1.45]) {
+      configure({id: 'timing', title: 'Timing', flags: [1,1], low, sea});
+      const samples: number[] = [];
+      let first = 0, previous = 0, measuring = false, invalid = false;
+      const gpuFoamMs = await new Promise<ReturnType<typeof gpu.stop>>(resolve => {
+        const tick = (now: number) => {
+          if (!first) first = now;
+          if (document.hidden) invalid = true;
+          if (now - first >= 10000 && !measuring) { measuring = true; gpu.start(); }
+          if (measuring && previous) samples.push(now - previous);
+          time += previous ? Math.min((now-previous)/1000, 0.25) : 1/60;
+          previous = now; render();
+          if (now - first < 40000) requestAnimationFrame(tick);
+          else resolve(gpu.stop());
+        };
+        requestAnimationFrame(tick);
+      });
+      results.push({quality: low ? 'low' : 'high', sea, invalid, ...summarizeFrameTimes(samples), gpuFoamMs});
+    }
+  } finally { gpu.dispose(); }
+  const gl = renderer.getContext();
+  const info = gl.getExtension('WEBGL_debug_renderer_info');
+  return {scope: 'isolated ocean lab, headless browser; not full-game 60 FPS evidence',
+    gpu: info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : 'unavailable',
+    width, height, pixelRatio: renderer.getPixelRatio(), browser: navigator.userAgent, results};
+}
+
+function benchmarkIfRequested() {
+  return new URLSearchParams(location.search).has('benchmark') ? measureLabPerformance() : null;
+}
+
 async function captureAll(): Promise<void> {
   const sheet = document.createElement('canvas');
   sheet.width = 1920; sheet.height = 1736;
@@ -239,8 +276,9 @@ async function captureAll(): Promise<void> {
     }
     await upload(mode + '-motion', motion);
   }
+  const performance = await benchmarkIfRequested();
   await fetch('/__ocean-preview-complete', { method: 'POST', body: JSON.stringify({
-    width, height, shaderErrors: failures, cases: records, fieldChecks,
+    width, height, shaderErrors: failures, cases: records, fieldChecks, performance,
     note: 'Production foam shader. Only the A/B switches are lab-specific.',
   }) });
 }
