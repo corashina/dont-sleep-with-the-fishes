@@ -75,7 +75,7 @@ export const OCEAN_FOAM_SIMULATION_FRAGMENT = /* glsl */ `
 
     float compression = 1.0 - (tangentX.x * tangentZ.y - tangentX.y * tangentZ.x);
     float weather = smoothstep(0.68, 1.5, uAmplitudeScale);
-    float crest = smoothstep(mix(0.22, 0.085, weather), mix(0.38, 0.27, weather), compression)
+    float crest = smoothstep(mix(0.24, 0.13, weather), mix(0.40, 0.32, weather), compression)
       * smoothstep(-0.06, 0.43, height);
     float hull = 0.0;
     bool inside = false;

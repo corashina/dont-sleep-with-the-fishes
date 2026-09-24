@@ -1,3 +1,7 @@
+import { OceanFoamSimulation } from '../../src/ocean/OceanFoamSimulation';
+import { createOceanFoamDetail } from '../../src/ocean/OceanFoamDetail';
+import type { OceanShaderUniforms } from '../../src/ocean/oceanShader';
+import { installFoamPreview } from './foamPreview';
 import { runFoamChecks } from './foamChecks';
 import {
   AmbientLight, Color, DirectionalLight, Fog, PerspectiveCamera, Scene, Vector2, WebGLRenderer,
@@ -35,9 +39,12 @@ document.querySelector('#stage')!.append(renderer.domElement);
 const ocean = new OceanRenderer('high');
 // Lab-only switches allow exact A/B captures of the production shader.
 ocean.material.uniforms.uFoamPreviewMask = { value: new Vector2(1, 1) };
-ocean.material.fragmentShader = 'uniform vec2 uFoamPreviewMask;\n' + ocean.material.fragmentShader
-  .replace('float source = max(crestSource, hullSource);',
-    'crestSource *= uFoamPreviewMask.x; hullSource *= uFoamPreviewMask.y; float source = max(crestSource, hullSource);');
+ocean.material.fragmentShader = 'uniform vec2 uFoamPreviewMask;\n' + ocean.material.fragmentShader;
+let simulation = new OceanFoamSimulation('high', ocean.material.uniforms as OceanShaderUniforms);
+const detail = createOceanFoamDetail();
+installFoamPreview(ocean, simulation, detail);
+let simulationQuality = 'high';
+window.addEventListener('pagehide', () => { simulation.dispose(); detail.dispose(); }, { once: true });
 scene.add(ocean.mesh);
 const assets = await LifeboatAssets.load();
 assets.configure(renderer.capabilities.getMaxAnisotropy());
@@ -71,7 +78,13 @@ let lastTime = 0;
 
 function configure(preview: Preview): void {
   selected = preview;
-  ocean.setQuality(preview.low ? 'low' : 'high');
+  const quality = preview.low ? 'low' : 'high';
+  ocean.setQuality(quality);
+  if (quality !== simulationQuality) {
+    simulation.dispose(); simulation = new OceanFoamSimulation(quality, ocean.material.uniforms as OceanShaderUniforms);
+    Object.assign(ocean.material.uniforms, simulation.uniforms); simulationQuality = quality;
+  }
+  simulation.reset(); simulation.sourceMask.set(1, 1);
   ocean.setBloodOceanIntensity(preview.blood ? 1 : 0);
   atmosphere.fogVolume = preview.fog ? 1 : 0;
   atmosphere.fogTime = fixedTime;
@@ -113,6 +126,8 @@ function render(): void {
   ocean.setExclusions(exclusions);
   ocean.follow(camera.position.x, camera.position.z);
   ocean.update(time, sea, selected.night ? 0.012 : 0.006, atmosphere);
+  simulation.setExclusions(exclusions);
+  simulation.update(renderer, time, camera);
   renderer.render(scene, camera);
   const error = renderer.getContext().getError();
   if (error) failures.push(`WebGL error: ${error}`);
@@ -195,6 +210,7 @@ async function captureAll(): Promise<void> {
   motion.width = 1440; motion.height = 976;
   const motionContext = motion.getContext('2d')!;
   configure({ id: 'motion', title: 'Foam motion', flags: [1, 1], sea: 0.9, close: true });
+  time = fixedTime - 6; advanceTo(fixedTime);
   for (let index = 0; index < 4; index++) {
     advanceTo(fixedTime + index * 0.6);
     motionContext.drawImage(labeledCapture('Foam motion · ' + time.toFixed(1) + ' seconds'),
