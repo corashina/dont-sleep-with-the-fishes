@@ -1,7 +1,3 @@
-import { OceanFoamSimulation } from '../../src/ocean/OceanFoamSimulation';
-import { createOceanFoamDetail } from '../../src/ocean/OceanFoamDetail';
-import type { OceanShaderUniforms } from '../../src/ocean/oceanShader';
-import { installFoamPreview } from './foamPreview';
 import { runFoamChecks } from './foamChecks';
 import {
   AmbientLight, Color, DirectionalLight, Fog, PerspectiveCamera, Scene, Vector2, WebGLRenderer,
@@ -46,11 +42,10 @@ const ocean = new OceanRenderer('high');
 // Lab-only switches allow exact A/B captures of the production shader.
 ocean.material.uniforms.uFoamPreviewMask = { value: new Vector2(1, 1) };
 ocean.material.fragmentShader = 'uniform vec2 uFoamPreviewMask;\n' + ocean.material.fragmentShader;
-let simulation = new OceanFoamSimulation('high', ocean.material.uniforms as OceanShaderUniforms);
-const detail = createOceanFoamDetail();
-installFoamPreview(ocean, simulation, detail);
-let simulationQuality = 'high';
-window.addEventListener('pagehide', () => { simulation.dispose(); detail.dispose(); }, { once: true });
+ocean.material.fragmentShader = ocean.material.fragmentShader.replace(
+  'const vec2 foamVisibility = vec2(1.0);', 'vec2 foamVisibility = uFoamPreviewMask;');
+const sourceMask = (): Vector2 => ocean.material.uniforms.uFoamSourceMask!.value as Vector2;
+window.addEventListener('pagehide', () => ocean.dispose(), { once: true });
 scene.add(ocean.mesh);
 const assets = await LifeboatAssets.load();
 assets.configure(renderer.capabilities.getMaxAnisotropy());
@@ -86,11 +81,7 @@ function configure(preview: Preview): void {
   selected = preview;
   const quality = preview.low ? 'low' : 'high';
   ocean.setQuality(quality);
-  if (quality !== simulationQuality) {
-    simulation.dispose(); simulation = new OceanFoamSimulation(quality, ocean.material.uniforms as OceanShaderUniforms);
-    Object.assign(ocean.material.uniforms, simulation.uniforms); simulationQuality = quality;
-  }
-  simulation.reset(); simulation.sourceMask.set(1, 1);
+  ocean.resetFoam(); sourceMask().set(1, 1);
   ocean.setBloodOceanIntensity(preview.blood ? 1 : 0);
   atmosphere.fogVolume = preview.fog ? 1 : 0;
   atmosphere.fogTime = fixedTime;
@@ -132,12 +123,6 @@ function render(): void {
   ocean.setExclusions(exclusions);
   ocean.follow(camera.position.x, camera.position.z);
   ocean.update(time, sea, selected.night ? 0.012 : 0.006, atmosphere);
-  simulation.setExclusions(exclusions);
-  const beforeSim = renderer.getContext().getError();
-  if (beforeSim) throw new Error('before main simulation: WebGL ' + beforeSim);
-  simulation.update(renderer, time, camera);
-  const afterSim = renderer.getContext().getError();
-  if (afterSim) throw new Error('after main simulation: WebGL ' + afterSim);
   renderer.render(scene, camera);
   const error = renderer.getContext().getError();
   if (error) failures.push(`WebGL error: ${error}`);
@@ -199,7 +184,7 @@ function verifyCoverage(preview: Preview): number {
 }
 
 function prepareSpecialCapture(preview: Preview): void {
-    if (preview.id === '13-source-off') { simulation.sourceMask.set(0, 0); advanceTo(time + 1); }
+    if (preview.id === '13-source-off') { sourceMask().set(0, 0); advanceTo(time + 1); }
     if (preview.id === '15-origin-scroll') { camera.position.x += 8; advanceTo(time + 1 / 30); }
     if (preview.id === '16-paused') {
       const pixels = readPixels();
@@ -245,7 +230,7 @@ async function captureAll(): Promise<void> {
   for (const mode of ['aging', 'hull', 'origin']) {
     configure({id: mode, title: mode, flags: mode === 'hull' ? [0,1] : [1,1], close: true, moving: mode === 'hull'});
     time = fixedTime - 6; advanceTo(fixedTime);
-    if (mode === 'aging') simulation.sourceMask.set(0,0);
+    if (mode === 'aging') sourceMask().set(0,0);
     for (let index=0;index<4;index++) {
       if (mode === 'origin') camera.position.x += 0.25;
       advanceTo(fixedTime + (mode === 'aging' ? [0,1,3,6][index]! : index * 0.6));

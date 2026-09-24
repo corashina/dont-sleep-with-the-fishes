@@ -283,7 +283,6 @@ export const OCEAN_FRAGMENT_SHADER = `
     ) {
       discard;
     }
-    float hullFoam = 0.0;
     for (int i = 0; i < 2; i++) {
       if (i < uExclusionCount) {
         vec3 exclusionLocal = (uExclusionWorldToLocal[i] * vec4(vWorldPosition, 1.0)).xyz;
@@ -294,9 +293,6 @@ export const OCEAN_FRAGMENT_SHADER = `
         oceanHullProfile(exclusionLocal, uExclusionLowerBounds[i], exclusionBounds,
           uExclusionLowerTaperStarts[i], uExclusionTaperStarts[i], minimumLocalY,
           uExclusionUpperLocalYs[i], localBounds, localTaperStarts);
-        hullFoam = max(hullFoam, hullFoamSource(
-          exclusionLocal, localBounds, localTaperStarts, minimumLocalY, uExclusionUpperLocalYs[i]
-        ));
         if (oceanInsideHull(exclusionLocal, localBounds, localTaperStarts,
           minimumLocalY, uExclusionUpperLocalYs[i])) {
           discard;
@@ -304,7 +300,7 @@ export const OCEAN_FRAGMENT_SHADER = `
       }
     }
     #ifdef HIGH_QUALITY_WATER
-    vec3 color = shadeHighWater(hullFoam);
+    vec3 color = shadeHighWater();
     #else
     vec2 detailSlope = warpedDetailSlope(vWorldPosition.xz);
     float waveHeight;
@@ -349,7 +345,7 @@ export const OCEAN_FRAGMENT_SHADER = `
     float sunSheen = pow(specularFacing, 38.0) * mix(0.10, 0.24, windAlignment);
 
     color += uSunColor * (sunCore + sunSheen) * uDirectLightStrength;
-    color = applyOceanFoam(color, normal, waveHeight, waveCompression, hullFoam);
+    color = applyOceanFoam(color, normal);
 
     #endif
 
