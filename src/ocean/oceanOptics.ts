@@ -86,7 +86,7 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
       }
     }
     compression = 1.0 - (tangentX.x * tangentZ.z - tangentX.z * tangentZ.x);
-    vec3 n = normalize(cross(tangentZ, tangentX));
+    vec3 n = hullContactNormal(normalize(cross(tangentZ, tangentX)));
     vec2 ripple = opticalRippleSlope(vWorldPosition.xz);
     return normalize(n + vec3(-ripple.x, 0.0, -ripple.y));
   }

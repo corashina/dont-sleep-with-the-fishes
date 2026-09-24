@@ -8,6 +8,7 @@ export interface WaterExclusionHeightProfile {
   readonly lowerHalfLength: number;
   readonly lowerTaperStart: number;
   readonly upperLocalY: number;
+  readonly keepSurfaceBelowRim?: boolean;
 }
 
 export interface WaterExclusionLongitudinalProfile {
@@ -29,6 +30,7 @@ export interface WaterExclusionRegion {
   lowerBounds: Vector4;
   lowerTaperStarts: Vector2;
   upperLocalY: number;
+  keepSurfaceBelowRim: boolean;
 }
 
 export function createWaterExclusion(
@@ -49,6 +51,7 @@ export function createWaterExclusion(
     lowerBounds: createLowerBounds(halfWidth, halfLength, heightProfile, longitudinalProfile),
     lowerTaperStarts: createLowerTaperStarts(taperStart, heightProfile, longitudinalProfile),
     upperLocalY: heightProfile?.upperLocalY ?? UNBOUNDED_MAXIMUM_LOCAL_Y,
+    keepSurfaceBelowRim: heightProfile?.keepSurfaceBelowRim ?? false,
   };
 }
 

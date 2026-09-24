@@ -548,7 +548,7 @@ export class World {
         boatBuild.waterExclusion.halfLength,
         boatBuild.waterExclusion.taperStart,
         boatBuild.waterExclusion.minimumLocalY,
-        undefined,
+        boatBuild.waterExclusion.heightProfile,
         boatBuild.waterExclusion.longitudinalProfile,
       );
       this.oceanExclusions = [

@@ -242,6 +242,7 @@ export class OceanRenderer {
     const lowerTaperStarts = this.uniforms.uExclusionLowerTaperStarts.value;
     const minimumLocalYs = this.uniforms.uExclusionMinimumLocalYs.value;
     const upperLocalYs = this.uniforms.uExclusionUpperLocalYs.value;
+    const hullContacts = this.uniforms.uExclusionHullContacts.value;
     const activeCount = Math.min(regions.length, MAX_OCEAN_EXCLUSIONS);
 
     for (let index = 0; index < MAX_OCEAN_EXCLUSIONS; index += 1) {
@@ -252,6 +253,7 @@ export class OceanRenderer {
       lowerTaperStarts[index]!.set(0, 0);
       minimumLocalYs[index] = UNBOUNDED_MINIMUM_LOCAL_Y;
       upperLocalYs[index] = UNBOUNDED_MAXIMUM_LOCAL_Y;
+      hullContacts[index] = 0;
     }
     for (let index = 0; index < activeCount; index += 1) {
       worldToLocal[index]!.copy(regions[index]!.worldToLocal);
@@ -261,6 +263,7 @@ export class OceanRenderer {
       lowerTaperStarts[index]!.copy(regions[index]!.lowerTaperStarts);
       minimumLocalYs[index] = regions[index]!.minimumLocalY ?? UNBOUNDED_MINIMUM_LOCAL_Y;
       upperLocalYs[index] = regions[index]!.upperLocalY;
+      hullContacts[index] = regions[index]!.keepSurfaceBelowRim ? 1 : 0;
     }
     this.uniforms.uExclusionCount.value = activeCount;
   }
