@@ -2,7 +2,7 @@
 
 Date: 2026-09-24
 Branch: codex/ocean-foam
-Status: Written design for user review. Implementation is not approved yet.
+Status: Approved by the user on 2026-09-24. Implementation awaits plan review and execution-method selection.
 
 ## Intent and scope
 
