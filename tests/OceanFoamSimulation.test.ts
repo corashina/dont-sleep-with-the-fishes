@@ -56,5 +56,15 @@ it('clears history after context restoration and removes its listener', () => {
  sim.update(f.renderer,1,new Camera()); const clears=f.r.clear.mock.calls.length;
  f.canvas.dispatchEvent(new Event('webglcontextrestored')); sim.update(f.renderer,1,new Camera());
  expect(f.r.clear.mock.calls.length).toBe(clears+2);
- const remove=vi.spyOn(f.canvas,'removeEventListener'); sim.dispose(); expect(remove).toHaveBeenCalledOnce();
+ const remove=vi.spyOn(f.canvas,'removeEventListener'); sim.dispose(); expect(remove).toHaveBeenCalledTimes(2);
+});
+
+it('releases lost-context handles before rebuilding their resources', () => {
+ const f=fixture(),disposal=vi.spyOn(WebGLRenderTarget.prototype,'dispose');
+ const sim=new OceanFoamSimulation('low',createOceanShaderDefinition('low').uniforms);
+ sim.update(f.renderer,1,new Camera());
+ f.canvas.dispatchEvent(new Event('webglcontextlost'));
+ expect(disposal).toHaveBeenCalledTimes(2);
+ f.canvas.dispatchEvent(new Event('webglcontextrestored'));sim.update(f.renderer,1,new Camera());
+ sim.dispose();expect(disposal).toHaveBeenCalledTimes(4);
 });

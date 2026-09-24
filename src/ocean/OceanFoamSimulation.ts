@@ -42,6 +42,8 @@ export class OceanFoamSimulation {
   private current = 0;
   private initialized = false;
   private disposed = false;
+  private resourcesReleased = false;
+  private readonly contextLost = (): void => { this.releaseResources(); this.reset(); };
   private readonly contextRestored = (): void => { this.reset(); };
 
   constructor(quality: WaterQuality, oceanUniforms: OceanShaderUniforms) {
@@ -88,22 +90,7 @@ export class OceanFoamSimulation {
   setExclusions(regions: readonly WaterExclusionRegion[]): void { this.regions = regions; }
 
   update(renderer: WebGLRenderer, timeSeconds: number, camera: Camera): void {
-    if (this.disposed) return;
-    if (this.canvas === null) {
-      if (!renderer.extensions.has('EXT_color_buffer_float'))
-        throw new Error('Ocean foam requires half-float color render targets');
-      this.canvas = renderer.domElement;
-      this.canvas.addEventListener('webglcontextrestored', this.contextRestored);
-    }
-    camera.getWorldPosition(this.viewer);
-    const texel = this.uniforms.uFoamExtent.value / this.targets[0].width;
-    this.nextOrigin.set(Math.round(this.viewer.x / texel) * texel, Math.round(this.viewer.z / texel) * texel);
-    if (this.initialized && this.nextOrigin.distanceTo(this.origins[this.current]!) > 256) this.reset();
-    this.clock.advance(timeSeconds);
-    if (this.clock.resetRequired) { this.initialized = false; this.hulls.reset(); }
-    this.hulls.setRegions(this.regions, timeSeconds);
-    this.uniforms.uFoamMix.value = this.clock.mix;
-    if (!this.clock.steps) return;
+    if (!this.prepareFrame(renderer, timeSeconds, camera)) return;
 
     const target = renderer.getRenderTarget();
     const face = renderer.getActiveCubeFace(), mip = renderer.getActiveMipmapLevel();
@@ -112,6 +99,7 @@ export class OceanFoamSimulation {
     const autoClear = renderer.autoClear, xr = renderer.xr.enabled;
     const shadowUpdate = renderer.shadowMap.autoUpdate, shadowDirty = renderer.shadowMap.needsUpdate;
     try {
+      this.resourcesReleased = false;
       renderer.autoClear = false; renderer.xr.enabled = false; renderer.shadowMap.autoUpdate = false;
       renderer.shadowMap.needsUpdate = false; renderer.setScissorTest(false);
       if (!this.initialized) {
@@ -145,13 +133,41 @@ export class OceanFoamSimulation {
     }
   }
 
+  private prepareFrame(renderer: WebGLRenderer, timeSeconds: number, camera: Camera): boolean {
+    if (this.disposed) return false;
+    if (this.canvas === null) {
+      if (!renderer.extensions.has('EXT_color_buffer_float'))
+        throw new Error('Ocean foam requires half-float color render targets');
+      this.canvas = renderer.domElement;
+      this.canvas.addEventListener('webglcontextrestored', this.contextRestored);
+      this.canvas.addEventListener('webglcontextlost', this.contextLost);
+    }
+    camera.getWorldPosition(this.viewer);
+    const texel = this.uniforms.uFoamExtent.value / this.targets[0].width;
+    this.nextOrigin.set(Math.round(this.viewer.x / texel) * texel, Math.round(this.viewer.z / texel) * texel);
+    if (this.initialized && this.nextOrigin.distanceTo(this.origins[this.current]!) > 256) this.reset();
+    this.clock.advance(timeSeconds);
+    if (this.clock.resetRequired) { this.initialized = false; this.hulls.reset(); }
+    this.hulls.setRegions(this.regions, timeSeconds);
+    this.uniforms.uFoamMix.value = this.clock.mix;
+    return this.clock.steps > 0;
+
+  }
+
   reset(): void { this.clock.reset(); this.hulls.reset(); this.initialized = false; }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.canvas?.removeEventListener('webglcontextrestored', this.contextRestored);
+    this.canvas?.removeEventListener('webglcontextlost', this.contextLost);
     this.canvas = null;
+    this.releaseResources();
+  }
+
+  private releaseResources(): void {
+    if (this.resourcesReleased) return;
+    this.resourcesReleased = true;
     this.targets[0].dispose(); this.targets[1].dispose(); this.material.dispose(); this.geometry.dispose();
   }
 }

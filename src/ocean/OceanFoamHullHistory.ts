@@ -46,16 +46,9 @@ export class OceanFoamHullHistory {
     }
     for (let i = 0; i < this.count; i++) {
       const region = regions[i]!;
-      let index = -1;
-      for (let slot = 0; slot < this.capacity; slot++) {
-        if (this.frames[slot]!.region === region) { index = slot; break; }
-      }
-      const fresh = index < 0;
-      if (fresh) {
-        for (let slot = 0; slot < this.capacity; slot++) {
-          if (this.frames[slot]!.region === null) { index = slot; break; }
-        }
-      }
+      const existing = this.findSlot(region);
+      const fresh = existing < 0;
+      const index = fresh ? this.findSlot(null) : existing;
       const frame = this.frames[index]!;
       this.order[i] = index;
       if (!fresh && timeSeconds === frame.time) continue;
@@ -73,6 +66,13 @@ export class OceanFoamHullHistory {
         frame.previousTime = timeSeconds;
       }
     }
+  }
+
+  private findSlot(region: WaterExclusionRegion | null): number {
+    for (let slot = 0; slot < this.capacity; slot++) {
+      if (this.frames[slot]!.region === region) return slot;
+    }
+    return -1;
   }
 
   sample(stepTime: number): void {

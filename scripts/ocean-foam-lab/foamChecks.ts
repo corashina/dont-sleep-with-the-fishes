@@ -1,11 +1,16 @@
 // Importance: 98/100. These checks execute the real GPU field, not shader source comparisons.
-import { Camera, Mesh, Object3D, PlaneGeometry, Scene, ShaderMaterial, Vector3, WebGLRenderTarget, type WebGLRenderer } from 'three';
+import { Camera, Mesh, Object3D, PlaneGeometry, Scene, ShaderMaterial, WebGLRenderTarget, type WebGLRenderer } from 'three';
 import { OceanFoamSimulation } from '../../src/ocean/OceanFoamSimulation';
 import { createOceanShaderDefinition } from '../../src/ocean/oceanShader';
 import { createWaterExclusion } from '../../src/ocean/WaterExclusion';
 import { OCEAN_FOAM_SIMULATION_VERTEX } from '../../src/ocean/oceanFoamSimulationShader';
 
+function requireFoam(condition: boolean, message: string): void {
+  if (!condition) throw new Error(message);
+}
+
 export async function runFoamChecks(renderer: WebGLRenderer): Promise<Record<string, number | string>> {
+ const checkGL=(label:string)=>{const code=renderer.getContext().getError();if(code)throw new Error(label+': WebGL '+code);};
  const u=createOceanShaderDefinition('low').uniforms;
  u.uAmplitudeScale.value=1.45;
  const camera=new Camera(); camera.position.set(0,8,0);
@@ -31,10 +36,10 @@ export async function runFoamChecks(renderer: WebGLRenderer): Promise<Record<str
  const advance=(seconds:number)=>{const steps=Math.round(seconds*30); for(let i=0;i<steps;i++){time+=1/30;sim.update(renderer,time,camera);}};
  try {
    sim.sourceMask.set(1,0); sim.update(renderer,time,camera); advance(2);
-   const formed=read(); if(formed.crest<=100)throw new Error('GPU check: crest foam was not deposited');
+   const formed=read(); requireFoam(formed.crest>100, 'GPU check: crest foam was not deposited');
    sim.sourceMask.set(0,0); advance(1); const aged=read();
-   if(!(aged.crest>0 && aged.crest<formed.crest))throw new Error('GPU check: foam did not persist and decay');
-   advance(5); const old=read(); if(old.crest>=aged.crest)throw new Error('GPU check: old foam did not decay');
+   requireFoam(aged.crest>0 && aged.crest<formed.crest, 'GPU check: foam did not persist and decay');
+   advance(5); const old=read(); requireFoam(old.crest<aged.crest, 'GPU check: old foam did not decay');
    const hull=new Object3D(); hull.position.y=6;
    const region=createWaterExclusion(hull,1,3,2,-1,{lowerHalfWidth:1,lowerHalfLength:3,lowerTaperStart:2,upperLocalY:1});
    const regions=[region]; u.uExclusionCount.value=1;
@@ -53,9 +58,26 @@ export async function runFoamChecks(renderer: WebGLRenderer): Promise<Record<str
    const pausedAfter=read();if(paused.data.some((value,i)=>value!==pausedAfter.data[i]))throw new Error('GPU check: paused field changes');
    camera.position.x+=8;sim.update(renderer,time+1/30,camera);time+=1/30;
    const scrolled=read();if(Math.abs(scrolled.x-drift.x+16)>1.2)throw new Error('GPU check: origin shift moved world foam');
+   checkGL('before context loss');
    const ext=renderer.getContext().getExtension('WEBGL_lose_context');
+   let contextStatus = 'unavailable';
+   if (ext) {
+     await new Promise<void>((resolve,reject)=>{
+       const timeout=setTimeout(()=>reject(new Error('Context restore timed out')),5000);
+       renderer.domElement.addEventListener('webglcontextrestored',()=>{clearTimeout(timeout);resolve();},{once:true});
+       renderer.domElement.addEventListener('webglcontextlost',event=>{
+         event.preventDefault();target.dispose();material.dispose();geometry.dispose();setTimeout(()=>ext.restoreContext(),100);
+       },{once:true});
+       ext.loseContext();
+     });
+     checkGL('after restore event');
+     sim.update(renderer,time,camera); checkGL('after restored simulation');
+     const restored=read();if(restored.crest!==0||restored.hull!==0)throw new Error('Context restore retained stale foam');
+     checkGL('after restored readback');
+     contextStatus='passed';
+   }
    return {crestFormed:formed.crest,crestAfterOneSecond:aged.crest,crestAfterSixSeconds:old.crest,
      hullContact:contact.hull,driftTexels:drift.x-before.x,originShiftTexels:scrolled.x-drift.x,
-     pause:'passed',contextExtension:ext?'available; lifecycle event tested separately':'unavailable'};
- } finally {sim.dispose();target.dispose();material.dispose();geometry.dispose();}
+     pause:'passed',contextRestoration:contextStatus};
+ } finally {sim.dispose();checkGL('dispose simulation');target.dispose();checkGL('dispose readback');material.dispose();checkGL('dispose material');geometry.dispose();checkGL('dispose geometry');}
 }

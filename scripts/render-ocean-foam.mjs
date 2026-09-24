@@ -9,6 +9,8 @@ const output = resolve(process.argv[2] ?? 'artifacts/ocean-foam');
 const expected = new Set([
   '01-baseline', '02-crest-foam', '03-hull-foam', '04-combined', '05-close', '06-calm',
   '07-night', '08-low', '09-blood', '10-fog', '11-raised-hull', '12-moved-hull', 'comparison', 'motion',
+  '13-source-off', '14-moving-hull', '15-origin-scroll', '16-paused', '17-quality-switch',
+  '18-context-restored', 'aging-motion', 'hull-motion', 'origin-motion',
 ]);
 const received = new Set();
 await mkdir(output, { recursive: true });
