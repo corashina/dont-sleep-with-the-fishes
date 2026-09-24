@@ -118,6 +118,11 @@ function render(): void {
   if (failures.length) throw new Error(failures.join('\n'));
 }
 
+function advanceTo(target: number): void {
+  while (time + 1 / 60 < target) { time += 1 / 60; render(); }
+  time = target; render();
+}
+
 function labeledCapture(title: string): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -174,8 +179,8 @@ async function captureAll(): Promise<void> {
   const records = [];
   for (const [index, preview] of previews.entries()) {
     configure(preview);
-    time = fixedTime;
-    render(); render();
+    time = fixedTime - 6;
+    advanceTo(fixedTime);
     const changedPixels = verifyCoverage(preview);
     const capture = labeledCapture(preview.title);
     if (index < 12) context.drawImage(capture, (index % 3) * 640, Math.floor(index / 3) * 434, 640, 434);
@@ -189,8 +194,7 @@ async function captureAll(): Promise<void> {
   const motionContext = motion.getContext('2d')!;
   configure({ id: 'motion', title: 'Foam motion', flags: [1, 1], sea: 0.9, close: true });
   for (let index = 0; index < 4; index++) {
-    time = fixedTime + index * 0.6;
-    render();
+    advanceTo(fixedTime + index * 0.6);
     motionContext.drawImage(labeledCapture('Foam motion · ' + time.toFixed(1) + ' seconds'),
       (index % 2) * 720, Math.floor(index / 2) * 488, 720, 488);
   }
