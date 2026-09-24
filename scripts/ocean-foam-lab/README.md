@@ -1,24 +1,27 @@
 # Ocean foam lab
 
-This lab renders the production ocean shaders with the real lifeboat.
-Only the foam switches are specific to this lab.
+The lab uses the production ocean renderer and the real lifeboat.
+Only the visibility and deposition switches are specific to the lab.
 
 ## Capture and verify
 
 Run from this worktree:
 
 ```powershell
-node scripts/render-ocean-foam.mjs
+node scripts/render-ocean-foam.mjs artifacts/ocean-foam/persistent-final
 ```
 
-Output: `artifacts/ocean-foam/`.
-The script captures twelve cases, a comparison sheet, and four motion frames.
-It fails on shader errors, WebGL errors, missing foam, and foam below an airborne hull.
-It compares each case with foam disabled at the same wave time and camera position.
-Importance: 95/100. Shader compilation alone cannot detect missing or misplaced foam.
+This captures 18 cases and five comparison or motion sheets.
+Checks cover shader errors, coverage, aging, contact, pause, scrolling, and context recovery.
+Both the isolated field and the complete production renderer lose and recover their WebGL context.
+The restoration image shows the recovered production renderer.
+An unavailable restoration extension produces a labeled placeholder.
+Importance: 98/100 for GPU behavior; 95/100 for image coverage.
 
-Set `CHROME_PATH` if Chrome or Edge is installed elsewhere.
-Pass an output directory as the first argument to change the destination.
+Set CHROME_PATH if Chrome or Edge is installed elsewhere.
+Add --benchmark for four timing runs. Each has ten seconds warmup and thirty seconds sampling.
+Nonblocking GPU queries measure simulation preparation, including frames without a simulation step.
+They exclude foam shading in the final water pass. Unavailable results are null, never zero.
 
 ## Interactive inspection
 
@@ -26,31 +29,45 @@ Pass an output directory as the first argument to change the destination.
 node node_modules/vite/bin/vite.js --port 5188
 ```
 
-Open:
-<http://127.0.0.1:5188/dont-sleep-with-the-fishes/scripts/ocean-foam-lab/index.html>
-
+Open http://127.0.0.1:5188/dont-sleep-with-the-fishes/scripts/ocean-foam-lab/index.html.
 Select a case. Press Play to inspect motion.
-
-## Cases
-
-- Foam disabled, crest foam only, hull foam only, and both effects.
-- Close view, calm sea, night, Low quality, blood ocean, and fog.
-- Raised hull and a translated, rotated hull.
-- Four close views at 0.6-second intervals.
-
-The captures use production materials without game post-processing.
-They verify rendering and contact behavior, not total game frame rate.
+The normal game runs at http://127.0.0.1:5188/dont-sleep-with-the-fishes/.
+The full-game timing page is scripts/ocean-foam-game-benchmark.html.
+Start gameplay before measuring. Keep the tab visible during measurements.
 
 ## Implementation
 
-`src/ocean/oceanFoam.ts` contains the shared foam shading.
-Crest foam uses existing wave compression and height.
-Hull foam uses each existing exclusion profile and transform.
-Broad foam patches have dense centers, translucent margins, and irregular pores.
-Shaded pore rims and folds give the film depth as it drifts.
-High quality adds two sizes of cellular pores. Low quality uses fewer texture calculations.
-Subpixel detail averages out. Clear and distant water skip detailed foam shading.
-Foam receives light before the existing blood and fog effects.
-There are no new particles, textures, render targets, or per-frame CPU allocations.
+OceanFoamSimulation owns two RGBA half-float targets over a 256-metre square.
+High uses 1024 by 1024 texels: 16 MiB for both targets.
+Low uses 512 by 512 texels: 4 MiB for both targets.
+Crest coverage, crest freshness, hull coverage, and hull freshness occupy separate channels.
+The field updates at 30 Hz. Rendering interpolates between the two fields with separate world origins.
+Foam follows wave flow, spreads, and fades. Hull motion adds foam at water contact.
+A generated 256 by 256 texture supplies porous coverage and relief.
+Fresh foam is dense. Aging foam breaks into thin patches.
+Lighting precedes the existing blood and fog effects.
+Production update paths reuse their CPU storage.
 
-Foam is procedural surface shading. It is not a persistent fluid simulation.
+## Evidence and limits
+
+Latest screenshots: artifacts/ocean-foam/persistent-final.
+Before screenshots: artifacts/ocean-foam/persistent-before.
+Timing report: artifacts/ocean-foam/persistent-final/performance.json.
+
+On the RTX 4070 Ti, the 1440 by 900 headless lab measured these simulation preparation costs:
+
+| Quality | Calm GPU p95 | Rough GPU p95 |
+| --- | --- | --- |
+| High | 0.352 ms | 0.310 ms |
+| Low | 0.137 ms | 0.165 ms |
+
+These measurements are below the 1.5 ms simulation budget.
+The lab frame p95 was 7.1 ms. This excludes full-game effects and cannot establish the game frame rate.
+The in-app browser did not complete the full-game pointer lock request.
+Baseline, changed, delta, and full-game target fields remain null. The 60 FPS target is unverified.
+The saved baseline build is artifacts/ocean-foam/baseline-build.
+
+Lint, type checking, production build, 31 ocean tests, and GPU checks pass.
+The full suite has 1307 passes and one existing AnchorItem pose failure.
+A dedicated interpolation regression at mix values 0, 0.5, and 1 remains deferred.
+Current scrolling evidence checks field centroid displacement and rendered motion sheets.

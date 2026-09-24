@@ -227,6 +227,41 @@ async function measureLabPerformance() {
     width, height, pixelRatio: renderer.getPixelRatio(), browser: navigator.userAgent, results};
 }
 
+async function restoreMainContext(): Promise<boolean> {
+  const extension = renderer.getContext().getExtension('WEBGL_lose_context');
+  if (!extension) return false;
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Production context restore timed out')), 5000);
+    renderer.domElement.addEventListener('webglcontextrestored', () => {
+      clearTimeout(timeout); resolve();
+    }, {once: true});
+    renderer.domElement.addEventListener('webglcontextlost', event => {
+      event.preventDefault(); setTimeout(() => extension.restoreContext(), 100);
+    }, {once: true});
+    extension.loseContext();
+  });
+  return true;
+}
+
+async function restoreCase(preview: Preview, checks: Record<string, number | string>): Promise<void> {
+  if (preview.id !== '18-context-restored') return;
+  if (!await restoreMainContext()) { checks.productionContextRestoration = 'unavailable'; return; }
+  advanceTo(time + 6);
+  checks.productionContextRestoration = 'passed';
+}
+
+function captureCase(preview: Preview, checks: Record<string, number | string>): HTMLCanvasElement {
+  if (preview.id !== '18-context-restored' || checks.productionContextRestoration === 'passed')
+    return labeledCapture(preview.title);
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height + 76;
+  const context = canvas.getContext('2d')!;
+  context.fillStyle = '#0d2029'; context.fillRect(0,0,canvas.width,canvas.height);
+  context.fillStyle = 'white'; context.font = '26px sans-serif';
+  context.fillText('CHECK UNAVAILABLE: WEBGL_lose_context is unavailable', 26, 60);
+  return canvas;
+}
+
 function benchmarkIfRequested() {
   return new URLSearchParams(location.search).has('benchmark') ? measureLabPerformance() : null;
 }
@@ -244,9 +279,10 @@ async function captureAll(): Promise<void> {
     configure(preview);
     time = fixedTime - 6;
     advanceTo(fixedTime);
+    await restoreCase(preview, fieldChecks);
     prepareSpecialCapture(preview);
     const changedPixels = verifyCoverage(preview);
-    const capture = labeledCapture(preview.title);
+    const capture = captureCase(preview, fieldChecks);
     if (index < 12) context.drawImage(capture, (index % 3) * 640, Math.floor(index / 3) * 434, 640, 434);
     await upload(preview.id, capture);
     records.push({ id: preview.id, time, sea: preview.sea ?? 1.45, night: !!preview.night, flags: preview.flags, changedPixels, quality: preview.low ? 'low' : 'high' });
