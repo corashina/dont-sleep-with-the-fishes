@@ -7,10 +7,9 @@ import { createServer } from 'vite';
 
 const output = resolve(process.argv[2] ?? 'artifacts/ocean-foam');
 const expected = new Set([
-  '01-baseline', '02-crest-foam', '03-hull-foam', '04-combined', '05-close', '06-calm',
-  '07-night', '08-low', '09-blood', '10-fog', '11-raised-hull', '12-moved-hull', 'comparison', 'motion',
-  '13-source-off', '14-moving-hull', '15-origin-scroll', '16-paused', '17-quality-switch',
-  '18-context-restored', 'aging-motion', 'hull-motion', 'origin-motion',
+  '01-baseline', '02-open-water', '03-hull-foam', '04-close', '05-prototype', '06-prototype-close',
+  '07-night', '08-low', '09-blood', '10-fog', '11-raised-hull', '12-moved-hull', '13-calm',
+  '14-prototype-calm', '17-contact-close', '15-paused', '16-context-restored', 'comparison', 'motion', 'prototype-motion',
 ]);
 const received = new Set();
 await mkdir(output, { recursive: true });
@@ -57,13 +56,13 @@ try {
   const profile = await mkdtemp(resolve(tmpdir(), 'ocean-preview-'));
   browser = spawn(executable, ['--headless=new', '--disable-gpu-sandbox', '--no-first-run',
     '--no-default-browser-check', `--user-data-dir=${profile}`,
-    `http://127.0.0.1:${address.port}/dont-sleep-with-the-fishes/scripts/ocean-foam-lab/index.html?capture${process.argv.includes('--benchmark') ? '&benchmark' : ''}`,
+    `http://127.0.0.1:${address.port}/dont-sleep-with-the-fishes/scripts/ocean-foam-lab/index.html?capture`,
   ], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
   let browserLog = '';
   browser.stderr.on('data', chunk => { browserLog = (browserLog + chunk).slice(-12000); });
   browser.once('error', fail);
   browser.once('exit', code => { if (code) fail(new Error(`Browser exited ${code}\n${browserLog}`)); });
-  timeout = setTimeout(() => fail(new Error(`Preview timed out\n${browserLog}`)), process.argv.includes('--benchmark') ? 300000 : 120000);
+  timeout = setTimeout(() => fail(new Error(`Preview timed out\n${browserLog}`)), 120000);
   await completed;
   const missing = [...expected].filter(id => !received.has(id));
   if (missing.length) throw new Error(`Missing captures: ${missing.join(', ')}`);

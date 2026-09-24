@@ -33,12 +33,4 @@ export const OCEAN_SURFACE_SAMPLING_GLSL = /* glsl */ `
     return displaced;
   }
 
-  vec2 oceanWaveCoordinate(vec2 worldXZ, vec3 viewer) {
-    vec2 q = worldXZ;
-    for (int iteration = 0; iteration < 2; iteration++) {
-      vec2 residual = oceanGeometryPosition(q, viewer).xz - worldXZ;
-      q -= residual * min(1.0, 4.0 / max(length(residual), 0.0001));
-    }
-    return q;
-  }
 `;

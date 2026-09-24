@@ -1,11 +1,8 @@
-import { OceanFoamSimulation } from '../src/ocean/OceanFoamSimulation';
-import { WebGLRenderTarget } from 'three';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Camera, Color, MeshBasicMaterial, Scene, type WebGLRenderer } from 'three';
 import { OceanCapture } from '../src/ocean/OceanCapture';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 
-beforeEach(() => { vi.spyOn(OceanFoamSimulation.prototype, 'update').mockImplementation(() => {}); });
 afterEach(() => vi.restoreAllMocks());
 
 describe('ocean quality resources', () => {
@@ -115,35 +112,4 @@ describe('ocean quality resources', () => {
       ocean.dispose();
     }
   });
-});
-
-// Importance: 98/100. Nested render passes and retries must not age foam twice.
-it('advances foam once per update across meshes, cameras, and capture retries', () => {
- const foam=vi.mocked(OceanFoamSimulation.prototype.update);
- const capture=vi.spyOn(OceanCapture.prototype,'update').mockImplementationOnce(()=>{throw new Error('capture failed');}).mockImplementation(()=>{});
- const ocean=new OceanRenderer('high'), scene=new Scene(), camera=new Camera();
- const draw=()=>ocean.mesh.onBeforeRender({} as WebGLRenderer,scene,camera,ocean.mesh.geometry,ocean.material,null!);
- try {
-   ocean.update(1,1,0.01);expect(draw).toThrow('capture failed');draw();
-   ocean.horizonMesh.onBeforeRender({} as WebGLRenderer,scene,camera,ocean.horizonMesh.geometry,ocean.material,null!);
-   ocean.mesh.onBeforeRender({} as WebGLRenderer,scene,new Camera(),ocean.mesh.geometry,ocean.material,null!);
-   expect(foam).toHaveBeenCalledTimes(1);expect(capture).toHaveBeenCalledTimes(3);
-   ocean.update(1.04,1,0.01);draw();expect(foam).toHaveBeenCalledTimes(2);
- }finally{ocean.dispose();}
-});
-// Importance: 95/100. Low water also needs history, and failed quality changes must retain valid resources.
-it('uses foam in Low mode and preserves it when a replacement allocation fails',()=>{
- const ocean=new OceanRenderer('low'),scene=new Scene(),camera=new Camera();
- try{
-   ocean.update(1,1,0.01);
-   ocean.mesh.onBeforeRender({} as WebGLRenderer,scene,camera,ocean.mesh.geometry,ocean.material,null!);
-   expect(OceanFoamSimulation.prototype.update).toHaveBeenCalledTimes(1);
-   const oldGeometry=ocean.mesh.geometry,oldField=ocean.material.uniforms.uFoamCurrent!.value;
-   vi.spyOn(WebGLRenderTarget.prototype,'clone').mockImplementationOnce(()=>{throw new Error('no memory');});
-   expect(()=>ocean.setQuality('high')).toThrow('no memory');
-   expect(ocean.mesh.geometry).toBe(oldGeometry);expect(ocean.material.uniforms.uFoamCurrent!.value).toBe(oldField);
-   ocean.update(1.04,1,0.01);
-   ocean.mesh.onBeforeRender({} as WebGLRenderer,scene,camera,ocean.mesh.geometry,ocean.material,null!);
-   expect(OceanFoamSimulation.prototype.update).toHaveBeenCalledTimes(2);
- }finally{ocean.dispose();}
 });

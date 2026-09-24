@@ -1,6 +1,4 @@
-import { instrumentFoamGpu } from './ocean-foam-lab/gpuTiming';
-const gpuTimer = instrumentFoamGpu();
-void import('../src/main');
+import '../src/main';
 import { summarizeFrameTimes } from './ocean-foam-lab/frameTiming';
 const panel = document.createElement('div');
 panel.style.cssText = 'position:fixed;z-index:99999;right:12px;top:12px;padding:10px;background:#10232b;color:white;font:14px sans-serif';
@@ -24,13 +22,13 @@ button.onclick = () => {
   const frame = (now: number) => {
     if (!first) first = now;
     if (document.hidden) invalid = true;
-    if (now - first >= 10000 && !recording) { recording = true; gpuTimer.start(); }
+    if (now - first >= 10000 && !recording) { recording = true; }
     if (recording && previous) samples.push(now - previous);
     previous = now;
     output.textContent = Math.ceil(Math.max(0, 40000 - (now - first)) / 1000) + ' seconds remaining';
     if (now - first < 40000) { requestAnimationFrame(frame); return; }
     const report = { ...summarizeFrameTimes(samples), invalid, ...hardwareInfo(),
-      gpuFoamMs: gpuTimer.stop(), targetMet: !invalid && summarizeFrameTimes(samples).p95Ms <= 16.7 };
+      targetMet: !invalid && summarizeFrameTimes(samples).p95Ms <= 16.7 };
     output.textContent = JSON.stringify(report, null, 2);
     button.disabled = false;
     const link = document.createElement('a');
