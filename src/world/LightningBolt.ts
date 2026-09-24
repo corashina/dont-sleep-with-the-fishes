@@ -1,5 +1,5 @@
 import {
-  AdditiveBlending, BufferGeometry, DoubleSide, Float32BufferAttribute,
+  AdditiveBlending, BufferGeometry, CatmullRomCurve3, DoubleSide, Float32BufferAttribute,
   Mesh, ShaderMaterial, Vector3,
 } from 'three';
 
@@ -29,11 +29,11 @@ const FRAGMENT_SHADER = `
   void main() {
     float distanceToCore = abs(vSide);
     float feather = max(fwidth(distanceToCore), 0.015);
-    float core = 1.0 - smoothstep(0.16 - feather, 0.16 + feather, distanceToCore);
-    float glow = exp(-distanceToCore * 5.0) * (1.0 - smoothstep(0.7, 1.0, distanceToCore));
+    float core = 1.0 - smoothstep(0.22 - feather, 0.22 + feather, distanceToCore);
+    float glow = exp(-distanceToCore * 3.5) * (1.0 - smoothstep(0.7, 1.0, distanceToCore));
     vec3 color = mix(vec3(0.48, 0.60, 0.9), vec3(1.0, 0.98, 1.0), core);
     float brightness = intensity * vStrength;
-    gl_FragColor = vec4(color * 1.65, brightness * max(core, glow * 0.32));
+    gl_FragColor = vec4(color * 1.65, brightness * max(core, glow * 0.5));
   }
 `;
 
@@ -54,7 +54,7 @@ function createGeometry(height: number, random: () => number): BufferGeometry {
       direction.subVectors(points[Math.min(index + 1, points.length - 1)]!, points[Math.max(0, index - 1)]!);
       const progress = index / (points.length - 1);
       const taper = branch ? 1 - progress * 0.98 : 1 - progress * 0.3;
-      const width = radius * taper * (0.8 + random() * 0.4);
+      const width = radius * 3 * taper * (0.8 + random() * 0.4);
       for (let side = 0; side < 2; side += 1) {
         positions.push(point.x, point.y, point.z);
         tangents.push(direction.x, direction.y, direction.z);
@@ -80,10 +80,22 @@ function createGeometry(height: number, random: () => number): BufferGeometry {
     return upper.concat(lower);
   };
 
-  const trunk = subdivide(
-    new Vector3((random() - 0.5) * height * 0.18, height, 0),
-    new Vector3(0, 0, 0), height * 0.32, 6,
-  );
+  const bends = [new Vector3((random() - 0.5) * height * 0.18, height, 0)];
+  const bendSide = random() < 0.5 ? -1 : 1;
+  for (let bend = 1; bend <= 4; bend += 1) {
+    bends.push(new Vector3(
+      bendSide * (bend % 2 === 0 ? -1 : 1) * height * (0.08 + random() * 0.12),
+      height * (1 - (bend + (random() - 0.5) * 0.3) / 5),
+      (random() - 0.5) * height * 0.06,
+    ));
+  }
+  bends.push(new Vector3(0, 0, 0));
+  const trunk = new CatmullRomCurve3(bends).getPoints(64);
+  // Broad curved bends carry small irregular kinks, rather than a straight stretched trunk.
+  for (let index = 1; index < trunk.length - 1; index += 1) {
+    trunk[index]!.x += (random() - 0.5) * height * 0.025;
+    trunk[index]!.z += (random() - 0.5) * height * 0.01;
+  }
   appendPath(trunk, height * 0.009, 1);
   for (let branch = 0; branch < 7; branch += 1) {
     const start = trunk[6 + Math.floor(random() * 44)]!;
@@ -109,6 +121,7 @@ function createGeometry(height: number, random: () => number): BufferGeometry {
   geometry.setAttribute('strength', new Float32BufferAttribute(strengths, 1));
   geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
+  geometry.computeBoundingBox();
   return geometry;
 }
 

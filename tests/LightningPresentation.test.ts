@@ -15,42 +15,55 @@ function expectBolt(object: unknown): asserts object is Mesh<import('three').Buf
 }
 
 describe('lightning presentation', () => {
-  // Importance: 95/100. Both strikes must remain inside the view after camera turns and on narrow screens.
-  it.each([16 / 9, 9 / 16])('places complete lightning paths inside the camera view at aspect %s', (aspect) => {
-    const camera = new PerspectiveCamera(50, aspect, 0.08, 1000);
-    camera.position.set(8, 1.5, -6);
-    const cameraRig = new Group();
-    cameraRig.add(camera);
-    for (const yaw of [0, Math.PI / 2, Math.PI]) {
-      cameraRig.rotation.y = yaw;
-      camera.rotation.x = -0.06;
-      camera.updateWorldMatrix(true, false);
-      const cameraPosition = camera.getWorldPosition(new Vector3());
-      for (const randomValue of [0, 0.5, 0.999]) {
-        const scene = new Scene();
-        const weather = new WeatherEffects(scene, () => randomValue);
-        weather.setWeather('thunderstorm');
-        weather.setLightningView(camera);
-        weather.update(0.65, 0.65, cameraPosition);
-        scene.updateMatrixWorld(true);
-        const bolts = scene.getObjectByName('weather-lightning')!.children.filter(
-          (object) => object.name.startsWith('weather-lightning-bolt-') && object.visible,
-        ) as Mesh[];
-        expect(bolts.length).toBeGreaterThan(0);
-        for (const bolt of bolts) {
-          const positions = bolt.geometry.getAttribute('position');
-          for (let vertex = 0; vertex < positions.count; vertex += 1) {
-            const projected = new Vector3().fromBufferAttribute(positions, vertex)
-              .applyMatrix4(bolt.matrixWorld).project(camera);
-            expect(Math.abs(projected.x)).toBeLessThan(0.95);
-            expect(Math.abs(projected.y)).toBeLessThan(0.95);
-            expect(projected.z).toBeGreaterThan(-1);
-            expect(projected.z).toBeLessThan(1);
+  // Importance: 95/100. Strikes must cover the view without clipping after camera turns or on narrow screens.
+  it.each([40, 80, 110].flatMap((fov) => [16 / 9, 9 / 16].map((aspect) => ({ fov, aspect }))))(
+    'keeps complete lightning paths large and in front at FOV $fov and aspect $aspect', ({ fov, aspect }) => {
+      const camera = new PerspectiveCamera(fov, aspect, 0.08, 1000);
+      camera.position.set(8, 1.5, -6);
+      const cameraRig = new Group();
+      cameraRig.add(camera);
+      for (const yaw of [0, Math.PI / 2, Math.PI]) {
+        cameraRig.rotation.y = yaw;
+        camera.rotation.x = -0.06;
+        camera.updateWorldMatrix(true, false);
+        const cameraPosition = camera.getWorldPosition(new Vector3());
+        let leftmost = Infinity;
+        let rightmost = -Infinity;
+        for (const randomValue of [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 0.999]) {
+          const scene = new Scene();
+          const weather = new WeatherEffects(scene, () => randomValue);
+          weather.setWeather('thunderstorm');
+          weather.setLightningView(camera);
+          weather.update(0.65, 0.65, cameraPosition);
+          scene.updateMatrixWorld(true);
+          const bolts = scene.getObjectByName('weather-lightning')!.children.filter(
+            (object) => object.name.startsWith('weather-lightning-bolt-') && object.visible,
+          ) as Mesh[];
+          expect(bolts.length).toBeGreaterThan(0);
+          for (const bolt of bolts) {
+            const positions = bolt.geometry.getAttribute('position');
+            let minimumY = Infinity;
+            let maximumY = -Infinity;
+            for (let vertex = 0; vertex < positions.count; vertex += 1) {
+              const projected = new Vector3().fromBufferAttribute(positions, vertex)
+                .applyMatrix4(bolt.matrixWorld).project(camera);
+              expect(Math.abs(projected.x)).toBeLessThan(0.95);
+              expect(Math.abs(projected.y)).toBeLessThan(0.95);
+              expect(projected.z).toBeGreaterThan(-1);
+              expect(projected.z).toBeLessThan(1);
+              leftmost = Math.min(leftmost, projected.x);
+              rightmost = Math.max(rightmost, projected.x);
+              minimumY = Math.min(minimumY, projected.y);
+              maximumY = Math.max(maximumY, projected.y);
+            }
+            // At least one fifth of the screen height, including at the widest game FOV.
+            expect(maximumY - minimumY).toBeGreaterThan(0.4);
           }
+          weather.dispose();
         }
-        weather.dispose();
+        expect(leftmost).toBeLessThan(-0.7);
+        expect(rightmost).toBeGreaterThan(0.7);
       }
-    }
   });
 
   it('renders weather strikes, fades without rebuilding, and hides when weather changes', () => {
@@ -70,12 +83,12 @@ describe('lightning presentation', () => {
     expect(light.position.z).toBe(bolt.position.z);
     expect(light.intensity).toBeGreaterThan(0);
     const geometry = bolt.geometry;
-    weather.update(1.85, 0.5, new Vector3());
+    weather.update(1.45, 0.1, new Vector3());
+    expect(thunder).not.toHaveBeenCalled();
+    weather.update(1.85, 0.4, new Vector3());
     expect(bolt.visible).toBe(false);
     expect(bolt.geometry).toBe(geometry);
     expect(light.intensity).toBe(0);
-    expect(thunder).not.toHaveBeenCalled();
-    weather.update(2.05, 0.2, new Vector3());
     expect(thunder).toHaveBeenCalledOnce();
     weather.setWeather('calm');
     expect(bolt.visible).toBe(false);

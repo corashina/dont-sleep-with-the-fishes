@@ -42,6 +42,7 @@ const MIST_COUNT = 120;
 const IMPACT_COUNT = 192;
 const SPRAY_COUNT = 160;
 const LIGHTNING_BOLT_COUNT = 8;
+const LIGHTNING_BOLT_HEIGHT = 24;
 const LIGHTNING_PAIR_CHANCE = 0.16;
 const PARTICLE_VERTEX_SHADER = `
   attribute float opacity;
@@ -182,7 +183,8 @@ export class WeatherEffects {
   private readonly activeLightningBoltIndices = new Int8Array(2);
   private readonly lightningViewDirection = new Vector3(0, 0, -1);
   private lightningViewHeading = Math.PI;
-  private lightningViewSpread = Math.PI / 12;
+  private lightningViewWidthRatio = Math.tan(40 * Math.PI / 180) * 16 / 9;
+  private lightningHeightRatio = Math.tan(40 * Math.PI / 180) * 0.65;
   private profile = presentationWeatherProfile('calm');
   private stateValue: Readonly<WeatherEffectsState>;
   private lightningClock = 0;
@@ -210,7 +212,7 @@ export class WeatherEffects {
     this.spray = createPool('weather-spray', SPRAY_COUNT, 0xd0e5e3, 0.24, [1, 1], 0.24, random);
     this.lightningBolts = Object.freeze(
       Array.from({ length: LIGHTNING_BOLT_COUNT }, (_, index) => (
-        new LightningBolt(24, 0x71a9 + index * 7919)
+        new LightningBolt(LIGHTNING_BOLT_HEIGHT, 0x71a9 + index * 7919)
       )),
     );
 
@@ -262,8 +264,8 @@ export class WeatherEffects {
     camera.getWorldDirection(this.lightningViewDirection);
     this.lightningViewHeading = Math.atan2(this.lightningViewDirection.x, this.lightningViewDirection.z);
     const verticalHalfFov = camera.getEffectiveFOV() * Math.PI / 360;
-    // Leave space for branches at both edges, including narrow portrait views.
-    this.lightningViewSpread = Math.atan(Math.tan(verticalHalfFov) * camera.aspect) * 0.45;
+    this.lightningViewWidthRatio = Math.tan(verticalHalfFov) * camera.aspect;
+    this.lightningHeightRatio = Math.tan(verticalHalfFov) * 0.65;
   }
 
   update(time: number, delta: number, cameraPosition: Readonly<Vector3>): void {
@@ -456,7 +458,7 @@ export class WeatherEffects {
       this.lightningInterval = 1.4 + this.lightningRandom() * 1.6;
       const primary = this.lightningBolts[this.activeLightningBoltIndices[0]!]!;
       this.lightningLight.position.copy(primary.position);
-      this.lightningLight.position.y += 24 * primary.scale.y;
+      this.lightningLight.position.y += LIGHTNING_BOLT_HEIGHT * primary.scale.y;
       this.thunderRemaining = primary.position.length() / 343;
     }
     const flash = lightningFlashIntensity(this.lightningFlashAge, this.lightningRepeatDelay) * this.lightningStrength;
@@ -511,13 +513,27 @@ export class WeatherEffects {
 
   private randomizeLightningBolt(index: number): void {
     const bolt = this.lightningBolts[index]!;
-    const angle = this.lightningViewHeading + (this.lightningRandom() * 2 - 1) * this.lightningViewSpread;
-    const radius = 140 + this.lightningRandom() * 190;
+    const acrossView = this.lightningRandom();
+    const depth = 70 + this.lightningRandom() * 40;
     const heightOffset = -0.5;
-    const scale = 1 + this.lightningRandom() * 0.7;
-    bolt.position.set(Math.sin(angle) * radius, heightOffset, Math.cos(angle) * radius);
-    bolt.rotation.y = this.lightningRandom() * Math.PI * 2;
-    bolt.scale.set(1, scale, 1);
+    // Keep each strike prominent without clipping its top at narrow fields of view.
+    const scale = depth * this.lightningHeightRatio * (0.85 + this.lightningRandom() * 0.3)
+      / LIGHTNING_BOLT_HEIGHT;
+    const mirror = this.lightningRandom() < 0.5 ? -1 : 1;
+    const bounds = bolt.geometry.boundingBox!;
+    const minimumX = (mirror < 0 ? -bounds.max.x : bounds.min.x) * scale;
+    const maximumX = (mirror < 0 ? -bounds.min.x : bounds.max.x) * scale;
+    // Sample the full visible width, reserving space for this bolt's branches and glow.
+    const halfWidth = (depth - bounds.max.z * scale) * this.lightningViewWidthRatio * 0.88;
+    const left = -halfWidth - minimumX + 0.9;
+    const right = halfWidth - maximumX - 0.9;
+    const offset = left + acrossView * (right - left);
+    const sine = Math.sin(this.lightningViewHeading);
+    const cosine = Math.cos(this.lightningViewHeading);
+    bolt.position.set(sine * depth - cosine * offset, heightOffset, cosine * depth + sine * offset);
+    // Face the broad bends toward the view and preserve their proportions at every distance.
+    bolt.rotation.y = this.lightningViewHeading + Math.PI;
+    bolt.scale.set(mirror * scale, scale, scale);
   }
 
   private resetLightning(): void {
