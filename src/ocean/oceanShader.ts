@@ -1,5 +1,6 @@
 import { seaFogShader } from '../world/seaFogShader';
 import { MODULATED_WAVE_GLSL } from './waveModulation';
+import { WATER_EXCLUSION_UNIFORMS, WATER_CONTACT_FUNCTIONS, WATER_CONTACT_NORMAL } from './waterContactShader';
 import {
   Color,
   type IUniform,
@@ -63,6 +64,7 @@ export interface OceanShaderUniforms {
   uFogLightColor: IUniform<Color>;
   uLightDirection: IUniform<Vector3>;
   uExclusionCount: IUniform<number>;
+  uExclusionHullContacts: IUniform<number[]>;
   uExclusionWorldToLocal: IUniform<Matrix4[]>;
   uExclusionBounds: IUniform<Vector4[]>;
   uExclusionLowerBounds: IUniform<Vector4[]>;
@@ -101,6 +103,7 @@ export const OCEAN_SHADER_QUALITY = Object.freeze({
 }) satisfies Readonly<Record<WaterQuality, OceanShaderQuality>>;
 
 export const OCEAN_VERTEX_SHADER = `
+  ${WATER_EXCLUSION_UNIFORMS}
   uniform float uTime;
   uniform float uAmplitudeScale;
   uniform vec2 uOrigin;
@@ -116,8 +119,12 @@ export const OCEAN_VERTEX_SHADER = `
   varying float vViewDepth;
   varying vec2 vOceanPosition;
   varying vec3 vWorldPosition;
+  varying float vHullContact;
+  varying vec3 vUnclampedWorldPosition;
 
   ${MODULATED_WAVE_GLSL}
+
+  ${WATER_CONTACT_FUNCTIONS}
 
   void main() {
     vec3 displaced = position;
@@ -152,6 +159,8 @@ export const OCEAN_VERTEX_SHADER = `
     }
     displaced.y += height;
     vec4 worldPosition = modelMatrix * vec4(displaced, 1.0);
+    vUnclampedWorldPosition = worldPosition.xyz;
+    applyHullContact(worldPosition.xyz, vHullContact);
     vViewDepth = length(cameraPosition - worldPosition.xyz);
     vOceanPosition = worldXZ;
     vWorldPosition = worldPosition.xyz;
@@ -186,17 +195,12 @@ export const OCEAN_FRAGMENT_SHADER = `
   uniform vec3 uFogLightColor;
   ${seaFogShader}
   uniform vec3 uLightDirection;
-  uniform int uExclusionCount;
-  uniform mat4 uExclusionWorldToLocal[2];
-  uniform vec4 uExclusionBounds[2];
-  uniform vec4 uExclusionLowerBounds[2];
-  uniform vec2 uExclusionTaperStarts[2];
-  uniform vec2 uExclusionLowerTaperStarts[2];
-  uniform float uExclusionMinimumLocalYs[2];
-  uniform float uExclusionUpperLocalYs[2];
+  ${WATER_EXCLUSION_UNIFORMS}
   varying float vViewDepth;
   varying vec2 vOceanPosition;
   varying vec3 vWorldPosition;
+  varying float vHullContact;
+  varying vec3 vUnclampedWorldPosition;
 
   ${MODULATED_WAVE_GLSL}
 
@@ -285,6 +289,9 @@ export const OCEAN_FRAGMENT_SHADER = `
 
 
 
+  ${WATER_CONTACT_FUNCTIONS}
+
+  ${WATER_CONTACT_NORMAL}
   ${OCEAN_OPTICS_FUNCTIONS}
 
   void main() {
@@ -358,11 +365,9 @@ export const OCEAN_FRAGMENT_SHADER = `
     vec2 waveDerivative;
     sampleSurfaceWave(vOceanPosition, waveHeight, waveDerivative);
     float waveSlope = length(waveDerivative);
-    vec3 normal = normalize(vec3(
-      -waveDerivative.x - detailSlope.x,
-      1.0,
-      -waveDerivative.y - detailSlope.y
-    ));
+    vec3 baseNormal = vec3(-waveDerivative.x, 1.0, -waveDerivative.y);
+    vec3 normal = hullContactNormal(normalize(baseNormal)) * length(baseNormal);
+    normal = normalize(normal + vec3(-detailSlope.x, 0.0, -detailSlope.y));
     vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
     vec3 lightDirection = normalize(uLightDirection);
     float lightFacing = clamp(dot(normal, lightDirection), 0.0, 1.0);
@@ -502,6 +507,7 @@ export function createOceanShaderDefinition(quality: WaterQuality): Readonly<{
     uFogLightColor: { value: new Color() },
     uLightDirection: { value: new Vector3() },
     uExclusionCount: { value: 0 },
+    uExclusionHullContacts: { value: Array(MAX_OCEAN_EXCLUSIONS).fill(0) },
     uExclusionWorldToLocal: {
       value: Array.from(
         { length: MAX_OCEAN_EXCLUSIONS },

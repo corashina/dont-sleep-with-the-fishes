@@ -1,6 +1,6 @@
 import { describe,expect,it } from 'vitest';
 import { Box3,Matrix4,Mesh,Quaternion,Raycaster,Texture,Vector3 } from 'three';
-import { createLifeboat } from '../src/world/Lifeboat';
+import { createLifeboat, LIFEBOAT_GUNWALE_SURFACE_Y } from '../src/world/Lifeboat';
 import { LifeboatAssets } from '../src/world/LifeboatAssets';
 import { BOAT_SUPPLY_GROUP_IDS,boatSupplyTransform } from '../src/world/BoatStorage';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
@@ -12,6 +12,38 @@ function buildBoat() {
 }
 
 describe('lifeboat visual geometry', () => {
+  // Importance: 95/100. A water cut outside the timber reveals an open gap during large waves.
+  it('keeps the water cut inside the solid hull and caps it at the rim', () => {
+    const boat = buildBoat();
+    const exclusion = boat.waterExclusion;
+    expect(exclusion.heightProfile?.upperLocalY).toBe(LIFEBOAT_GUNWALE_SURFACE_Y);
+    const hull = boat.root.getObjectByName('lifeboat-hull-planks')!;
+    const profile = exclusion.longitudinalProfile;
+    const ray = new Raycaster();
+    for (const y of [-0.30, 0, 0.20, 0.30]) {
+      const t = (y - exclusion.minimumLocalY)
+        / (exclusion.heightProfile.upperLocalY - exclusion.minimumLocalY);
+      const halfWidth = exclusion.heightProfile.lowerHalfWidth
+        + (exclusion.halfWidth - exclusion.heightProfile.lowerHalfWidth) * t;
+      for (let z = -2.9; z <= 2.31; z += 0.1) {
+        let taper = 0;
+        if (z < profile.taperStartMinZ) taper = (profile.taperStartMinZ - z) / (profile.taperStartMinZ - profile.minZ);
+        if (z > profile.taperStartMaxZ) taper = (z - profile.taperStartMaxZ) / (profile.maxZ - profile.taperStartMaxZ);
+        const edge = halfWidth * Math.sqrt(Math.max(0, 1 - taper * taper));
+        ray.ray.origin.set(4, y, z);
+        ray.ray.direction.set(-1, 0, 0);
+        const outside = ray.intersectObject(hull, true)[0];
+        expect(outside, 'No hull at ' + y + ', ' + z).toBeDefined();
+        expect(edge, 'Water cut beyond hull at ' + y + ', ' + z).toBeLessThan(outside!.point.x);
+        ray.ray.origin.set(0, y, z);
+        ray.ray.direction.set(1, 0, 0);
+        const inside = ray.intersectObject(hull, true)[0];
+        expect(inside).toBeDefined();
+        expect(edge, 'Water inside hull at ' + y + ', ' + z).toBeGreaterThan(inside!.point.x);
+      }
+    }
+  });
+
   it('keeps the front bench supports clear of the stored items', () => {
     const boat = buildBoat();
     const bench = boat.root.getObjectByName('lifeboat-display-bench')!;

@@ -1,3 +1,4 @@
+import { LIFEBOAT_GUNWALE_SURFACE_Y } from '../src/world/Lifeboat';
 // Importance: 10/10 (scaled from 5/5). Protects world integration and resource ownership.
 import { describe,expect,it,vi } from 'vitest';
 import {
@@ -332,6 +333,11 @@ describe('world builders', () => {
     try {
       world.update(1, 1 / 60, getSinkingState(30, 120), new Vector3(), false);
       const firstList = exclusions[0]!;
+      // Importance: 95/100. Both game modes must cap the water cut at the hull rim.
+      expect(firstList[1]!.upperLocalY).toBe(LIFEBOAT_GUNWALE_SURFACE_Y);
+      expect(firstList[0]!.keepSurfaceBelowRim).toBe(false);
+      expect(firstList[1]!.keepSurfaceBelowRim).toBe(true);
+      expect(internals.ocean.material.uniforms.uExclusionHullContacts!.value).toEqual([0, 1]);
       const firstShipMatrix = firstList[0]!.worldToLocal.clone();
       const firstLifeboatMatrix = firstList[1]!.worldToLocal.clone();
 

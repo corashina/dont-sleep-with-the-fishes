@@ -1,3 +1,4 @@
+import { LIFEBOAT_GUNWALE_SURFACE_Y } from '../src/world/Lifeboat';
 // Importance: 8/10 (scaled from 4/5). Protects survival world integration and cleanup.
 import { describe,expect,it,vi } from 'vitest';
 import {
@@ -1679,6 +1680,10 @@ describe('BoatWorld helpers', () => {
     expect(exclusions).toHaveLength(2);
     expect(exclusions[1]).toBe(exclusions[0]);
     expect(exclusions[1]![0]).toBe(exclusions[0]![0]);
+    // Importance: 95/100. Both game modes must cap the water cut at the hull rim.
+    expect(exclusions[0]![0]!.upperLocalY).toBe(LIFEBOAT_GUNWALE_SURFACE_Y);
+    expect(exclusions[0]![0]!.keepSurfaceBelowRim).toBe(true);
+    expect(ocean.material.uniforms.uExclusionHullContacts!.value).toEqual([1, 0]);
     world.dispose();
     propModels.dispose();
   });

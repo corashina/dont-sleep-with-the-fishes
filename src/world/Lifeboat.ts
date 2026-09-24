@@ -16,7 +16,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { createLifeboatRailGeometry, mapLifeboatWoodGrain } from './LifeboatGeometry';
 import { mergeLifeboatFastenings } from './LifeboatFastenings';
 import type { LifeboatAssets } from './LifeboatAssets';
-import type { WaterExclusionLongitudinalProfile } from '../ocean/WaterExclusion';
+import type { WaterExclusionHeightProfile, WaterExclusionLongitudinalProfile } from '../ocean/WaterExclusion';
 import {
   createLifeboatMaterials,
   type LifeboatMaterials,
@@ -33,6 +33,7 @@ export interface LifeboatBuild {
     readonly halfLength: number;
     readonly taperStart: number;
     readonly minimumLocalY: number;
+    readonly heightProfile: WaterExclusionHeightProfile;
     readonly longitudinalProfile: WaterExclusionLongitudinalProfile;
   };
 }
@@ -486,15 +487,22 @@ export function createLifeboat(assets: LifeboatAssets): LifeboatBuild {
       halfLength: 2.74,
       taperStart: 1.05,
       minimumLocalY: FLOOR_HEIGHT,
+      heightProfile: {
+        lowerHalfWidth: 1.58,
+        lowerHalfLength: 2.74,
+        lowerTaperStart: 1.05,
+        upperLocalY: LIFEBOAT_GUNWALE_SURFACE_Y,
+        keepSurfaceBelowRim: true,
+      },
       longitudinalProfile: {
         minZ: -3.04,
         maxZ: 2.44,
         taperStartMinZ: -1.05,
-        taperStartMaxZ: 0.45,
+        taperStartMaxZ: 0.20,
         lowerMinZ: -3.04,
         lowerMaxZ: 2.44,
         lowerTaperStartMinZ: -1.05,
-        lowerTaperStartMaxZ: 0.45,
+        lowerTaperStartMaxZ: 0.20,
       },
     },
   };
