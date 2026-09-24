@@ -291,12 +291,17 @@ export class OceanRenderer {
     material: Material,
   ): void => {
     if (
-      this.disposed || this.preparing || !this.capture
+      this.disposed || this.preparing
       || material !== this.material || scene.overrideMaterial !== null
       || (this.preparedVersion === this.updateVersion && this.preparedCamera === camera)
     ) return;
     this.preparing = true;
     try {
+      this.material.uniformsNeedUpdate = true;
+      if (!this.capture) {
+        this.preparedVersion = this.updateVersion; this.preparedCamera = camera;
+        return;
+      }
       this.capture.update(renderer, scene, camera, this.mesh);
       this.uniforms.uWaterReflectionMatrix.value.copy(this.capture.reflectionMatrix);
       this.uniforms.uWaterInverseProjection.value.copy(this.capture.inverseProjection);

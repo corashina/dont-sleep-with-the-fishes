@@ -1,6 +1,10 @@
+import { OCEAN_SURFACE_DETAIL_FUNCTIONS } from './oceanSurfaceDetail';
+import { OCEAN_SURFACE_SAMPLING_GLSL } from './oceanSurfaceSampling';
+import { OCEAN_HULL_PROFILE_GLSL } from './oceanHullProfile';
 import { seaFogShader } from '../world/seaFogShader';
 import { MODULATED_WAVE_GLSL } from './waveModulation';
 import { WATER_EXCLUSION_UNIFORMS, WATER_CONTACT_FUNCTIONS, WATER_CONTACT_NORMAL } from './waterContactShader';
+import { OCEAN_FOAM_FUNCTIONS } from './oceanFoam';
 import {
   Color,
   type IUniform,
@@ -121,41 +125,15 @@ export const OCEAN_VERTEX_SHADER = `
   varying vec3 vUnclampedWorldPosition;
 
   ${MODULATED_WAVE_GLSL}
+  ${OCEAN_SURFACE_SAMPLING_GLSL}
 
   ${WATER_CONTACT_FUNCTIONS}
 
   void main() {
     vec3 displaced = position;
     vec2 worldXZ = position.xz + uOrigin;
-    vec4 baseWorldPosition = modelMatrix * vec4(position, 1.0);
-    float geometryLod = smoothstep(
-      55.0,
-      140.0,
-      length(cameraPosition - baseWorldPosition.xyz)
-    );
-    float height = 0.0;
-    for (int i = 0; i < 4; i++) {
-      float wavelength = uParameters[i].y;
-      float resolvedGeometryWave = smoothstep(4.0, 11.0, wavelength);
-      float geometryWeight = mix(1.0, resolvedGeometryWave, geometryLod);
-      OceanWaveSample wave = sampleOceanWave(i, worldXZ);
-      height += wave.height * geometryWeight;
-      displaced.xz += wave.displacement * geometryWeight;
-    }
-    if (uVortexStrength != 0.0) {
-      vec2 vortexDelta = worldXZ - uVortexCenter;
-      float vortexDistance = length(vortexDelta);
-      float vortexRadius = max(0.001, uVortexRadius);
-      float envelopeT = clamp(1.0 - vortexDistance / vortexRadius, 0.0, 1.0);
-      float envelope = envelopeT * envelopeT * (3.0 - 2.0 * envelopeT) * uVortexStrength;
-      float inverseDistance = vortexDistance > 0.0001 ? 1.0 / vortexDistance : 0.0;
-      vec2 radial = vortexDelta * inverseDistance;
-      float swirl = 0.78 + 0.22 * sin(uVortexPhase + vortexDistance * 0.65);
-      height -= uVortexDepression * envelope;
-      displaced.x += -radial.y * uVortexTangentStrength * envelope * swirl;
-      displaced.z += radial.x * uVortexTangentStrength * envelope * swirl;
-    }
-    displaced.y += height;
+    vec3 surface = oceanGeometryPosition(worldXZ, cameraPosition);
+    displaced += surface - vec3(worldXZ.x, 0.0, worldXZ.y);
     vec4 worldPosition = modelMatrix * vec4(displaced, 1.0);
     vUnclampedWorldPosition = worldPosition.xyz;
     applyHullContact(worldPosition.xyz, vHullContact);
@@ -231,15 +209,22 @@ export const OCEAN_FRAGMENT_SHADER = `
   void sampleSurfaceWave(
     vec2 worldPosition,
     out float height,
-    out vec2 derivative
+    out vec2 derivative,
+    out float compression
   ) {
     height = 0.0;
     derivative = vec2(0.0);
+    vec2 tangentX = vec2(1.0, 0.0);
+    vec2 tangentZ = vec2(0.0, 1.0);
     for (int i = 0; i < 4; i++) {
       OceanWaveSample wave = sampleOceanWave(i, worldPosition);
       height += wave.height;
       derivative += wave.slope;
+      vec2 direction = normalize(uDirections[i]);
+      tangentX += direction * wave.horizontalSlope.x;
+      tangentZ += direction * wave.horizontalSlope.y;
     }
+    compression = 1.0 - (tangentX.x * tangentZ.y - tangentX.y * tangentZ.x);
     applyVortexDepression(worldPosition, height, derivative);
   }
 
@@ -290,6 +275,9 @@ export const OCEAN_FRAGMENT_SHADER = `
   ${WATER_CONTACT_FUNCTIONS}
 
   ${WATER_CONTACT_NORMAL}
+  ${OCEAN_HULL_PROFILE_GLSL}
+  ${OCEAN_FOAM_FUNCTIONS}
+  ${OCEAN_SURFACE_DETAIL_FUNCTIONS}
   ${OCEAN_OPTICS_FUNCTIONS}
 
   void main() {
@@ -307,50 +295,13 @@ export const OCEAN_FRAGMENT_SHADER = `
         vec3 exclusionLocal = (uExclusionWorldToLocal[i] * vec4(vWorldPosition, 1.0)).xyz;
         vec4 exclusionBounds = uExclusionBounds[i];
         float minimumLocalY = uExclusionMinimumLocalYs[i];
-        float heightSpan = max(uExclusionUpperLocalYs[i] - minimumLocalY, 0.0001);
-        float profileProgress = clamp(
-          (exclusionLocal.y - minimumLocalY) / heightSpan,
-          0.0,
-          1.0
-        );
-        vec4 lowerBounds = uExclusionLowerBounds[i];
-        vec4 localBounds = mix(lowerBounds, exclusionBounds, profileProgress);
-        vec2 localTaperStarts = mix(
-          uExclusionLowerTaperStarts[i],
-          uExclusionTaperStarts[i],
-          profileProgress
-        );
-        float localHalfWidth = (localBounds.y - localBounds.x) * 0.5;
-        float localCenterX = (localBounds.x + localBounds.y) * 0.5;
-        float taperProgress = 0.0;
-        if (exclusionLocal.z < localTaperStarts.x) {
-          float taperSpan = max(localTaperStarts.x - localBounds.z, 0.0);
-          if (taperSpan > 0.0) {
-            taperProgress = clamp(
-              (localTaperStarts.x - exclusionLocal.z) / taperSpan,
-              0.0,
-              1.0
-            );
-          }
-        } else if (exclusionLocal.z > localTaperStarts.y) {
-          float taperSpan = max(localBounds.w - localTaperStarts.y, 0.0);
-          if (taperSpan > 0.0) {
-            taperProgress = clamp(
-              (exclusionLocal.z - localTaperStarts.y) / taperSpan,
-              0.0,
-              1.0
-            );
-          }
-        }
-        localHalfWidth = localHalfWidth
-          * sqrt(max(0.0, 1.0 - taperProgress * taperProgress));
-        if (
-          exclusionLocal.y >= uExclusionMinimumLocalYs[i]
-          && exclusionLocal.y <= uExclusionUpperLocalYs[i]
-          && exclusionLocal.z >= localBounds.z
-          && exclusionLocal.z <= localBounds.w
-          && abs(exclusionLocal.x - localCenterX) <= localHalfWidth
-        ) {
+        vec4 localBounds;
+        vec2 localTaperStarts;
+        oceanHullProfile(exclusionLocal, uExclusionLowerBounds[i], exclusionBounds,
+          uExclusionLowerTaperStarts[i], uExclusionTaperStarts[i], minimumLocalY,
+          uExclusionUpperLocalYs[i], localBounds, localTaperStarts);
+        if (oceanInsideHull(exclusionLocal, localBounds, localTaperStarts,
+          minimumLocalY, uExclusionUpperLocalYs[i])) {
           discard;
         }
       }
@@ -361,11 +312,13 @@ export const OCEAN_FRAGMENT_SHADER = `
     vec2 detailSlope = warpedDetailSlope(vWorldPosition.xz);
     float waveHeight;
     vec2 waveDerivative;
-    sampleSurfaceWave(vOceanPosition, waveHeight, waveDerivative);
+    float waveCompression;
+    sampleSurfaceWave(vOceanPosition, waveHeight, waveDerivative, waveCompression);
     float waveSlope = length(waveDerivative);
     vec3 baseNormal = vec3(-waveDerivative.x, 1.0, -waveDerivative.y);
     vec3 normal = hullContactNormal(normalize(baseNormal)) * length(baseNormal);
     normal = normalize(normal + vec3(-detailSlope.x, 0.0, -detailSlope.y));
+    if (oceanEffectVisibility.x > 0.5) normal = surfaceRippleNormal(normal);
     vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
     vec3 lightDirection = normalize(uLightDirection);
     float lightFacing = clamp(dot(normal, lightDirection), 0.0, 1.0);
@@ -398,6 +351,7 @@ export const OCEAN_FRAGMENT_SHADER = `
     float sunSheen = pow(specularFacing, 38.0) * mix(0.10, 0.24, windAlignment);
 
     color += uSunColor * (sunCore + sunSheen) * uDirectLightStrength;
+    color = applyOceanSurface(color, normal);
 
     #endif
 
