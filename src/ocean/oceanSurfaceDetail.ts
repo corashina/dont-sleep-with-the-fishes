@@ -49,15 +49,15 @@ export const OCEAN_SURFACE_DETAIL_FUNCTIONS = /* glsl */ `
     opacity *= mix(0.23, 1.55, ridge) * mix(0.55, 1.0, patches);
     opacity *= 1.0 - smoothstep(45.0, 150.0, vViewDepth);
     float daylight = clamp(uDirectLightStrength, 0.0, 1.0);
-    float facing = max(dot(normal, normalize(uLightDirection)), 0.0);
+
     vec3 body = water * vec3(0.16, 0.34, 0.48) / (vec3(1.0) + water * 1.6);
     body += vec3(0.004, 0.012, 0.020) * daylight;
-    vec3 streakColor = uSkyColor * 0.30 + vec3(0.62, 0.77, 0.84) * daylight * (0.75 + facing * 0.25);
+    vec3 streakColor = oceanFoamColor(normal);
     return mix(body, streakColor, clamp(opacity, 0.0, 0.85));
   }
 
   vec3 applyOceanSurface(vec3 water, vec3 normal) {
-    if (oceanEffectVisibility.x > 0.5) water = shadeSurfaceDetail(water, normal);
-    return applyOceanFoam(water, normal);
+    if (oceanSurfaceVisibility > 0.5) return shadeSurfaceDetail(water, normal);
+    return water;
   }
 `;
