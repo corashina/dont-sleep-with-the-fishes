@@ -46,8 +46,9 @@ They verify rendering and contact behavior, not total game frame rate.
 `src/ocean/oceanFoam.ts` contains the shared foam shading.
 Crest foam uses existing wave compression and height.
 Hull foam uses each existing exclusion profile and transform.
-Fine pores and irregular patches drift across the water.
-High quality adds cellular pores. Low quality uses fewer texture calculations.
+Broad foam patches have dense centers, translucent margins, and irregular pores.
+Shaded pore rims and folds give the film depth as it drifts.
+High quality adds two sizes of cellular pores. Low quality uses fewer texture calculations.
 Subpixel detail averages out. Clear and distant water skip detailed foam shading.
 Foam receives light before the existing blood and fog effects.
 There are no new particles, textures, render targets, or per-frame CPU allocations.
