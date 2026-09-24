@@ -21,8 +21,9 @@ export const OCEAN_FOAM_FUNCTIONS = /* glsl */ `
       float minY = uExclusionMinimumLocalYs[i], maxY = uExclusionUpperLocalYs[i];
       oceanHullProfile(local, uExclusionLowerBounds[i], uExclusionBounds[i],
         uExclusionLowerTaperStarts[i], uExclusionTaperStarts[i], minY, maxY, bounds, taper);
-      // Exclusion follows the interior. Move foam outside the timber wall.
-      float distanceToHull = foamHullDistance(local.xz, bounds, taper) - 0.14;
+      float hullDistance = foamHullDistance(local.xz, bounds, taper);
+      // Extend the outer edge past the timber, without shifting the inner edge.
+      float distanceToHull = hullDistance - 0.14;
       float aa = max(fwidth(distanceToHull), 0.008);
       vec2 drift = local.xz * 2.0 + vec2(uTime * 0.24, -uTime * 0.16);
       float shape = foamNoise(drift);
@@ -39,8 +40,8 @@ export const OCEAN_FOAM_FUNCTIONS = /* glsl */ `
       outer *= smoothstep(0.53, 0.68, shape) * smoothstep(0.28, 0.5, fine);
       float contact = smoothstep(minY - 0.22, minY - 0.06, local.y)
         * (1.0 - smoothstep(maxY - 0.025, maxY + 0.035, local.y));
-      float outside = smoothstep(-aa, aa, distanceToHull);
-      foam = max(foam, max(ribbon, outer) * contact * outside);
+      // The hull depth and water exclusion hide the inner film. Do not cut a second hole.
+      foam = max(foam, max(ribbon, outer) * contact);
     }
     float daylight = clamp(uDirectLightStrength, 0.0, 1.0);
     float lightFacing = max(dot(normal, normalize(uLightDirection)), 0.0);
