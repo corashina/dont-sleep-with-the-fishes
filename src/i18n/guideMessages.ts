@@ -19,9 +19,9 @@ export const guideText = defineMessages({
   },
   collectTitle: { en: 'Gather', pl: 'Zbieraj', 'es-AR': 'Recolectá' },
   collectBody: {
-    en: "Gather supplies before Dorothy sinks in 60 seconds. Move with W, A, S, D; look with the mouse. Hold Shift to sprint and press Space to jump. Aim at supplies and left-click to pick them up. Items weigh 1–3 units; the three carry circles show your 3-unit limit. Aim at the deck outside the marked storage area and left-click to drop your last pickup.",
-    pl: "Zbierz zapasy, zanim Dorothy zatonie za 60 sekund. Poruszaj się klawiszami W, A, S, D; rozglądaj się myszą. Przytrzymaj Shift, aby biec, i naciśnij Spację, aby skoczyć. Wyceluj w zapasy i kliknij lewym przyciskiem, aby je podnieść. Przedmioty ważą 1–3 jednostki; trzy pola udźwigu pokazują limit 3 jednostek. Wyceluj w pokład poza oznaczonym miejscem odkładania zapasów i kliknij lewym przyciskiem, aby upuścić ostatni przedmiot.",
-    'es-AR': "Juntá suministros antes de que el Dorothy se hunda en 60 segundos. Movete con W, A, S, D; mirá con el mouse. Mantené Shift para correr y pulsá Espacio para saltar. Apuntá a los suministros y hacé clic izquierdo para recogerlos. Los objetos pesan 1–3 unidades; los tres círculos muestran tu límite de 3 unidades. Apuntá a la cubierta fuera de la zona marcada y hacé clic izquierdo para soltar el último objeto.",
+    en: "You have 60 seconds to gather supplies. Move with WASD, look with the mouse, hold Shift to sprint, and press Space to jump. Aim and left-click to pick up an item. You can carry three weight units. Aim at the deck and click to drop your last pickup.",
+    pl: "Masz 60 sekund na zebranie zapasów. Poruszaj się klawiszami WASD i rozglądaj myszą. Przytrzymaj Shift, aby biec, i naciśnij Spację, aby skoczyć. Wyceluj w przedmiot i kliknij lewym przyciskiem, aby go podnieść. Możesz unieść trzy jednostki ciężaru. Wyceluj w pokład i kliknij, aby upuścić ostatni podniesiony przedmiot.",
+    'es-AR': "Tenés 60 segundos para juntar suministros. Movete con WASD y mirá con el mouse. Mantené Shift para correr y pulsá Espacio para saltar. Apuntá y hacé clic izquierdo para recoger un objeto. Podés cargar tres unidades de peso. Apuntá a la cubierta y hacé clic para soltar el último objeto que recogiste.",
   },
   collectAlt: {
     en: 'Supplies on Dorothy’s deck with all three carry circles filled.',
@@ -30,9 +30,9 @@ export const guideText = defineMessages({
   },
   evacuateTitle: { en: 'Escape', pl: 'Uciekaj', 'es-AR': 'Escapá' },
   evacuateBody: {
-    en: "Approach the lifeboat and aim at it or the marked deck area. Left-click to store everything you carry. Storage has no limit; dropped items elsewhere are not stored. Make more trips while time remains. To escape, stand in the marked evacuation area beside the lifeboat when the timer reaches zero. Evacuation is automatic. You cannot leave early. Only stored supplies enter survival.",
-    pl: "Podejdź do szalupy i wyceluj w nią lub oznaczone miejsce na pokładzie. Kliknij lewym przyciskiem, aby odłożyć wszystkie niesione zapasy. Magazyn nie ma limitu; przedmioty upuszczone gdzie indziej nie są zapisane. Wracaj po zapasy, dopóki masz czas. Aby uciec, stój w oznaczonym miejscu ewakuacji przy szalupie, gdy licznik osiągnie zero. Ewakuacja nastąpi automatycznie. Nie możesz odpłynąć wcześniej. Do przetrwania zabierzesz tylko odłożone zapasy.",
-    'es-AR': "Acercate al bote y apuntá a él o a la zona marcada. Hacé clic izquierdo para guardar toda tu carga. No hay límite de almacenamiento; los objetos soltados en otro lugar no se guardan. Hacé más viajes mientras tengas tiempo. Para escapar, quedate en la zona de evacuación marcada junto al bote cuando el contador llegue a cero. La evacuación es automática. No podés irte antes. Solo los suministros guardados pasan a supervivencia.",
+    en: "Aim at the lifeboat or its marked storage area and click to store your load. Make more trips while time remains. Stand on the footprints beside the lifeboat when the timer reaches zero to escape. Only stored supplies come with you.",
+    pl: "Wyceluj w szalupę lub oznaczone miejsce odkładania zapasów i kliknij, aby odłożyć cały ładunek. Wracaj po kolejne zapasy, dopóki masz czas. Aby uciec, stój na śladach stóp przy szalupie, gdy licznik osiągnie zero. Zabierzesz ze sobą tylko odłożone zapasy.",
+    'es-AR': "Apuntá al bote o a su zona marcada de almacenamiento y hacé clic para guardar toda tu carga. Hacé más viajes mientras tengas tiempo. Para escapar, quedate sobre las huellas junto al bote cuando el contador llegue a cero. Solo te llevás los suministros guardados.",
   },
   evacuateAlt: {
     en: 'The lifeboat beside Dorothy and the marked deck storage area.',
@@ -45,9 +45,9 @@ export const guideText = defineMessages({
     'es-AR': "Sobrevivir",
   },
   needsBody: {
-    en: "Keep Health and Hull above zero to survive. Hover the meters for exact values. Food measures fullness, not stored portions. Select food to consume a portion and restore 18–24 Food, capped at 100. A medical kit restores Health to 100. Neither costs energy. Food falls at dawn. If Food remains above 30 after this decrease, recover up to 5 Health. Health cannot exceed 100. Hunger reduces restored energy; an empty Food meter also damages Health. Dawn normally restores ⚡3; unused energy does not carry over. The number above ⚡ shows the amount. Consume an Energy Bar when below full to restore ⚡3.",
-    pl: "Utrzymuj zdrowie i kadłub powyżej zera, aby przetrwać. Najedź na wskaźniki, aby sprawdzić wartości. Jedzenie oznacza sytość, nie zapas porcji. Wybierz jedzenie, aby zużyć porcję i odzyskać 18–24 punkty jedzenia, do limitu 100. Apteczka przywraca zdrowie do 100. Obie czynności nie zużywają energii. Jedzenie spada o świcie. Jeśli po spadku przekracza 30, odzyskujesz do 5 punktów zdrowia. Zdrowie nie może przekroczyć 100. Głód ogranicza odzyskaną energię; pusty wskaźnik jedzenia dodatkowo odbiera zdrowie. Świt zwykle przywraca ⚡3; niewykorzystana energia przepada. Liczba nad ⚡ oznacza jej ilość. Zjedz baton energetyczny, gdy brakuje energii, aby przywrócić ⚡3.",
-    'es-AR': "Mantené la Salud y el Casco por encima de cero para sobrevivir. Pasá el cursor sobre los indicadores para ver sus valores. La Comida mide saciedad, no porciones guardadas. Elegí comida para consumir una porción y recuperar 18–24 de Comida, hasta un máximo de 100. Un botiquín restaura la Salud a 100. Ninguna acción gasta energía. La Comida baja al amanecer. Si queda por encima de 30 después de bajar, recuperás hasta 5 de Salud. La Salud no puede superar 100. El hambre reduce la energía recuperada; un indicador de Comida vacío también daña la Salud. El amanecer normalmente restaura ⚡3; la energía sin usar se pierde. El número sobre ⚡ indica la cantidad. Consumí una barra energética cuando te falte energía para restaurar ⚡3.",
+    en: "Keep Health and Hull above zero. The Food meter shows fullness; cans show stored portions. Eat before night: hunger reduces the energy you regain at dawn, and starvation damages Health. Eating and using a medical kit cost no energy. Start each day with up to ⚡3. You lose unused energy at dawn.",
+    pl: "Utrzymuj zdrowie i kadłub powyżej zera. Wskaźnik jedzenia pokazuje sytość, a puszki oznaczają zapas porcji. Jedz przed nocą: głód ogranicza energię odzyskaną o świcie, a wygłodzenie odbiera zdrowie. Jedzenie i użycie apteczki nie kosztują energii. O świcie odzyskujesz do ⚡3. Niewykorzystaną energię tracisz o świcie.",
+    'es-AR': "Mantené la Salud y el Casco por encima de cero. El indicador de Comida muestra saciedad; las latas muestran las porciones guardadas. Comé antes de la noche: el hambre reduce la energía que recuperás al amanecer, y la inanición daña la Salud. Comer y usar un botiquín no gastan energía. Empezás cada día con hasta ⚡3. Al amanecer perdés la energía que no usaste.",
   },
   needsAlt: {
     en: 'The lifeboat in daylight with supplies and the four condition meters.',
@@ -60,9 +60,9 @@ export const guideText = defineMessages({
     'es-AR': "Pesca",
   },
   catchBody: {
-    en: "Select the bow’s fishing rod once during the day. Click the water to cast for ⚡1. Entering or leaving the fishing view costs no energy. When bubbles appear around the bobber, click them within 6 seconds to catch fish, supplies, or junk. Fish become stored food; eat them separately. Bait improves fish catches automatically and is consumed only when you land a fish. Close the result to cast again. With no energy left, closing the result returns the camera to the boat.",
-    pl: "Za dnia wybierz wędkę na dziobie jednym kliknięciem. Kliknij wodę, aby zarzucić żyłkę za ⚡1. Wejście do widoku łowienia i wyjście z niego nie zużywa energii. Gdy wokół spławika pojawią się bąbelki, kliknij je w ciągu 6 sekund, aby wyciągnąć rybę, zapasy albo śmieci. Ryby trafiają do zapasu jedzenia; zjedz je osobno. Przynęta automatycznie poprawia połów i zużywa się tylko po wyciągnięciu ryby. Zamknij wynik, aby zarzucić ponownie. Gdy zabraknie energii, zamknięcie wyniku przywróci widok szalupy.",
-    'es-AR': "Elegí la caña de la proa una vez durante el día. Hacé clic en el agua para lanzar por ⚡1. Entrar o salir de la vista de pesca no gasta energía. Cuando aparezcan burbujas alrededor de la boya, hacé clic dentro de 6 segundos para sacar peces, suministros o basura. Los peces se guardan como comida; comelos aparte. La carnada mejora las capturas automáticamente y solo se consume al sacar un pez. Cerrá el resultado para volver a lanzar. Si no queda energía, cerrar el resultado devuelve la cámara al bote.",
+    en: "Select the rod, then click the water to cast for ⚡1. Click the bubbles around the bobber within six seconds of a bite. You must eat caught fish from your supplies. You use bait without selecting it. Close the result to cast again.",
+    pl: "Wybierz wędkę i kliknij wodę, aby zarzucić żyłkę za ⚡1. Kliknij bąbelki wokół spławika w ciągu sześciu sekund od brania. Złowione ryby zjedz z zapasów. Używasz przynęty bez jej wybierania. Zamknij wynik połowu, aby zarzucić ponownie.",
+    'es-AR': "Elegí la caña y hacé clic en el agua para lanzar por ⚡1. Hacé clic en las burbujas alrededor de la boya dentro de los seis segundos de la picada. Comé los peces que pescaste desde tus suministros. Usás carnada sin seleccionarla. Cerrá el resultado para volver a lanzar.",
   },
   catchAlt: {
     en: 'Bubbles around the fishing bobber mark the place to click during a bite.',
@@ -75,9 +75,9 @@ export const guideText = defineMessages({
     'es-AR': "Bote",
   },
   hullRepairBody: {
-    en: "The sea and events damage Hull. Select the toolbox during the day to repair it. Repairs automatically spend ⚡1–⚡3, restoring up to 33 Hull per ⚡1, capped at 100. Check the cost; you cannot choose a smaller repair. The toolbox is reusable and needs no supplies. To fix broken equipment, select duct tape and choose an item. Each repair consumes one tape and costs no energy. Lost or consumed items cannot be repaired.",
-    pl: "Morze i zdarzenia uszkadzają kadłub. Za dnia wybierz skrzynkę z narzędziami, aby go naprawić. Naprawa automatycznie zużywa ⚡1–⚡3. Każde ⚡1 przywraca do 33 punktów kadłuba, maksymalnie do 100. Sprawdź koszt; nie możesz wybrać mniejszej naprawy. Skrzynka jest wielokrotnego użytku i nie wymaga zapasów. Aby naprawić sprzęt, wybierz taśmę klejącą i przedmiot. Naprawa zużywa jedną taśmę i nie kosztuje energii. Nie naprawisz zgubionych ani zużytych przedmiotów.",
-    'es-AR': "El mar y los eventos dañan el Casco. Elegí la caja de herramientas durante el día para repararlo. Las reparaciones gastan automáticamente ⚡1–⚡3 y restauran hasta 33 de Casco por ⚡1, con un máximo de 100. Revisá el costo; no podés elegir una reparación menor. La caja es reutilizable y no necesita suministros. Para reparar equipo roto, elegí cinta adhesiva y un objeto. Cada reparación consume una cinta y no gasta energía. Los objetos perdidos o consumidos no se pueden reparar.",
+    en: "Repair Hull with the toolbox. A repair can spend up to ⚡3, so check its cost before clicking. You need no repair supplies. Use duct tape to fix broken equipment without spending energy; each repair consumes one tape. Between encounters, take time to plan.",
+    pl: "Napraw kadłub za pomocą skrzynki z narzędziami. Naprawa może zużyć do ⚡3, więc sprawdź koszt przed kliknięciem. Nie potrzebujesz do niej zapasów. Użyj taśmy klejącej, aby naprawić uszkodzony sprzęt bez wydawania energii. Każda naprawa sprzętu zużywa jedną taśmę. Między zdarzeniami masz czas na planowanie.",
+    'es-AR': "Repará el Casco con la caja de herramientas. Una reparación puede gastar hasta ⚡3, así que revisá el costo antes de hacer clic. No necesitás suministros para reparar el casco. Usá cinta adhesiva para reparar equipo roto sin gastar energía; cada reparación consume una cinta. Entre encuentros, tomate tiempo para planear.",
   },
   hullRepairAlt: {
     en: 'The toolbox action shows the hull repair and its energy cost.',
@@ -90,9 +90,9 @@ export const guideText = defineMessages({
     'es-AR': "Océano",
   },
   driftingBody: {
-    en: "Select drifting supplies before night: ordinary supplies cost ⚡1 to collect; chests cost ⚡1. Debris uses the same collection rules. Cargo can contain food and bait, common supplies, and at most one valuable item. Open each recovered chest aboard once for a reward at a cost of ⚡3; leaving them closed for several nights risks an attack. Select usable scuba gear to dive for ⚡3. Dives can yield equipment, 1–3 food, or 1–3 bait. Three-unit finds are extremely rare. You risk losing 15–45 Health even with a reward. Overcast weather worsens the odds, and squalls block diving.",
-    pl: "Wybierz dryfujące zapasy przed nocą: zebranie zwykłych zapasów kosztuje ⚡1, a skrzyni ⚡1. Szczątki zbierasz na tych samych zasadach. Ładunek może zawierać jedzenie i przynętę, zwykłe zapasy oraz najwyżej jeden cenny przedmiot. Każdą odzyskaną skrzynię otworzysz raz w szalupie, aby zdobyć nagrodę za ⚡3. Zamknięta przez kilka nocy skrzynia grozi atakiem. Wybierz sprawny sprzęt do nurkowania, aby zanurkować za ⚡3. Możesz znaleźć sprzęt, 1–3 porcje jedzenia lub 1–3 przynęty. Znaleziska po trzy sztuki są niezwykle rzadkie. Ryzykujesz utratę 15–45 punktów zdrowia, nawet ze zdobyczą. Zachmurzenie pogarsza szanse, a szkwał blokuje nurkowanie.",
-    'es-AR': "Elegí suministros a la deriva antes de la noche: recoger suministros comunes cuesta ⚡1; los cofres cuestan ⚡1. Los restos se recogen igual. La carga puede contener comida y carnada, suministros comunes y como máximo un objeto valioso. Abrí cada cofre recuperado una vez a bordo para obtener una recompensa por ⚡3; dejarlos cerrados varias noches puede provocar un ataque. Elegí equipo de buceo utilizable para bucear por ⚡3. Podés encontrar equipo, 1–3 porciones de comida o 1–3 unidades de carnada. Encontrar tres unidades es extremadamente raro. Podés perder 15–45 de Salud incluso con una recompensa. El cielo cubierto empeora las probabilidades y las tormentas fuertes impiden bucear.",
+    en: "Collect drifting supplies before night. Retrieving supplies or a chest costs ⚡1. Opening a recovered chest costs ⚡3; keeping it closed for several nights risks an attack. Diving costs ⚡3 and can injure you even when you find supplies. Squalls prevent diving.",
+    pl: "Zbierz dryfujące zapasy przed nocą. Wyłowienie zapasów lub skrzyni kosztuje ⚡1. Otwarcie odzyskanej skrzyni kosztuje ⚡3. Jeśli pozostawisz ją zamkniętą przez kilka nocy, ryzykujesz atak. Nurkowanie kosztuje ⚡3 i grozi obrażeniami, nawet gdy znajdziesz zapasy. Podczas szkwału nie możesz nurkować.",
+    'es-AR': "Recogé los suministros a la deriva antes de la noche. Recuperar suministros o un cofre cuesta ⚡1. Abrir un cofre recuperado cuesta ⚡3; dejarlo cerrado varias noches puede provocar un ataque. Bucear cuesta ⚡3 y puede causarte heridas incluso si encontrás suministros. No podés bucear durante una tormenta fuerte.",
   },
   driftingAlt: {
     en: 'A drifting barrel with choices to retrieve it, send Carlitos, or let it drift.',
@@ -105,9 +105,9 @@ export const guideText = defineMessages({
     'es-AR': "Eventos",
   },
   nightEventBody: {
-    en: "Use the pillow to end the day and begin a night event. Read the event and check each response’s requirements before choosing. Choices can change your condition or supplies; outcomes may vary between encounters. Complete the response and continue from its result to reach dawn. Check your meters before starting another day.",
-    pl: "Użyj poduszki, aby zakończyć dzień i rozpocząć nocne zdarzenie. Przeczytaj zdarzenie i sprawdź wymagania reakcji przed wyborem. Wybory mogą zmienić twój stan lub zapasy; wyniki mogą się różnić między spotkaniami. Zakończ reakcję i przejdź dalej po jej wyniku, aby dotrzeć do świtu. Sprawdź wskaźniki przed rozpoczęciem kolejnego dnia.",
-    'es-AR': "Usá la almohada para terminar el día y comenzar un evento nocturno. Leé el evento y revisá los requisitos de cada respuesta antes de elegir. Las elecciones pueden cambiar tu estado o tus suministros; los resultados pueden variar entre encuentros. Completá la respuesta y continuá desde el resultado para llegar al amanecer. Revisá los indicadores antes de empezar otro día.",
+    en: "Select the pillow to end the day. Use equipment with a white outline to respond; some actions start on the first click. Sleeping through an event can cost Health, Hull, or supplies. Open the journal to review what happened and what you gained or lost.",
+    pl: "Wybierz poduszkę, aby zakończyć dzień. Zareaguj za pomocą sprzętu z białym obrysem. Niektóre czynności rozpoczynają się po pierwszym kliknięciu. Przespanie zdarzenia może kosztować zdrowie, kadłub lub zapasy. Otwórz dziennik, aby sprawdzić przebieg zdarzeń oraz zdobyte i utracone zapasy.",
+    'es-AR': "Elegí la almohada para terminar el día. Usá equipo con contorno blanco para responder; algunas acciones empiezan con el primer clic. Dormir durante un evento puede costarte Salud, Casco o suministros. Abrí el diario para revisar qué pasó y qué ganaste o perdiste.",
   },
   nightEventAlt: {
     en: 'A night event begins around the lifeboat.',
@@ -115,14 +115,14 @@ export const guideText = defineMessages({
     'es-AR': 'Comienza un evento nocturno alrededor del bote.',
   },
   nightResponseTitle: {
-    en: "Items",
-    pl: "Przedmioty",
-    'es-AR': "Objetos",
+    en: "Help",
+    pl: "Pomoc",
+    'es-AR': "Ayuda",
   },
   nightResponseBody: {
-    en: "Items usable in the current event glow white. Select one, read its response, then choose an action. Missing or broken items can block responses; read the unavailable reason. Using equipment may consume, break, or lose it. If sleep is offered, select the pillow to sleep through the event. Sleeping can still cause injury, Hull damage, or lost supplies.",
-    pl: "Przedmioty dostępne w bieżącym zdarzeniu świecą na biało. Wybierz przedmiot, przeczytaj reakcję i wybierz czynność. Brak lub uszkodzenie przedmiotu może blokować reakcję; przeczytaj powód niedostępności. Użycie może zużyć, zepsuć lub odebrać sprzęt. Jeśli sen jest dostępny, wybierz poduszkę, aby przespać zdarzenie. Sen nadal może spowodować obrażenia, uszkodzenie kadłuba albo utratę zapasów.",
-    'es-AR': "Los objetos utilizables en el evento actual brillan en blanco. Elegí uno, leé su respuesta y seleccioná una acción. Los objetos faltantes o rotos pueden bloquear respuestas; leé el motivo. Usar equipo puede consumirlo, romperlo o hacer que lo pierdas. Si se ofrece dormir, elegí la almohada para pasar el evento durmiendo. Dormir todavía puede causar heridas, daño al Casco o pérdida de suministros.",
+    en: "Answer radio calls for ⚡1 to improve your rescue chances. Signal people or aircraft during encounters. Select Carlitos to check his condition, feed him, or pet him. He needs food, attention, and rest to recover between jobs. Feeding him uses one stored portion.",
+    pl: "Odbieraj sygnały radiowe za ⚡1, aby zwiększyć szanse na ratunek. Dawaj sygnały napotkanym ludziom lub samolotom. Wybierz Carlitosa, aby sprawdzić jego stan, nakarmić go lub pogłaskać. Potrzebuje jedzenia, uwagi i odpoczynku, aby odzyskać siły między zadaniami. Karmienie zużywa jedną porcję z zapasów.",
+    'es-AR': "Respondé llamadas de radio por ⚡1 para mejorar tus posibilidades de rescate. Hacé señales a personas o aviones durante los encuentros. Elegí a Carlitos para revisar su estado, darle de comer o acariciarlo. Necesita comida, atención y descanso para recuperarse entre tareas. Alimentarlo consume una porción guardada.",
   },
   nightResponseAlt: {
     en: 'White outlines mark equipment available for a night event response.',
