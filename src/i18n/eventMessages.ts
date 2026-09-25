@@ -387,10 +387,6 @@ export function eventMessage(messageId: string, textId: EventTextId): string {
   return translate(textId);
 }
 
-export function eventTranslationCount(): number {
-  return Object.keys(EVENT_TEXT).length;
-}
-
 function localizedProperty<T extends object, K extends keyof T>(
   owner: T,
   property: K,

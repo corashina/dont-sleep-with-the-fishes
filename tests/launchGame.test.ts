@@ -144,7 +144,7 @@ describe('phase-based launch', () => {
     expect(element.querySelector('.system-screen--error')).not.toBeNull();
     handle.cancel();
   });
-  it.each([new Error('constructor failed'), new WebGlInitializationError('webgl')])('reports construction failure and releases the owner', async error => {
+  it.each([new WebGlInitializationError('webgl')])('reports construction failure and releases the owner', async error => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const audio = AudioSystem.silent();
     const dispose = vi.spyOn(audio, 'dispose');

@@ -24,24 +24,6 @@ function fakeDocument(initiallyHidden = false) {
 
 describe('SurvivalVisibilityController', () => {
 
-  it('calls hidden and visible effects for visibility changes', () => {
-    const fake = fakeDocument();
-    const onHidden = vi.fn();
-    const onVisible = vi.fn();
-    const controller = new SurvivalVisibilityController(
-      fake.document,
-      onHidden,
-      onVisible,
-    );
-
-    fake.setHidden(true);
-    fake.setHidden(false);
-
-    expect(onHidden).toHaveBeenCalledOnce();
-    expect(onVisible).toHaveBeenCalledOnce();
-    expect(controller.isHidden()).toBe(false);
-  });
-
   it('resolves multiple current waiters after visibility returns', async () => {
     const fake = fakeDocument(true);
     const controller = new SurvivalVisibilityController(

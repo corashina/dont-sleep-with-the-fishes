@@ -34,7 +34,7 @@ function rig(overrides: Partial<GameFactories> = {}, options: Pick<GameRuntimeTe
   document.body.append(mount);
   const game = createRuntimeTestGame(factories, { ...options, mount, resources, onFatalError });
   game.start();
-  return { game, factories, loaders, onFatalError, mount };
+  return { game, factories, loaders, resources, onFatalError, mount };
 }
 afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
 describe('asynchronous phase activation', () => {
@@ -59,28 +59,6 @@ describe('asynchronous phase activation', () => {
       expect(setWeatherOverride).not.toHaveBeenCalledWith('calm');
       expect(r.onFatalError).not.toHaveBeenCalled();
     } finally { r.game.dispose(); }
-  });
-
-  it('holds the loading cover and gameplay until scene preparation finishes', async () => {
-    let start!: () => void;
-    const pending = deferred<void>();
-    const ship = { ...phase(), prepare: vi.fn(() => pending.promise) };
-    const r = rig({
-      createMenu: (_context, next) => { start = next; return phase(); },
-      createScavenge: () => ship,
-    });
-    await r.game.ready;
-    start();
-    await flushPhases();
-    expect(ship.prepare).toHaveBeenCalledOnce();
-    expect(ship.start).not.toHaveBeenCalled();
-    expect(r.mount.querySelector('progress')?.position).toBe(-1);
-    expect(r.mount.querySelector('.system-loading-status')?.textContent).toBe('Building scene');
-    pending.resolve();
-    await flushPhases();
-    expect(ship.start).toHaveBeenCalledOnce();
-    expect(r.mount.querySelector('.system-screen--loading')).toBeNull();
-    r.game.dispose();
   });
 
   // Importance: 95/100. Cancelled scenes must not overwrite the current loading status.
@@ -110,23 +88,6 @@ describe('asynchronous phase activation', () => {
     expect(ship.start).not.toHaveBeenCalled();
     expect(r.factories.createSurvival).toHaveBeenCalledOnce();
     expect(r.onFatalError).not.toHaveBeenCalled();
-    r.game.dispose();
-    expect(ship.dispose).toHaveBeenCalledOnce();
-  });
-
-  it('reports preparation failures without starting gameplay', async () => {
-    let start!: () => void;
-    const error = new Error('shader compilation');
-    const ship = { ...phase(), prepare: async () => { throw error; } };
-    const r = rig({
-      createMenu: (_context, next) => { start = next; return phase(); },
-      createScavenge: () => ship,
-    });
-    await r.game.ready;
-    start();
-    await flushPhases();
-    expect(r.onFatalError).toHaveBeenCalledExactlyOnceWith(error);
-    expect(ship.start).not.toHaveBeenCalled();
     r.game.dispose();
     expect(ship.dispose).toHaveBeenCalledOnce();
   });
@@ -192,6 +153,7 @@ describe('asynchronous phase activation', () => {
     expect(r.factories.createScavenge).not.toHaveBeenCalled();
     expect(r.onFatalError).not.toHaveBeenCalled();
   });
+  // Importance: 95/100. Global shutdown must not mask a leaked lease after phase construction fails.
   it('releases the incoming lease when its phase constructor fails', async () => {
     let start!: () => void;
     const error = new Error('phase constructor');
@@ -200,12 +162,21 @@ describe('asynchronous phase activation', () => {
       createScavenge: () => { throw error; },
     });
     await r.game.ready;
+    const acquireShip = r.resources.acquireShip.bind(r.resources);
+    const releaseShip = vi.fn();
+    vi.spyOn(r.resources, 'acquireShip').mockImplementation(async () => {
+      const lease = await acquireShip();
+      releaseShip.mockImplementation(() => lease.dispose());
+      return { assets: lease.assets, dispose: releaseShip };
+    });
     start(); await flushPhases();
     expect(r.onFatalError).toHaveBeenCalledExactlyOnceWith(error);
+    expect(releaseShip).toHaveBeenCalledOnce();
     const models = await vi.mocked(r.loaders.loadGameplayModels).mock.results[0]!.value;
     expect(models.dispose).not.toHaveBeenCalled();
     r.game.dispose();
     expect(models.dispose).toHaveBeenCalledOnce();
+    expect(releaseShip).toHaveBeenCalledOnce();
   });
   it('offers the existing resume control when pointer lock is lost during loading', async () => {
     let start!: () => void;

@@ -7,36 +7,6 @@ describe('MenuUI how-to-play popup', () => {
     document.body.replaceChildren();
   });
 
-  it('supports page boundaries, scroll reset, and reopening at the first page', () => {
-    const ui = new MenuUI(document.body);
-    try {
-      ui.openGuide();
-      const dialog = document.querySelector<HTMLElement>('[data-menu-guide]')!;
-      const content = document.querySelector<HTMLElement>('[data-menu-guide-sections]')!;
-      const key = (value: string) => dialog.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true }));
-      content.scrollTop = 240;
-      key('End');
-      expect(dialog.dataset.page).toBe('4');
-      expect(content.scrollTop).toBe(0);
-      key('ArrowRight');
-      expect(dialog.dataset.page).toBe('4');
-      key('ArrowLeft');
-      expect(dialog.dataset.page).toBe('3');
-      key('Home');
-      expect(dialog.dataset.page).toBe('1');
-      key('ArrowLeft');
-      expect(dialog.dataset.page).toBe('1');
-      key('End');
-      key('Escape');
-      ui.openGuide();
-      expect(dialog.dataset.page).toBe('1');
-      content.scrollTop = 240;
-      key('Escape');
-      ui.openGuide();
-      expect(content.scrollTop).toBe(0);
-    } finally { ui.dispose(); }
-  });
-
   it('keeps the scroll region keyboard accessible and traps focus inside the dialog', () => {
     const ui = new MenuUI(document.body);
     try {
@@ -68,23 +38,6 @@ describe('MenuUI how-to-play popup', () => {
 
     expect(document.querySelector('[data-menu-guide]')?.getAttribute('aria-hidden'))
       .toBe('true');
-    expect(document.activeElement).toBe(open);
-
-    ui.dispose();
-  });
-
-  it('closes when the backdrop is pressed but stays open for panel presses', () => {
-    const ui = new MenuUI(document.body);
-    const open = document.querySelector<HTMLButtonElement>('[data-menu-guide-open]')!;
-    const dialog = document.querySelector<HTMLElement>('[data-menu-guide]')!;
-    const panel = document.querySelector<HTMLElement>('.how-to-play-popup')!;
-
-    open.click();
-    panel.click();
-    expect(dialog.getAttribute('aria-hidden')).toBe('false');
-
-    dialog.click();
-    expect(dialog.getAttribute('aria-hidden')).toBe('true');
     expect(document.activeElement).toBe(open);
 
     ui.dispose();

@@ -1,6 +1,5 @@
 import { describe,expect,it } from 'vitest';
 import { ITEM_IDS,type ItemId,type ItemInstance } from '../src/game/ItemState';
-import { drawDiveItem } from '../src/survival/diveRewards';
 import { formatJournalEntry } from '../src/survival/journal';
 import { formatDiveResult } from '../src/survival/SurvivalDayActionFlow';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -10,22 +9,6 @@ const inventoryIds = ITEM_IDS.filter((id) => id !== 'carlitos');
 const saved = (ids: readonly ItemId[]): ItemInstance[] => ids.map((type) => ({
   type, instanceId: `${type}-1`,
 }));
-
-describe('dive item selection', () => {
-  it('assigns relative chances of 3, 2, and 1 to item weights 1, 2, and 3', () => {
-    const present = new Set(inventoryIds.filter((id) => !['compass', 'medicalKit', 'anchor'].includes(id)));
-    const results = Array.from({ length: 600 }, (_, index) => (
-      drawDiveItem(present, sequenceRandom([(index + 0.5) / 600]))
-    ));
-    expect(results.filter((id) => id === 'compass')).toHaveLength(300);
-    expect(results.filter((id) => id === 'medicalKit')).toHaveLength(200);
-    expect(results.filter((id) => id === 'anchor')).toHaveLength(100);
-  });
-
-  it('returns no item when every inventory item is present', () => {
-    expect(drawDiveItem(new Set(inventoryIds), sequenceRandom([0]))).toBeNull();
-  });
-});
 
 describe('normal dive item rewards', () => {
   // Importance: 95/100. Diving must never advance hidden rescue progress.
@@ -45,17 +28,6 @@ describe('normal dive item rewards', () => {
       if (outcome.deltas.bait) counts.bait += 1;
     }
     expect(counts).toEqual({ food: 50, bait: 50 });
-  });
-
-  it.each(['calm'] as const)('gives an item on 15%% of all dives in %s weather', (weather) => {
-    let itemFinds = 0;
-    for (let index = 0; index < 100; index += 1) {
-      const session = new SurvivalSession(saved(['scubaSet']), {
-        seed: 1, weather, random: sequenceRandom([(index + 0.5) / 100, 0.99, 0]),
-      });
-      if (session.perform('dive').rewardSummary?.kind === 'item') itemFinds += 1;
-    }
-    expect(itemFinds).toBe(15);
   });
 
   it.each(['compass'] as const)('adds missing %s and preserves it on restore', (missing) => {

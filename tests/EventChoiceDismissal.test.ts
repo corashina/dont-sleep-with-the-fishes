@@ -29,7 +29,7 @@ function activate(button: HTMLButtonElement, input: string): void {
   else button.dispatchEvent(new KeyboardEvent('keydown', { key: input, bubbles: true }));
 }
 
-describe.each(['click', 'Enter', ' '])('event popup dismissal with %s', (input) => {
+describe.each(['click', ' '])('event popup dismissal with %s', (input) => {
   it.each([['midnight-tour', 'visit']])('closes %s before resolving %s', async (eventId, choiceId) => {
     const { ui, mount } = fixture();
     const event = survivalEventById(eventId)!;

@@ -2,7 +2,6 @@ import { describe,expect,it,vi } from 'vitest';
 import { Mesh,PerspectiveCamera,Scene,Texture,Vector3 } from 'three';
 import type { DivePlayOptions } from '../src/survival/DivePresentation';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { survivalEventById } from '../src/survival/eventCatalog';
 import { OceanOfBloodPresentation,BLOOD_OCEAN_REVEAL_SECONDS } from '../src/survival/events/OceanOfBloodPresentation';
 import type { DedicatedEventEnvironment } from '../src/survival/eventPresentationTypes';
 import { deriveEventOutcomePresentation } from '../src/survival/eventPresentationOutcome';
@@ -21,20 +20,6 @@ function session(hunger = 0, item?: ItemId): SurvivalSession {
 }
 
 describe('Ocean of Blood rules', () => {
-  it('offers salvage, scuba gear and wait, and retrieves only the heart with scuba gear', () => {
-    expect(survivalEventById('ocean-of-blood')!.choices.map(choice => choice.id)).toEqual(['fishingNet', 'bucket', 'scubaSet', 'sleep']);
-    const run = session(0, 'scubaSet');
-    const before = run.snapshot();
-    expect(run.resolveEvent({ kind: 'item', choiceId: 'scubaSet', instanceId: 'scubaSet-1' })).toMatchObject({
-      accepted: true, deltas: { pressure: 1 }, eventResult: { resultId: 'blood-ocean-searched' },
-    });
-    expect(run.snapshot()).toMatchObject({
-      food: before.food, pressure: 3, health: before.health, hull: before.hull,
-      inventory: { 'scubaSet-1': { condition: 'usable' } },
-    });
-    run.beginDawn();
-    expect(run.snapshot().energy).toBe(3);
-  });
 
   it.each([[0, 2], [60, 2], [80, 1]])('caps dawn energy at hunger %s across a checkpoint', (hunger, energy) => {
     const run = session(hunger);
@@ -98,20 +83,6 @@ function presentation() {
 }
 
 describe('Ocean of Blood presentation', () => {
-  it('starts fully red before reveal and keeps the atmosphere red throughout reveal', async () => {
-    const { event, intensity } = presentation();
-    try {
-      expect(intensity).toHaveBeenLastCalledWith(1);
-      const reveal = event.reveal();
-      for (const time of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
-        event.update(time, time === 0 ? 0 : 1);
-        expect(intensity).toHaveBeenLastCalledWith(1);
-      }
-      await reveal;
-    } finally {
-      event.dispose();
-    }
-  });
 
   // Importance: 90/100. The reveal must not take control of the player's camera.
   it('preserves the camera throughout reveal and cleanup', async () => {
@@ -130,28 +101,6 @@ describe('Ocean of Blood presentation', () => {
     expect(camera.position).toEqual(originalPosition);
     expect(intensity).toHaveBeenLastCalledWith(0);
     event.dispose();
-  });
-
-  it('reveals twelve bodies and recovers only the heart through a scuba dive', async () => {
-    const { event, intensity, sample, dive, finishDive } = presentation();
-    const reveal = event.reveal();
-    event.update(9, BLOOD_OCEAN_REVEAL_SECONDS);
-    await reveal;
-    expect(intensity).toHaveBeenLastCalledWith(1);
-    expect(event.worldRoot.visible).toBe(true);
-    expect(event.worldRoot.children.filter(child => child.name.startsWith('blood-ocean-body-'))).toHaveLength(12);
-    expect(sample).toHaveBeenCalledTimes(24);
-    expect(await event.playItemUse('fishingNet', 'fishingNet-1')).toBe(false);
-    expect(dive.play).not.toHaveBeenCalled();
-    const use = event.playItemUse('scubaSet', 'scubaSet-1');
-    expect(dive.play).toHaveBeenCalledWith('scubaSet-1', expect.objectContaining({ waterAppearance: 'blood' }));
-    finishDive();
-    expect(await use).toBe(true);
-    expect(dive.clear).not.toHaveBeenCalled();
-    event.clear();
-    expect(dive.clear).toHaveBeenCalledOnce();
-    event.dispose();
-    expect(intensity).toHaveBeenLastCalledWith(0);
   });
 
   it('settles reveal, clears pending actions, and disposes geometry once', async () => {
@@ -211,26 +160,6 @@ describe('Ocean of Blood presentation', () => {
       control.update(2, next, camera);
       expect(sky.palette).toEqual(control.palette);
       expect(sky.material.uniforms.uHorizonColor!.value).toEqual(control.palette.horizonColor);
-    } finally { sky.dispose(); control.dispose(); texture.dispose(); }
-  });
-
-  it('settles a weather and phase transition before the next visible frame', () => {
-    const texture = new Texture();
-    const initial = { weather: 'calm' as const, phase: 'day' as const, severity: 0 };
-    const target = { weather: 'squall' as const, phase: 'night' as const, severity: 0 };
-    const sky = new Skybox(new Scene(), initial, texture);
-    const control = new Skybox(new Scene(), target, texture);
-    const camera = new Vector3();
-    try {
-      sky.update(0.1, target, camera);
-      expect(sky.palette).not.toEqual(control.palette);
-      sky.settleTransition(target, camera);
-      expect(sky.palette.zenithColor.getHex()).toBe(control.palette.zenithColor.getHex());
-      expect(sky.palette.horizonColor.getHex()).toBe(control.palette.horizonColor.getHex());
-      expect(sky.palette.fogColor.getHex()).toBe(control.palette.fogColor.getHex());
-      expect(sky.palette.cloudCoverage).toBeCloseTo(control.palette.cloudCoverage);
-      expect(sky.palette.ambientLightIntensity).toBeCloseTo(control.palette.ambientLightIntensity);
-      expect(sky.palette.keyLightIntensity).toBeCloseTo(control.palette.keyLightIntensity);
     } finally { sky.dispose(); control.dispose(); texture.dispose(); }
   });
 

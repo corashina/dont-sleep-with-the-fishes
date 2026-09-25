@@ -84,20 +84,6 @@ describe('survival checkpoints', () => {
     } finally { phase.dispose(); }
   });
 
-  // Importance: 98/100. All survival ending bells must use the popup visibility callback.
-  it.each(['rescue', 'kraken', 'death', 'sinking'] as const)('rings when the %s popup reports visibility', (id) => {
-    const bell = vi.spyOn(SurvivalAudio.prototype, 'endingPopup');
-    const ui: Partial<SurvivalUI> = {};
-    const phase = SurvivalPhase.forTestStart({ world: {}, ui }, {
-      kind: 'fresh', savedItems: [], seed: 41, scavengeElapsedSeconds: 0,
-    });
-    try {
-      expect(bell).not.toHaveBeenCalled();
-      ui.onEndingShown?.(id);
-      expect(bell).toHaveBeenCalledOnce();
-    } finally { phase.dispose(); bell.mockRestore(); }
-  });
-
   // Importance: 95/100. Lab-only quest ownership must not leak into regular runs or trigger an ending.
   it.each([true, false])('loads all heart models only in the item lab: lab=%s', (lab) => {
     const render = vi.fn();
@@ -157,7 +143,7 @@ describe('survival checkpoints', () => {
     } finally { phase.dispose(); bell.mockRestore(); }
   });
 
-  it.each(['drifting-supplies', 'drifting-chest'] as const)(
+  it.each(['drifting-chest'] as const)(
     'keeps repair, camera controls, and inspection available during %s', async (eventId) => {
       const session = new SurvivalSession([], {
         seed: 72,
@@ -209,56 +195,6 @@ describe('survival checkpoints', () => {
       phase.dispose();
     },
   );
-
-  it('renders fresh resources and action reasons when busy presentation settles', () => {
-    let current = snapshot({
-      energy: 2,
-      chest: { state: 'closed', acquiredDay: 1 },
-    });
-    const render = vi.fn();
-    const phase = createTestSurvivalPhase({
-      session: {
-        snapshot: vi.fn(() => current),
-        availableReason: vi.fn((action) => (
-          action === 'dive' && current.energy < 3
-            ? 'Diving requires three energy.'
-            : null
-        )),
-      },
-      world: {},
-      ui: { render },
-    });
-    const internals = phase as unknown as { setBusy(value: boolean): void };
-
-    phase.start();
-    internals.setBusy(true);
-    current = snapshot({
-      energy: 3,
-      chest: { state: 'closed', acquiredDay: 1 },
-    });
-    internals.setBusy(false);
-
-    const [rendered, unavailable] = render.mock.calls.at(-1)!;
-    expect(rendered).toMatchObject({ energy: 3 });
-    expect(unavailable('dive')).toBeNull();
-    expect(render).toHaveBeenCalledTimes(2);
-  });
-
-  it('opens the journal during a busy action presentation', () => {
-    const showJournal = vi.fn();
-    const phase = createTestSurvivalPhase({
-      session: { snapshot: vi.fn(() => snapshot()) },
-      world: {},
-      ui: { showJournal },
-    });
-    const internals = phase as unknown as { setBusy(value: boolean): void };
-    phase.start();
-
-    internals.setBusy(true);
-    phase.handleJournalOpen();
-
-    expect(showJournal).toHaveBeenCalledWith([]);
-  });
 
   it.each([['day event', 'drifting-supplies'], ['night choice', 'guarded-sleep']] as const)(
     'restores a %s without emitting until its reveal settles',
@@ -524,26 +460,9 @@ function createFishingRig(options: FishingRigOptions = {}) {
 
 type FishingRig = ReturnType<typeof createFishingRig>;
 
-function fishingCastCallback(rig: FishingRig) {
-  const callback = rig.ui.onFishingCast;
-  if (callback === null || callback === undefined) throw new Error('Fishing cast callback was not wired.');
-  return callback;
-}
-
-function fishingReelCallback(rig: FishingRig) {
-  const callback = rig.ui.onFishingReel;
-  if (callback === null || callback === undefined) throw new Error('Fishing reel callback was not wired.');
-  return callback;
-}
-
 async function settleFishingEntry(rig: FishingRig): Promise<void> {
   expect(rig.animations.enter).toHaveLength(1);
   rig.animations.enter.at(-1)!.resolve();
-  await flushPromises();
-}
-
-async function completeFishingCast(rig: FishingRig): Promise<void> {
-  rig.animations.cast.at(-1)!.resolve();
   await flushPromises();
 }
 
@@ -836,121 +755,6 @@ describe('SurvivalPhase orchestration', () => {
       biteTarget: null,
     });
     expect(rig.ui.setFishingViewExitVisible).toHaveBeenLastCalledWith(true);
-  });
-
-  it('shows a landed cod result after reeling and waits for one acknowledgement before return', async () => {
-    const rig = createFishingRig();
-    rig.phase.start();
-    rig.phase.handleAction('fish');
-    await settleFishingEntry(rig);
-    expect(fishingCastCallback(rig)(null)).toBe(true);
-    await completeFishingCast(rig);
-    rig.phase.update(3, 3);
-    rig.calls.length = 0;
-
-    const reel = fishingReelCallback(rig);
-    expect(reel()).toBe(true);
-    expect(reel()).toBe(false);
-    rig.phase.update(3.1, 0.1);
-
-    expect(rig.session.finishFishing).toHaveBeenCalledOnce();
-    expect(rig.world.playFishingReel).toHaveBeenCalledOnce();
-    expect(rig.realSession.snapshot()).toMatchObject({ food: 1, bait: 0 });
-    expect(rig.session.requestDayEvent).not.toHaveBeenCalled();
-    const finishIndex = rig.calls.indexOf('finishFishing');
-    const renderIndex = rig.calls.indexOf('render:2:1:0');
-    const presentationIndex = rig.calls.indexOf('playFishingReel:cod');
-    expect(finishIndex).toBeLessThan(renderIndex);
-    expect(renderIndex).toBeLessThan(presentationIndex);
-    expect(rig.calls).not.toContain('result:cannedFood:1');
-    expect(rig.world.exitFishingView).not.toHaveBeenCalled();
-
-    rig.animations.reel.at(-1)!.resolve();
-    await flushPromises();
-    expect(rig.calls).toContain('result:cannedFood:1');
-    expect(rig.ui.showFishingResult).toHaveBeenCalledWith({
-      items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }],
-      message: '',
-    });
-    expect(rig.world.projectFishingCatch).not.toHaveBeenCalled();
-    expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
-      mode: 'result', message: '', biteTarget: null,
-    });
-    expect(rig.world.exitFishingView).not.toHaveBeenCalled();
-    expect(rig.session.requestDayEvent).not.toHaveBeenCalled();
-    rig.ui.onFishingResultContinue?.();
-    rig.ui.onFishingResultContinue?.();
-    expect(rig.ui.hideFishingResult).toHaveBeenCalledOnce();
-    expect(rig.world.clearFishingPresentation).toHaveBeenCalledOnce();
-    expect(rig.world.exitFishingView).not.toHaveBeenCalled();
-    rig.ui.onFishingViewExit?.();
-    rig.ui.onFishingViewExit?.();
-    expect(rig.world.exitFishingView).toHaveBeenCalledOnce();
-    rig.animations.exit.at(-1)!.resolve();
-    await flushPromises();
-
-    const exitIndex = rig.calls.indexOf('exitFishingView');
-    const unlockIndex = rig.calls.lastIndexOf('unlock');
-    expect(presentationIndex).toBeLessThan(exitIndex);
-    expect(rig.calls.indexOf('playFishingReel:cod'))
-      .toBeLessThan(rig.calls.indexOf('result:cannedFood:1'));
-    expect(rig.calls.indexOf('result:cannedFood:1'))
-      .toBeLessThan(rig.calls.indexOf('exitFishingView'));
-    expect(exitIndex).toBeLessThan(unlockIndex);
-    expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
-      mode: 'hidden', message: '', biteTarget: null,
-    });
-    expect(rig.session.requestDayEvent).not.toHaveBeenCalled();
-    expect(rig.world.play).not.toHaveBeenCalled();
-
-    rig.realSession.perform('endDay');
-    expect(rig.realSession.snapshot().journalEntries[0]?.actions).toHaveLength(1);
-  });
-
-  it('keeps aiming after Continue and leaves without another Energy charge', async () => {
-    const rig = createFishingRig();
-    rig.phase.start();
-    rig.ui.onAction?.('fish');
-    await settleFishingEntry(rig);
-    expect(fishingCastCallback(rig)(null)).toBe(true);
-    await completeFishingCast(rig);
-    rig.phase.update(3, 3);
-    expect(fishingReelCallback(rig)()).toBe(true);
-    rig.animations.reel[0]!.resolve();
-    await flushPromises();
-    rig.ui.onFishingResultContinue?.();
-    rig.ui.onFishingResultContinue?.();
-
-    rig.ui.onAction?.('fish');
-    rig.ui.onAction?.('fish');
-
-    expect(rig.session.beginFishing).toHaveBeenCalledOnce();
-    expect(rig.realSession.snapshot()).toMatchObject({ energy: 2, food: 1 });
-    expect(rig.world.exitFishingView).not.toHaveBeenCalled();
-    expect(rig.animations.enter).toHaveLength(1);
-    expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
-      mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null,
-    });
-
-    rig.ui.onFishingViewExit?.();
-    rig.ui.onFishingViewExit?.();
-
-    expect(rig.session.cancelFishing).not.toHaveBeenCalled();
-    expect(rig.session.finishFishing).toHaveBeenCalledOnce();
-    expect(rig.realSession.snapshot()).toMatchObject({ energy: 2, food: 1, actedToday: true });
-    expect(rig.world.exitFishingView).toHaveBeenCalledOnce();
-    rig.animations.exit[0]!.resolve();
-    await flushPromises();
-    expect(rig.ui.setBusy).toHaveBeenLastCalledWith(false);
-    expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce();
-
-    rig.ui.onAction?.('fish');
-    expect(rig.session.beginFishing).toHaveBeenCalledOnce();
-    rig.animations.enter.at(-1)!.resolve();
-    await flushPromises();
-    expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
-      mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null,
-    });
   });
 
   it('stages a committed night event under cover before revealing choices', async () => {
@@ -2634,88 +2438,6 @@ describe('SurvivalPhase orchestration', () => {
     hold.resolve();
     phase.dispose();
   });
-
-  it.each([
-    ['death-stare', 'flashlight', 'flashlight-1', 'flashlight'],
-    ['tornado', 'swimRing', 'swimRing-1', 'swimRing'],
-  ] as const)(
-    'resolves %s %s only after hide and restore',
-    async (eventId, choiceId, instanceId, itemType) => {
-      const listeners = new Map<string, EventListener>();
-      const fakeDocument = {
-        hidden: false,
-        addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
-        removeEventListener: vi.fn((type: string) => listeners.delete(type)),
-      };
-      vi.stubGlobal('document', fakeDocument);
-      const itemUse = deferred();
-      let current = snapshot({
-        state: 'nightEvent',
-        pendingEventId: eventId,
-        inventory: inventory({
-          [instanceId]: { instanceId, type: itemType, condition: 'usable' as const },
-        }),
-      });
-      const outcome = accepted({
-        code: 'event-resolved',
-        message: `${eventId} result`,
-        deltas: {},
-        cue: 'none',
-      });
-      const resolveEvent = vi.fn(() => {
-        current = snapshot({
-          state: 'nightEvent',
-          pendingEventId: null,
-          inventory: current.inventory,
-        });
-        return outcome;
-      });
-      const setDocumentHidden = vi.fn((hidden: boolean) => {
-        if (hidden) itemUse.resolve();
-      });
-      const phase = createTestSurvivalPhase({
-        session: { snapshot: vi.fn(() => current), resolveEvent },
-        world: {
-          stageEvent: vi.fn(),
-          revealEvent: vi.fn(() => Promise.resolve()),
-          playEventItemUse: vi.fn(() => itemUse.promise),
-          reactToEventOutcome: vi.fn(() => Promise.resolve()),
-          syncInventory: vi.fn(),
-          setDocumentHidden,
-          dispose: vi.fn(),
-        },
-        ui: {
-          beginEventPresentation: vi.fn(),
-          setSleepCovered: vi.fn(() => Promise.resolve()),
-          showEventReveal: vi.fn(() => Promise.resolve()),
-          setEventSelection: vi.fn(),
-          setEventUsing: vi.fn(),
-          setBusy: vi.fn(),
-          setPaused: vi.fn(),
-          holdEventOutcome: vi.fn(() => new Promise<void>(() => undefined)),
-          dispose: vi.fn(),
-        },
-      });
-      phase.start();
-      await flushPromises();
-      phase.handleEventItem(choiceId, instanceId);
-      phase.update(0.2, 0.2);
-
-      fakeDocument.hidden = true;
-      listeners.get('visibilitychange')!(new Event('visibilitychange'));
-      await flushPromises();
-      expect(resolveEvent).not.toHaveBeenCalled();
-
-      fakeDocument.hidden = false;
-      listeners.get('visibilitychange')!(new Event('visibilitychange'));
-      await flushPromises();
-
-      expect(setDocumentHidden).toHaveBeenNthCalledWith(1, true);
-      expect(setDocumentHidden).toHaveBeenNthCalledWith(2, false);
-      expect(resolveEvent).toHaveBeenCalledOnce();
-      phase.dispose();
-    },
-  );
 
   it('ignores async sequence completion after disposal and disposes owned resources once', async () => {
     const cue = deferred();

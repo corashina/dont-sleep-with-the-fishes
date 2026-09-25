@@ -108,10 +108,6 @@ export class SurvivalJournalView {
     if (!this.disposed) this.movePage(1);
   }
 
-  pageForTest(): number {
-    return this.pageIndex;
-  }
-
   beginDispose(): boolean {
     if (this.disposed) return false;
     this.disposed = true;

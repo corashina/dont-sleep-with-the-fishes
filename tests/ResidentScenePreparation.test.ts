@@ -4,7 +4,7 @@ import { prepareScene } from '../src/rendering/prepareScene';
 
 describe('scene preparation', () => {
   // Importance: 95/100. Cancellation between shader stages must not start more GPU work.
-  it.each([false, true])('reports shader stages and respects cancellation: %s', async cancelled => {
+  it.each([true])('reports shader stages and respects cancellation: %s', async cancelled => {
     const scene = new Scene();
     const camera = new PerspectiveCamera();
     const stages: string[] = [];

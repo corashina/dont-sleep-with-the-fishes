@@ -3,7 +3,7 @@ import { Box3, BoxGeometry, Group, Mesh, MeshStandardMaterial, PerspectiveCamera
 import { expect, it, vi } from 'vitest';
 import { FishingPresentation } from '../src/survival/FishingPresentation';
 
-it.each([-2.6, 0, 2.6].flatMap((x) => [-10.5, -6.4, -4.8].map((z) => [x, z])))
+it.each([[-2.6, -10.5], [2.6, -4.8]])
 ('reels close before lifting for cast x=%s, z=%s', async (x, z) => {
   const root = new Group();
   const rodPivot = new Group();

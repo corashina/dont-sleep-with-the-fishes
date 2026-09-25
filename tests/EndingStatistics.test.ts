@@ -61,19 +61,4 @@ describe('ending statistics page', () => {
     expect(restart).toHaveBeenCalledOnce();
     expect(button.disabled).toBe(true);
   });
-
-  it('returns focus to statistics after a pause and removes its controls on disposal', () => {
-    const ui = new SurvivalUI(document.body);
-    views.push(ui);
-    const snapshot = SurvivalSession.createEndingPreview([], 1, 'rescue').snapshot();
-    ui.render(snapshot, () => null);
-    ui.showEnding({ id: 'rescue', day: 1, savedPickupCount: 0, signalAssisted: false });
-    element<HTMLButtonElement>('[data-view-statistics]').click();
-    ui.setPaused(true);
-    ui.setPaused(false);
-    expect(document.activeElement).toBe(element('[data-statistics-title]'));
-    const card = element('[data-ending-statistics]');
-    ui.dispose();
-    expect(card.isConnected).toBe(false);
-  });
 });

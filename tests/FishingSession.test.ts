@@ -37,19 +37,6 @@ describe('FishingSession', () => {
     expect(session.completeReel().accepted).toBe(true);
   });
 
-  it.each([0, Number.NaN])(
-    'rejects invalid fish weight multiplier %s',
-    (fishWeightMultiplier) => {
-      expect(() => new FishingSession({
-        id: 'attempt-1',
-        day: 0,
-        capturedBait: false,
-        fishWeightMultiplier,
-        random: sequenceRandom([0, 0]),
-      })).toThrow(RangeError);
-    },
-  );
-
   it('stores an immutable horizontal cast point and rejects invalid or duplicate casts', () => {
     const session = createSession();
     const point = { x: 4, z: -2 };

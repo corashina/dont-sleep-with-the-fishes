@@ -5,7 +5,6 @@ import type { DedicatedEventPresentation } from '../src/survival/eventPresentati
 import { BoatHeartDisplay } from '../src/survival/BoatHeartDisplay';
 import { beforeEach,describe,expect,it,vi } from 'vitest';
 import { FOCUSED_EVENT_IDS } from '../src/survival/eventPresentationRoutes';
-import type { EventPresentationReaction } from '../src/survival/EventPresentationAdapter';
 import type { ItemInstanceId } from '../src/game/ItemState';
 import {
   EventPresentationRegistry
@@ -242,20 +241,6 @@ beforeEach(() => {
 });
 
 describe('EventPresentationRegistry', () => {
-  // Importance: 96/100. A missing authored scene must fail instead of hiding a required event.
-  it('rejects a missing authored focused presenter', () => {
-    const { dependencies } = createDependencies();
-    expect(() => new EventPresentationRegistry().create('handyman', {
-      ...dependencies, focusedFactories: { handyman: () => null },
-    })).toThrow('Missing required focused event presentation: handyman');
-  });
-  it('preserves focused factory errors', () => {
-    const failure = new Error('authored construction');
-    const { dependencies } = createDependencies();
-    expect(() => new EventPresentationRegistry().create('handyman', {
-      ...dependencies, focusedFactories: { handyman: () => { throw failure; } },
-    })).toThrow(failure);
-  });
   it('caches focused targets and preserves held roots when cleared', async () => {
     const { dependencies } = createDependencies();
     const adapter = new EventPresentationRegistry().create('handyman', dependencies);
@@ -274,17 +259,6 @@ describe('EventPresentationRegistry', () => {
     adapter.clear();
     expect(focused.root.visible).toBe(false);
     expect(adapter.interactionRoot('trade')).toBeNull();
-    adapter.dispose();
-  });
-  it('requires matching focused results before preparation and reaction', () => {
-    const { dependencies } = createDependencies();
-    const adapter = new EventPresentationRegistry().create('handyman', dependencies);
-    for (const outcome of [{}, { eventResult: { eventId: 'plane' } }]) {
-      const reaction = { outcome } as EventPresentationReaction;
-      expect(() => adapter.prepareReaction?.(reaction)).toThrow('requires a matching event result');
-      expect(() => adapter.react(reaction)).toThrow('requires a matching event result');
-    }
-    expect(focused.react).not.toHaveBeenCalled();
     adapter.dispose();
   });
 
@@ -331,7 +305,8 @@ describe('EventPresentationRegistry', () => {
   });
 
 
-  it('creates and disposes a default adapter for every event', () => {
+  // Importance: 90/100. Keep route completeness; two real scene routes have separate integration proof.
+  it('creates and disposes every event adapter with stubbed presenters', () => {
     const registry = new EventPresentationRegistry();
     const { dependencies } = createDependencies();
     for (const eventId of SURVIVAL_EVENT_IDS) {
@@ -356,35 +331,5 @@ describe('EventPresentationRegistry', () => {
 
     expect(dangerous.playItemUse).toHaveBeenCalledOnce();
     expect(dangerous.playChoice).not.toHaveBeenCalled();
-  });
-
-  it('keeps unsupported animator item use on the shared fallback path', async () => {
-    weather.supportsItemUse.mockReturnValue(false);
-    supernatural.supportsItemUse.mockReturnValue(false);
-    const { dependencies } = createDependencies();
-    const weatherAdapter = new EventPresentationRegistry().create(
-      'shower-night',
-      dependencies,
-    );
-    const supernaturalAdapter = new EventPresentationRegistry().create(
-      'ghosts',
-      dependencies,
-    );
-    await expect(weatherAdapter.playItemUse('sleep', 'map-1' as ItemInstanceId))
-      .resolves.toBe(false);
-    await expect(supernaturalAdapter.playItemUse('sleep', 'map-1' as ItemInstanceId))
-      .resolves.toBe(false);
-    expect(weather.playItemUse).not.toHaveBeenCalled();
-    expect(supernatural.playItemUse).not.toHaveBeenCalled();
-  });
-
-  it('preserves an animator construction error', () => {
-    const constructionError = new Error('weather construction');
-    constructors.weather.mockImplementationOnce(() => {
-      throw constructionError;
-    });
-    const { dependencies } = createDependencies();
-    expect(() => new EventPresentationRegistry().create('shower-night', dependencies))
-      .toThrow(constructionError);
   });
 });

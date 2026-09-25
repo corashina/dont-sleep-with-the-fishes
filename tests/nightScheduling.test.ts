@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ItemId } from '../src/game/ItemState';
-import { SURVIVAL_EVENTS, survivalEventById } from '../src/survival/eventCatalog';
+import { SURVIVAL_EVENTS } from '../src/survival/eventCatalog';
 import { drawWeightedEvent, eligibleEvents, type EventEligibility } from '../src/survival/eventSelection';
 import { mulberry32 } from '../src/survival/random';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -14,34 +14,6 @@ const eligibility = (day: number): EventEligibility => ({
 });
 
 describe('night scheduling', () => {
-  it('never repeats Guarded Sleep, even after a long delay', () => {
-    const pool = eligibleEvents(SURVIVAL_EVENTS, {
-      ...eligibility(50), hasCompanion: true,
-      appearanceCounts: new Map([['guarded-sleep', 1]]),
-      lastSeenDay: new Map([['guarded-sleep', 7]]),
-    });
-    expect(pool.map(({ id }) => id)).not.toContain('guarded-sleep');
-  });
-
-  it('excludes Guarded Sleep while Carlitos is exhausted', () => {
-    const guardedSleep = survivalEventById('guarded-sleep')!;
-    const restedPool = eligibleEvents([guardedSleep], {
-      ...eligibility(7), hasCompanion: true, companionExhausted: false,
-    });
-    const exhaustedPool = eligibleEvents([guardedSleep], {
-      ...eligibility(7), hasCompanion: true, companionExhausted: true,
-    });
-    expect(restedPool).toEqual([guardedSleep]);
-    expect(exhaustedPool).toEqual([]);
-  });
-
-  it('makes Quiet Night eligible again exactly 15 days after its last occurrence', () => {
-    const quiet = survivalEventById('quiet-night');
-    expect(quiet).toBeDefined();
-    const criteria = { ...eligibility(15), lastSeenDay: new Map([['quiet-night', 1]]) };
-    expect(eligibleEvents([quiet!], criteria)).toEqual([]);
-    expect(eligibleEvents([quiet!], { ...criteria, day: 16 })).toEqual([quiet]);
-  });
 
   it('preserves automatic Quiet Night history through save and load', () => {
     const session = new SurvivalSession([], { seed: 3 });

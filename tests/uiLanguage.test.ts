@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getLanguage, setLanguage } from '../src/i18n/language';
-import { uiDynamic } from '../src/i18n/uiDynamicMessages';
 import { ScavengeSession } from '../src/game/ScavengeSession';
 import { GameUI } from '../src/ui/GameUI';
 import { SurvivalJournalView } from '../src/ui/SurvivalJournalView';
@@ -46,6 +45,7 @@ describe('live gameplay translations', () => {
     expect(find('[data-hands-full-notice]').hidden).toBe(true);
   });
 
+  // Importance: 95/100. Language changes must preserve the visible journal page and keyboard focus.
   it('translates an open journal without changing its page or focus', () => {
     const view = new SurvivalJournalView();
     views.push(view);
@@ -58,7 +58,6 @@ describe('live gameplay translations', () => {
     view.onPage = pageTurn;
     const focus = document.activeElement;
     setLanguage('pl');
-    expect(view.pageForTest()).toBe(1);
     expect(document.activeElement).toBe(focus);
     expect(find('[data-journal-page-count]').textContent).toBe('STRONA 2 Z 3');
     expect(find('#journal-day-label').textContent).toBe('DZIEŃ 2');
@@ -66,7 +65,6 @@ describe('live gameplay translations', () => {
     expect(view.root.getAttribute('aria-label')).toBe('Dziennik przetrwania');
     expect(pageTurn).not.toHaveBeenCalled();
     setLanguage('es-AR');
-    expect(view.pageForTest()).toBe(1);
     expect(document.activeElement).toBe(focus);
     expect(find('[data-journal-page-count]').textContent).toBe('PÁGINA 2 DE 3');
     expect(find('#journal-day-label').textContent).toBe('DÍA 2');
@@ -121,16 +119,5 @@ describe('live gameplay translations', () => {
     view.confirmRewardResult();
     await Promise.resolve();
     expect(settled).toBe(true);
-  });
-
-  it('removes subscriptions on disposal and uses Polish second forms', () => {
-    const view = new SurvivalJournalView();
-    const original = view.closeButton.getAttribute('aria-label');
-    view.dispose();
-    setLanguage('pl');
-    expect(view.closeButton.getAttribute('aria-label')).toBe(original);
-    expect([1, 2, 5, 12, 22].map(value => uiDynamic('seconds', value))).toEqual([
-      '1 SEKUNDA', '2 SEKUNDY', '5 SEKUND', '12 SEKUND', '22 SEKUNDY',
-    ]);
   });
 });

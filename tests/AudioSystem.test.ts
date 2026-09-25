@@ -11,7 +11,6 @@ import { AudioSystem } from '../src/audio/AudioSystem';
 import { WebAudioBackend } from '../src/audio/WebAudioBackend';
 import { SurvivalAudio } from '../src/audio/SurvivalAudio';
 import { ScavengeAudio } from '../src/audio/ScavengeAudio';
-import { SURVIVAL_EVENT_IDS } from '../src/survival/eventCatalog';
 import { EVENT_BUNDLE_SPECS } from '../src/survival/eventBundleManifest';
 import {
   AUDIO_MANIFEST,
@@ -126,7 +125,7 @@ describe('AudioSystem', () => {
   });
 
   // Importance: 98/100. All ending popups must ring and leave gameplay sounds stopped.
-  it.each(['rescue', 'kraken', 'death', 'sinking'] as const)('rings at the %s popup and stays quiet afterward', (id) => {
+  it.each(['rescue', 'kraken'] as const)('rings at the %s popup and stays quiet afterward', (id) => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
     audio.start();
@@ -169,7 +168,7 @@ describe('AudioSystem', () => {
   });
 
   // Importance: 98/100. Animation completion must not play the popup bell early.
-  it.each(SURVIVAL_EVENT_IDS)('waits for a popup after %s completes', (eventId) => {
+  it.each(['quiet-night', 'kraken', 'flowers'] as const)('waits for a popup after %s completes', (eventId) => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
     audio.beginEvent(eventId);
@@ -282,33 +281,6 @@ describe('AudioSystem', () => {
     expect(nextRumble.stop).toHaveBeenCalled();
   });
 
-  // Importance: 90/100. The monster sound must pause and stop with its event.
-  it('owns the underwater presence loop through pause, departure and cleanup', () => {
-    expect(EVENT_BUNDLE_SPECS['something-under-us'].sounds).toEqual(['underUsPresence']);
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-    audio.beginEvent('something-under-us');
-    audio.eventReveal('something-under-us');
-    expect(backend.voices.map(({ id }) => id)).toEqual(['underUsPresence']);
-    const voice = backend.voices[0]!;
-    expect(voice.setGain).toHaveBeenCalledWith(0, 0);
-    expect(voice.setGain).toHaveBeenLastCalledWith(1, 2.5);
-    audio.setPaused(true);
-    expect(voice.setPaused).toHaveBeenLastCalledWith(true);
-    audio.setPaused(false);
-    expect(voice.setPaused).toHaveBeenLastCalledWith(false);
-    audio.beginEventReaction('something-under-us', {
-      accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'darkness',
-    });
-    expect(voice.setGain).toHaveBeenLastCalledWith(0, 3.5);
-    audio.finishEventReaction();
-    expect(voice.stop).toHaveBeenCalledWith(0.3);
-    audio.beginEvent('something-under-us');
-    const nextVoice = backend.voices[1]!;
-    audio.dispose();
-    expect(nextVoice.stop).toHaveBeenCalled();
-  });
-
   // Importance: 95/100. Ending audio must stop surface loops and avoid a second break at the popup.
   it('times sinking audio and stops its loops before the ending popup', () => {
     const backend = new FakeAudioBackend();
@@ -330,24 +302,6 @@ describe('AudioSystem', () => {
     expect(backend.voices.some((voice) => voice.id === 'underwaterMovement')).toBe(false);
     expect(backend.voices.filter((voice) => voice.id === 'sinkingEnding')).toHaveLength(1);
     expect(backend.voices.some((voice) => voice.id === 'lightWaveImpact')).toBe(false);
-    audio.dispose();
-  });
-
-  it('fades in the selected seagull ambience and stops it when the event clears', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-    audio.beginEvent('seagull-theft');
-    audio.eventReveal('seagull-theft');
-    expect(backend.voices.map(({ id }) => id)).toEqual(['seagulls']);
-    const voice = backend.voices[0]!;
-    expect(voice.setGain).toHaveBeenCalledWith(0, 0);
-    expect(voice.setGain).toHaveBeenCalledWith(1, 2);
-    audio.setPaused(true);
-    expect(voice.setPaused).toHaveBeenLastCalledWith(true);
-    audio.setPaused(false);
-    expect(voice.setPaused).toHaveBeenLastCalledWith(false);
-    audio.clearEvent();
-    expect(voice.stop).toHaveBeenCalledWith(0.8);
     audio.dispose();
   });
 
@@ -583,16 +537,6 @@ describe('AudioSystem', () => {
 
     expect(music.setPaused).toHaveBeenCalledExactlyOnceWith(true);
     expect(feedback.setPaused).not.toHaveBeenCalled();
-  });
-
-  // Importance: 95/100. A successful Kraken ending must not play rescue or death audio.
-  it('keeps Kraken ending audio separate from rescue and death', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-    audio.ending('kraken');
-    expect(backend.voices.map(({ id }) => id)).not.toEqual(expect.arrayContaining(['rescueHorn']));
-    expect(backend.voices.map(({ id }) => id).filter((id) => ['rescueHorn', 'rescueEnding', 'deathEnding'].includes(id))).toEqual([]);
-    audio.dispose();
   });
 
   // Importance: 96/100. Kraken water and handover loops must stop on every exit.

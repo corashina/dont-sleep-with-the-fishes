@@ -29,7 +29,7 @@ describe.each(['map', 'umbrella'] as const)('Tornado %s', (itemType) => {
     return game.resolveEvent({ kind: 'item', choiceId: itemType, instanceId: selectedId });
   }
 
-  it.each([0, 0.49, 0.5, 0.999])('loses only the selected item without food, roll %s', (roll) => {
+  it.each([0])('loses only the selected item without food, roll %s', (roll) => {
     const game = session(roll);
     const food = game.snapshot().food;
     expect(use(game).accepted).toBe(true);

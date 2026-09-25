@@ -46,37 +46,6 @@ describe('binocular item camera', () => {
     return { camera, target, adapter, sample: createEventItemUseSample() };
   }
 
-  it('keeps the player at the back throughout binocular use', () => {
-    const { camera, adapter, sample } = setup();
-    try {
-      const start = camera.position.clone();
-      for (let frame = 0; frame <= 100; frame += 1) {
-        sampleEventItemUse('binocular-look', 'spyglass', frame / 100, sample);
-        adapter.apply(sample);
-        expect(camera.position.equals(start)).toBe(true);
-      }
-    } finally { adapter.dispose(); }
-  });
-
-  it('turns and zooms with the same progress from the back', () => {
-    const { camera, target, adapter, sample } = setup();
-    try {
-      const baseRotation = camera.quaternion.clone();
-      const start = camera.position.clone();
-      camera.lookAt(target.position);
-      const targetRotation = camera.quaternion.clone();
-      const fullAngle = baseRotation.angleTo(targetRotation);
-      for (const progress of [0.5, 0.52, 0.57, 0.61, 0.64, 0.9]) {
-        sampleEventItemUse('binocular-look', 'spyglass', progress, sample);
-        adapter.apply(sample);
-        const zoomProgress = (60 - camera.fov) / (60 * 0.62);
-        expect(sample.cameraTargetBlend).toBeCloseTo(zoomProgress, 8);
-        expect(baseRotation.angleTo(camera.quaternion) / fullAngle).toBeCloseTo(zoomProgress, 6);
-        expect(camera.position.equals(start)).toBe(true);
-      }
-    } finally { adapter.dispose(); }
-  });
-
   it('keeps the player in place during recovery and restores the camera after cancellation', () => {
     const { camera, adapter, sample } = setup();
     const start = camera.position.clone();

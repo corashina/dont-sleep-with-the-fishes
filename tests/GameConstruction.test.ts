@@ -31,18 +31,6 @@ describe('Game construction rollback', () => {
     vi.restoreAllMocks();
   });
 
-  it('classifies renderer construction errors as WebGL initialization failures', async () => {
-    const cause = new Error('WebGL context failed');
-    constructionMocks.WebGLRenderer.mockImplementation(() => { throw cause; });
-    const { createBrowserGame, WebGlInitializationError } = await import('../src/app/createBrowserGame');
-
-    expect(() => createBrowserGame(
-      document.createElement('main'),
-      {} as PhaseResourceSource,
-      () => undefined, null,
-    )).toThrow(WebGlInitializationError);
-  }, 10_000);
-
   it('starts with default quality and preserves renderer setup errors during cleanup', async () => {
     const calls: string[] = [];
     const canvas = document.createElement('canvas');

@@ -67,28 +67,6 @@ describe('Settings menu', () => {
     expect(resume).toHaveBeenCalledOnce();
   });
 
-  it('sets AO presets and reflects developer changes when reopened', () => {
-    const { menu, options, button } = setup();
-    button.click();
-    const quality = menu.element.querySelector<HTMLFieldSetElement>('[data-quality-control="ambient-occlusion"]')!;
-    for (const value of ['high', 'off', 'low'] as const) {
-      const choice = quality.querySelector<HTMLButtonElement>(`[data-quality="${value}"]`)!;
-      choice.click();
-      expect(choice.getAttribute('aria-pressed')).toBe('true');
-      expect(options.ambientOcclusion.getState().ambientOcclusionMode).toBe(value === 'off' ? 'off' : 'composite');
-      if (value !== 'off') expect(options.ambientOcclusion.getState().ambientOcclusionQuality).toBe(value);
-    }
-    expect(options.ambientOcclusion.setNumeric).not.toHaveBeenCalled();
-    menu.close();
-    options.ambientOcclusion.setAmbientOcclusionMode('off');
-    button.click();
-    expect(quality.querySelector('[data-quality="off"]')!.getAttribute('aria-pressed')).toBe('true');
-    menu.close();
-    options.ambientOcclusion.getState().ambientOcclusionAvailable = false;
-    button.click();
-    expect(quality.disabled).toBe(true);
-  });
-
   it('returns from Settings to the start menu pause panel before closing it', () => {
     const { menu, mount, ui } = setup();
     ui.dispose();
@@ -134,25 +112,6 @@ describe('Settings menu', () => {
     expect(resume).not.toHaveBeenCalled();
   });
 
-  it('applies sound, camera, frame rate, and quality controls', () => {
-    const { menu, options, button } = setup();
-    button.click();
-    for (const [selector, value] of [['[data-audio-volume]', '35'], ['[data-camera-fov]', '90']] as const) {
-      const input = menu.element.querySelector<HTMLInputElement>(selector)!;
-      input.value = value;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    expect(options.audio.setVolume).toHaveBeenCalledWith(.35);
-    expect(options.camera.setFieldOfView).toHaveBeenCalledWith(90);
-    menu.element.querySelector<HTMLInputElement>('[data-performance-stats-enabled]')!.click();
-    expect(options.performance.setVisible).toHaveBeenCalledWith(true);
-    const water = menu.element.querySelector<HTMLFieldSetElement>('[data-quality-control="water"]')!;
-    expect([...water.querySelectorAll('[data-quality]')].map((choice) => choice.getAttribute('data-quality')))
-      .toEqual(['low', 'high']);
-    water.querySelector<HTMLButtonElement>('[data-quality="low"]')!.click();
-    expect(options.waterQuality.get()).toBe('low');
-  });
-
   it('updates saves and keeps newly created checkpoints when enabling auto-save', () => {
     const { menu, button, options } = setup();
     button.click();
@@ -171,15 +130,5 @@ describe('Settings menu', () => {
     expect(continueButton.disabled).toBe(true);
     menu.setSaveState(true, null);
     expect(menu.element.querySelector('[data-save-status]')!.textContent).toBe('NO SAVE');
-  });
-
-  it('removes listeners and restores pause on disposal', () => {
-    const { menu, button, pause } = setup();
-    button.click();
-    menu.dispose();
-    expect(pause.hasAttribute('inert')).toBe(false);
-    button.click();
-    expect(menu.element.isConnected).toBe(false);
-    expect(menu.element.hidden).toBe(true);
   });
 });

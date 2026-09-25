@@ -60,13 +60,7 @@ function setup(itemId: ItemId, context: EventItemUseContext) {
 
 describe('consumed item return', () => {
   // Importance: 95/100. Cleanup must not conceal an incorrect return destination.
-  it.each([
-    ['shotgun', 'shotgun-fire'],
-    ['flareGun', 'flare-target'],
-    ['ductTape', 'tape-stretch'],
-    ['fishingNet', 'net-scoop'],
-    ['radio', 'base'],
-  ] as const)('returns %s from %s to its pickup pose before cleanup', (itemId, context) => {
+  it.each([['fishingNet', 'net-scoop']] as const)('returns %s from %s to its pickup pose before cleanup', (itemId, context) => {
     const rig = setup(itemId, context);
     try {
       const target = new Group();

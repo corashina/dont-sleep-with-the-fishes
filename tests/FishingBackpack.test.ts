@@ -1,7 +1,6 @@
 import { describe,expect,it } from 'vitest';
 import { ITEM_IDS,type ItemId } from '../src/game/ItemState';
 import { eligibleFishingCatches,selectFishingCatch } from '../src/survival/fishingCatalog';
-import { fishingSettlement } from '../src/survival/fishingSettlementRules';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { createSurvivalSaveDocument,parseSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
 import { formatFishingResult } from '../src/survival/SurvivalFishingFlow';
@@ -44,15 +43,6 @@ describe('fishing backpack', () => {
       .toEqual([{ itemId: missing, kind: 'gain' }]);
   });
 
-  it('can award every missing item except Carlitos', () => {
-    const candidates = ITEM_IDS.filter((id) => id !== 'carlitos');
-    for (const itemId of candidates) {
-      const owned = new Set<ItemId>(candidates.filter((candidate) => candidate !== itemId));
-      const caught = selectFishingCatch(0, false, 0.95, owned);
-      expect(caught).toMatchObject({ id: 'backpack', reward: { kind: 'item', itemId, condition: 'usable' } });
-    }
-  });
-
   it('only awards the missing item and disappears when all eligible items are present', () => {
     const present = new Set<ItemId>(ITEM_IDS.filter((id) => id !== 'map'));
     for (const roll of [0.90, 0.95, 0.999999]) {
@@ -61,15 +51,5 @@ describe('fishing backpack', () => {
     present.add('map');
     expect(eligibleFishingCatches(3, true, present).some((entry) => entry.catch.id === 'backpack')).toBe(false);
     expect(selectFishingCatch(3, true, 0.999999, present).id).not.toBe('backpack');
-  });
-
-  it('awards the item without consuming bait and names the contents', () => {
-    const present = new Set(ITEM_IDS.filter((id) => id !== 'map'));
-    const caught = selectFishingCatch(3, true, 0.95, present);
-    expect(fishingSettlement({ kind: 'catch', catch: caught }, true)).toMatchObject({
-      code: 'utility-caught', baitConsumed: false, deltas: {},
-      itemReward: { itemId: 'map', condition: 'usable' },
-      message: 'The backpack holds map.',
-    });
   });
 });

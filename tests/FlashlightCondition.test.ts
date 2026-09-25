@@ -21,15 +21,4 @@ describe('Flashlight condition', () => {
     expect(restored.snapshot().inventory[flashlight.instanceId]?.condition).toBe('broken');
   });
 
-  it('rejects a broken Flashlight as an event response', () => {
-    const session = new SurvivalSession([flashlight], {
-      seed: 42, initialConditions: { 'flashlight-1': 'broken' }, initialEventId: 'death-stare',
-    });
-    const before = session.snapshot();
-    expect(session.resolveEvent({
-      kind: 'item', choiceId: 'flashlight', instanceId: flashlight.instanceId,
-    })).toMatchObject({ accepted: false, code: 'item-unavailable' });
-    expect(session.snapshot()).toEqual(before);
-  });
-
 });

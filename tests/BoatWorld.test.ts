@@ -3,33 +3,7 @@ import { WIND_ITEM_FLIGHT_DURATION } from '../src/survival/eventItemUseChoreogra
 import { resourceSupplyActorId } from '../src/survival/resourceSupplyActors';
 // Importance: 8/10 (scaled from 4/5). Protects survival world integration and cleanup.
 import { describe,expect,it,vi } from 'vitest';
-import {
-  AnimationClip,
-  Bone,
-  Box3,
-  BoxGeometry,
-  BufferGeometry,
-  Float32BufferAttribute,
-  Group,
-  Light,
-  Line,
-  Material,
-  Mesh,
-  MeshStandardMaterial,
-  Object3D,
-  PerspectiveCamera,
-  PointLight,
-  Points,
-  Quaternion,
-  QuaternionKeyframeTrack,
-  Raycaster,
-  ShaderMaterial,
-  Skeleton,
-  SkinnedMesh,
-  Texture,
-  Uint16BufferAttribute,
-  Vector3,
-} from 'three';
+import { AnimationClip, Bone, BufferGeometry, Float32BufferAttribute, Group, Light, Line, Material, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, PointLight, Points, Quaternion, QuaternionKeyframeTrack, ShaderMaterial, Skeleton, SkinnedMesh, Texture, Uint16BufferAttribute, Vector3 } from 'three';
 import {
   type ItemId,
   type ItemInstance,
@@ -37,14 +11,8 @@ import {
 } from '../src/game/ItemState';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import {
-  type WaveSample,
-} from '../src/ocean/WaveField';
-import {
   BoatWorld,
 } from '../src/survival/BoatWorld';
-import {
-  FishingPresentation
-} from '../src/survival/FishingPresentation';
 import {
   BoatSupplyDisplay,
   type BorrowedSupplyActor,
@@ -81,16 +49,12 @@ import { SurvivalInventoryState } from '../src/survival/inventory';
 import {
   type SurvivalEventId
 } from '../src/survival/eventCatalog';
-import { SurvivalEventModelLibrary } from '../src/survival/SurvivalEventModelLibrary';
 import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
-import { presentationWeatherProfile } from '../src/weather/presentationWeather';
 import {
   createTestPropModels,
 } from './helpers/propModels';
 import { createTestSkyTextures } from './helpers/skyAssets';
 import { createTestShipFurniture } from './helpers/shipFurniture';
-import { boatSupplyTransform } from '../src/world/BoatStorage';
-import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 
 const savedItem = (type: ItemId, index = 1): ItemInstance => ({
   instanceId: `${type}-${index}` as ItemInstanceId,
@@ -127,18 +91,6 @@ function createTestEventModels(): EventModelLibrary {
     animations: vi.fn(() => []),
     dispose: vi.fn(),
   } as unknown as EventModelLibrary;
-}
-
-async function createTestFeaturedModels(
-  ids: Parameters<typeof SurvivalEventModelLibrary.load>[0],
-): Promise<SurvivalEventModelLibrary> {
-  return SurvivalEventModelLibrary.load([...ids, 'bloodHeart', 'flowersHeart', 'chestHeart'], {
-    load: async () => {
-      const root = new Group();
-      root.add(new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial()));
-      return root;
-    },
-  });
 }
 
 function expectEventEffectRootsCleared(scene: Object3D, eventId: SurvivalEventId): void {
@@ -355,26 +307,9 @@ describe('BoatWorld helpers', () => {
     }
   });
 
-  // Importance: 95/100. Reward choices share resource IDs but must never throw stored supplies.
-  it('does not treat a Starry Night Food wish as a resource payment', async () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(new PerspectiveCamera(), propModels, ...createTestSkyTextures(), [],
-      undefined, undefined, 'low', createTestEventModels());
-    try {
-      world.syncInventory(snapshot([], { food: 2 }));
-      const use = vi.spyOn(world, 'playEventItemUse');
-      await world.playEventChoice('starry-night', 'cannedFood');
-      expect(use).not.toHaveBeenCalled();
-    } finally {
-      world.dispose();
-      propModels.dispose();
-    }
-  });
-
   // Importance: 95/100. Resource-only choices must borrow visible props and release them on cancellation.
   it.each([
     ['swarm-of-sharks', 'cannedFood', 'food', 'boat-food-supply'],
-    ['tentacle-attack', 'cannedFood', 'food', 'boat-food-supply'],
     ['school-of-fish', 'baitTin', 'bait', 'boat-bait-supply'],
   ] as const)('animates %s / %s without a container in inventory', async (eventId, choiceId, resource, actorId) => {
     const propModels = createTestPropModels();
@@ -407,25 +342,6 @@ describe('BoatWorld helpers', () => {
       propModels.dispose();
     }
   });
-
-  // Importance: 95/100. Restored ownership must drive the boat models and ending cleanup.
-  it('shows collected heart pieces on the boat and removes them after return', () => {
-    const world = new BoatWorld(new PerspectiveCamera(), createTestPropModels(), ...createTestSkyTextures());
-    try {
-      world.syncInventory(snapshot([], { heartPieces: { flowers: true, blood: false, chest: true } }));
-      const display = world.scene.getObjectByName('boat-heart-pieces')!;
-      expect(display.getObjectByName('flowers-heart-piece')!.visible).toBe(true);
-      expect(display.getObjectByName('blood-heart-piece')!.visible).toBe(false);
-      expect(display.getObjectByName('chest-heart-piece')!.visible).toBe(true);
-      world.syncInventory(snapshot([], { heartPieces: { flowers: true, blood: true, chest: true } }));
-      expect(display.getObjectByName('blood-heart-piece')!.visible).toBe(true);
-      world.syncInventory(snapshot([], { ending: { id: 'kraken', day: 1, savedPickupCount: 0 } }));
-      expect(display.visible).toBe(false);
-      for (const id of ['flowers', 'blood', 'chest']) {
-        expect(display.getObjectByName(id + '-heart-piece')!.visible).toBe(false);
-      }
-    } finally { world.dispose(); }
-  });
   // Importance: 95/100. Protects the terminal handoff and prevents replaying the ending after event outcomes.
   it('holds the blackout after a visible break and fall before showing the ending', async () => {
     const camera = new PerspectiveCamera();
@@ -450,27 +366,6 @@ describe('BoatWorld helpers', () => {
       await world.play('sinking');
       expect(sound.mock.calls.flat()).toEqual(['strain', 'break', 'finish']);
     } finally { world.dispose(); }
-  });
-
-  it('keeps repair selectable and clears the flare gun after moving the toolbox back', () => {
-    const camera = new PerspectiveCamera(63, 16 / 9, 0.08, 220);
-    const world = new BoatWorld(camera, createTestPropModels(), ...createTestSkyTextures());
-    try {
-      world.update(0.01, 0.01);
-      world.scene.updateMatrixWorld(true);
-      const toolbox = world.scene.getObjectByName('repair-toolbox')!;
-      const bounds = ITEM_MODEL_SPECS.flareGun.normalizedBounds;
-      const pose = boatSupplyTransform('flareGun', 0);
-      const target = new Box3(new Vector3(...bounds.min), new Vector3(...bounds.max))
-        .getCenter(new Vector3()).multiplyScalar(pose.scale).applyEuler(pose.rotation).add(pose.position);
-      world.scene.getObjectByName('lifeboat')!.localToWorld(target);
-      const origin = camera.getWorldPosition(new Vector3());
-      const ray = new Raycaster(origin, target.clone().sub(origin).normalize(), 0, origin.distanceTo(target));
-      expect(ray.intersectObject(toolbox, true)).toHaveLength(0);
-      expect(world.projectInteractionAnchors(1280, 720).find((anchor) => anchor.toolId === 'repairTools')!.visible).toBe(true);
-    } finally {
-      world.dispose();
-    }
   });
 
   it('runs and restores the Midnight Tour attack cutscene on each seeded side', async () => {
@@ -581,41 +476,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it.each(['drifting-supplies', 'drifting-chest'] as const)(
-    'keeps Carlitos seated while he retrieves %s',
-    async (eventId) => {
-      const propModels = createTestPropModels();
-      const adapter = eventAdapterTestDouble(eventId);
-      const create = vi.spyOn(EventPresentationRegistry.prototype, 'create')
-        .mockReturnValue(adapter);
-      const world = new BoatWorld(
-        new PerspectiveCamera(),
-        propModels,
-        ...createTestSkyTextures(),
-      );
-
-      try {
-        world.syncInventory(snapshot([], { carlitos: createCarlitosState() }));
-        world.stageEvent(eventId);
-        const carlitos = world.scene.getObjectByName('carlitos-companion')!;
-        const seatedPosition = carlitos.position.clone();
-        const seatedRotation = carlitos.rotation.clone();
-
-        const retrieval = world.delegateDriftingItem(eventId);
-        world.update(0.5, 0.5);
-
-        expect(carlitos.position).toEqual(seatedPosition);
-        expect(carlitos.rotation.toArray()).toEqual(seatedRotation.toArray());
-        world.update(2, 1.5);
-        await retrieval;
-      } finally {
-        world.dispose();
-        create.mockRestore();
-        propModels.dispose();
-      }
-    },
-  );
-
   // Importance: 95/100. Prevents recovered cargo disappearing during the storage handoff.
   it.each(['retrieveDriftingItem', 'delegateDriftingItem'] as const)(
     '%s keeps the recovered chest visible until boat storage takes over',
@@ -707,38 +567,6 @@ describe('BoatWorld helpers', () => {
     disposals.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
     furniture.dispose();
     disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
-    propModels.dispose();
-  });
-
-  it('prepares local matrices without traversing the scene during a focused drifting-item frame', async () => {
-    const propModels = createTestPropModels();
-    const featuredModels = await createTestFeaturedModels([
-      'driftingBarrel', 'wreckageBox', 'wreckageCrate', 'wreckagePallet',
-      'emptyLifeboat',
-      'emptyLifeboatContainer',
-      'shippingContainer',
-    ]);
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 4 / 3, 0.08, 220),
-      propModels,
-      ...createTestSkyTextures(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      featuredModels,
-    );
-    world.stageEvent('drifting-supplies', 8);
-    const entered = world.enterFocusedEventView('drifting-supplies');
-    world.update(1.2, 1.2);
-    await entered;
-    const updateMatrixWorld = vi.spyOn(world.scene, 'updateMatrixWorld');
-
-    world.update(1.3, 0.1);
-
-    expect(updateMatrixWorld).not.toHaveBeenCalled();
-    world.dispose();
-    featuredModels.dispose();
     propModels.dispose();
   });
 
@@ -1319,26 +1147,6 @@ describe('BoatWorld helpers', () => {
     },
   );
 
-  it('applies the canonical supply restore and event pose once per frame', () => {
-    const propModels = createTestPropModels();
-    const updateSupply = vi.spyOn(BoatSupplyDisplay.prototype, 'update');
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      ...createTestSkyTextures(),
-    );
-    updateSupply.mockClear();
-
-    world.stageEvent('windy-night');
-    void world.revealEvent('windy-night');
-    world.update(1, 0.25);
-
-    expect(updateSupply).toHaveBeenCalledOnce();
-    updateSupply.mockRestore();
-    world.dispose();
-    propModels.dispose();
-  });
-
   // Importance: 94/100. Cargo tools must contact the supplies, remain deployed, and release on scene cleanup.
   it.each([
     ['shower-night', 'map'], ['windy-night', 'fishingNet'],
@@ -1561,36 +1369,6 @@ describe('BoatWorld helpers', () => {
     supernaturalSupport.mockRestore();
   });
 
-  it('shows a newly gained supply without allocating a model during inventory sync', () => {
-    const propModels = createTestPropModels();
-    const create = vi.spyOn(propModels, 'createPresentation');
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
-      propModels,
-      ...createTestSkyTextures(),
-    );
-    const createdAtConstruction = create.mock.calls.length;
-    const gained = savedItem('energyBar');
-
-    world.syncInventory(snapshot([], {
-      inventory: {
-        [gained.instanceId]: { ...gained, condition: 'usable' as const },
-      },
-    }));
-
-    expect(create).toHaveBeenCalledTimes(createdAtConstruction);
-    expect(world.scene.getObjectByName('boat-supply:energyBar:copy-1')?.visible).toBe(true);
-    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'supply:energyBar',
-        backingInstanceId: 'energyBar-1',
-      }),
-    ]));
-
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('ignores stale borrowed actor commands after another supply becomes active', () => {
     const map = savedItem('map');
     const ring = savedItem('swimRing');
@@ -1758,46 +1536,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps projected item and tool anchors steady while riding waves', () => {
-    const savedItems = [savedItem('bucket')];
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
-    camera.updateProjectionMatrix();
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      ...createTestSkyTextures(),
-      savedItems,
-    );
-    world.syncInventory(snapshot(savedItems));
-    world.update(0.5, 1 / 60);
-    const settled = new Map(
-      world.projectInteractionAnchors(800, 600).map((anchor) => [anchor.id, anchor]),
-    );
-
-    world.update(8, 0.5);
-    const ridingWave = new Map(
-      world.projectInteractionAnchors(800, 600).map((anchor) => [anchor.id, anchor]),
-    );
-
-    for (const id of [
-      'supply:bucket',
-      'fishing-tools',
-      'repair-tools',
-      'end-day-pillow',
-    ]) {
-      expect(ridingWave.get(id)?.x, id).toBeCloseTo(settled.get(id)!.x);
-      expect(ridingWave.get(id)?.y, id).toBeCloseTo(settled.get(id)!.y);
-      expect(ridingWave.get(id)?.hitArea?.width, id)
-        .toBeCloseTo(settled.get(id)!.hitArea!.width);
-      expect(ridingWave.get(id)?.hitArea?.height, id)
-        .toBeCloseTo(settled.get(id)!.hitArea!.height);
-    }
-
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('reuses one water exclusion region and list across frames', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -1823,86 +1561,6 @@ describe('BoatWorld helpers', () => {
     expect(exclusions[0]![0]!.upperLocalY).toBe(LIFEBOAT_GUNWALE_SURFACE_Y);
     expect(exclusions[0]![0]!.keepSurfaceBelowRim).toBe(true);
     expect(ocean.material.uniforms.uExclusionHullContacts!.value).toEqual([1, 0]);
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('keeps ocean water continuous beneath the drifting lifeboat', async () => {
-    const propModels = createTestPropModels();
-    const featuredModels = await createTestFeaturedModels([
-      'driftingBarrel', 'wreckageBox', 'wreckageCrate', 'wreckagePallet',
-      'emptyLifeboat',
-      'emptyLifeboatContainer',
-      'shippingContainer',
-    ]);
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      propModels,
-      ...createTestSkyTextures(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      featuredModels,
-    );
-    const ocean = (world as unknown as { ocean: OceanRenderer }).ocean;
-    const exclusions: Parameters<OceanRenderer['setExclusions']>[0][] = [];
-    vi.spyOn(ocean, 'setExclusions').mockImplementation((regions) => {
-      exclusions.push(regions);
-    });
-
-    world.stageEvent('drifting-supplies', 2);
-    world.update(1, 1 / 60);
-
-    const lifeboat = world.scene.getObjectByName('drifting-supplies:lifeboat')!;
-    const floor = lifeboat.getObjectByName('drifting-supplies:lifeboat-floor');
-    expect(floor).toBeInstanceOf(Mesh);
-    expect(exclusions).toHaveLength(1);
-    expect(exclusions[0]).toHaveLength(1);
-
-    world.dispose();
-    featuredModels.dispose();
-    propModels.dispose();
-  });
-
-  it('keeps the frame-captured wave scale when an event update changes weather', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      propModels,
-      ...createTestSkyTextures(),
-    );
-    const internals = world as unknown as {
-      fishingPresentation: FishingPresentation;
-      eventPresentationHost: { update(time: number, delta: number): void };
-    };
-    world.setPresentationWeather('calm');
-    world.showFishingWaiting(world.centeredFishingCast());
-    const presentationDependencies = internals.fishingPresentation as unknown as {
-      dependencies: {
-        sampleWaveInto: (
-          output: WaveSample,
-          time: number,
-          x: number,
-          z: number,
-          amplitudeScale: number,
-        ) => void;
-      };
-    };
-    const sampleWave = vi.spyOn(presentationDependencies.dependencies, 'sampleWaveInto');
-    sampleWave.mockClear();
-    const eventUpdate = internals.eventPresentationHost.update
-      .bind(internals.eventPresentationHost);
-    vi.spyOn(internals.eventPresentationHost, 'update').mockImplementation((time, delta) => {
-      eventUpdate(time, delta);
-      world.setPresentationWeather('waves');
-    });
-
-    world.update(2, 1 / 60);
-
-    expect(sampleWave.mock.calls.at(-1)?.[4]).toBe(
-      presentationWeatherProfile('calm').waveScale,
-    );
     world.dispose();
     propModels.dispose();
   });

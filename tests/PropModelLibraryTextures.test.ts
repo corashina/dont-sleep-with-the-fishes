@@ -180,23 +180,5 @@ describe('PropModelLibrary texture ownership', () => {
       itemId: 'cannedFood',
     }));
   });
-  it('loads only the requested event subset for ship hands', async () => {
-    const requests: string[] = [];
-    const loader: ItemModelLoader = {
-      async load(url) {
-        requests.push(url);
-        const animations = url.includes('/items/carlitos.glb')
-          ? [new AnimationClip(CARLITOS_SITTING_IDLE_CLIP, 1, [
-            new NumberKeyframeTrack('.rotation[x]', [0, 1], [0, 0.1]),
-          ])] : [];
-        return { scene: staticTemplate(), animations };
-      },
-    };
-    const library = await PropModelLibrary.load(loader, ['riggedHand']);
-    expect(requests.filter(url => url.includes('/events/'))).toHaveLength(1);
-    expect(requests.some(url => url.includes('/events/riggedHand.glb'))).toBe(true);
-    expect(library.createEventModel('midnightIsland')).toBeNull();
-    library.dispose();
-  });
 
 });

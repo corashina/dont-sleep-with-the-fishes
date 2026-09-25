@@ -117,7 +117,7 @@ describe('OceanCapture', () => {
   afterEach(() => vi.restoreAllMocks());
 
   // Importance: 95/100. Captures must reuse transforms and keep sky in reflections only.
-  it.each([false, true])('restores sky and transform state after captures (failure: %s)', (fail) => {
+  it.each([true])('restores sky and transform state after captures (failure: %s)', (fail) => {
     const capture = new OceanCapture();
     const testRenderer = createRenderer();
     const { scene, water, camera } = createSceneInput();

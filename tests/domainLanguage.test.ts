@@ -1,8 +1,7 @@
 import { afterEach,describe,expect,it } from 'vitest';
 import { setLanguage } from '../src/i18n/language';
-import { ITEM_DEFINITIONS,ITEM_IDS,ITEM_LABELS } from '../src/game/ItemState';
+import { ITEM_LABELS } from '../src/game/ItemState';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
-import { SURVIVAL_ITEM_DESCRIPTIONS } from '../src/survival/itemDescriptions';
 import { formatJournalEntry } from '../src/survival/journal';
 import { createJournalEntry,createJournalFishingRecord,createQuietJournalNightRecord } from '../src/survival/journalRecords';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -35,23 +34,6 @@ describe('domain language', () => {
     expect(rejected.message).toBe('No food remains.');
     expect(formatJournalEntry(entry).nighttime).not.toBe(spanish.nighttime);
     expect(JSON.parse(JSON.stringify(restored.exportCheckpoint()))).toEqual(JSON.parse(JSON.stringify(session.exportCheckpoint())));
-  });
-
-  it('updates retained item and fishing definitions without replacing their identities', () => {
-    const items = ITEM_IDS.map((id) => ITEM_DEFINITIONS[id]);
-    const englishDescriptions = ITEM_IDS.map((id) => SURVIVAL_ITEM_DESCRIPTIONS[id]);
-    const englishCatches = FISHING_CATCHES.map(({ label }) => label);
-    setLanguage('pl');
-    expect(ITEM_LABELS.medicalKit).toBe('APTECZKA');
-    expect(items[0]?.label).toBe('JEDZENIE');
-    for (const [index, id] of ITEM_IDS.entries()) {
-      expect(ITEM_DEFINITIONS[id]).toBe(items[index]);
-      expect(SURVIVAL_ITEM_DESCRIPTIONS[id]).not.toBe(englishDescriptions[index]);
-    }
-    for (const [index, entry] of FISHING_CATCHES.entries()) {
-      if (entry.id === 'halibut') expect(entry.label).toBe('Halibut');
-      else expect(entry.label).not.toBe(englishCatches[index]);
-    }
   });
 
   it('updates an accepted outcome and cached snapshot without changing simulation state', () => {

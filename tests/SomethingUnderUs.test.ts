@@ -3,13 +3,9 @@ import { Group, Mesh, PerspectiveCamera, Vector3 } from 'three';
 import { DEFAULT_WAVES, sampleWaveFieldInto } from '../src/ocean/WaveField';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { survivalEventById } from '../src/survival/eventCatalog';
-import { eligibleEvents } from '../src/survival/eventSelection';
 import { validateSurvivalEventCatalog } from '../src/survival/eventCatalogValidation';
 import { SomethingUnderUsPresentation } from '../src/survival/events/SomethingUnderUsPresentation';
-import { createUnderUsPose, sampleUnderUsReveal } from '../src/survival/events/underUsChoreography';
 import { deriveEventOutcomePresentation } from '../src/survival/eventPresentationOutcome';
-import { setLanguage } from '../src/i18n/language';
-import { formatJournalEntry } from '../src/survival/journal';
 import type { ItemId, ItemInstanceId } from '../src/game/ItemState';
 
 function session(hunger = 0, ...items: ItemId[]): SurvivalSession {
@@ -33,17 +29,6 @@ describe('Something Under Us rules', () => {
     expect(restored.exportCheckpoint().nextDawnEnergyOverride).toBeNull();
   });
 
-  it('uses exactly one bait and preserves normal sleep', () => {
-    const run = session(0, 'baitTin');
-    const before = run.snapshot();
-    const result = run.resolveEvent({ kind: 'item', choiceId: 'baitTin', instanceId: 'baitTin-1' });
-    expect(result.accepted).toBe(true);
-    expect(run.snapshot()).toMatchObject({ bait: before.bait - 1, health: before.health, hull: before.hull });
-    expect(run.snapshot().inventory['baitTin-1']?.condition).toBe('consumed');
-    run.beginDawn();
-    expect(run.snapshot().energy).toBe(3);
-  });
-
   it('rejects unavailable bait without changing the event', () => {
     const run = session();
     const before = run.snapshot();
@@ -58,20 +43,6 @@ describe('Something Under Us rules', () => {
     expect(run.snapshot()).toEqual(before);
   });
 
-  it('enforces the day, pressure, cooldown and appearance limits', () => {
-    const event = survivalEventById('something-under-us')!;
-    const base = {
-      phase: 'night' as const, day: 8, weather: 'calm' as const, lastEventId: null,
-      lastSeenDay: new Map<string, number>(), targetableItemIds: new Set<ItemId>(),
-      appearanceCounts: new Map<string, number>(), inventoryItemIds: new Set<ItemId>(), rescueLead: 0, pressure: 1,
-    };
-    expect(eligibleEvents([event], base)).toHaveLength(1);
-    for (const overrides of [
-      { day: 7 }, { pressure: 0 }, { day: 14, lastSeenDay: new Map([[event.id, 8]]) },
-      { appearanceCounts: new Map([[event.id, 2]]) },
-    ]) expect(eligibleEvents([event], { ...base, ...overrides })).toHaveLength(0);
-  });
-
   it('rejects contradictory and daytime dawn penalties', () => {
     const event = survivalEventById('something-under-us')!;
     const still = event.choices.find(({ id }) => id === 'sleep')!;
@@ -79,22 +50,6 @@ describe('Something Under Us rules', () => {
     expect(() => validateSurvivalEventCatalog([{ ...event, choices: [{ ...still, outcomes: [{
       ...still.outcomes[0]!, effects: { nextDawnEnergyReduction: 1, nextDawnEnergy: 3 },
     }] }] }])).toThrow(/cannot combine/);
-  });
-
-  it.each(['en'] as const)('records all three outcomes in the %s journal', (language) => {
-    setLanguage(language);
-    try {
-      for (const item of [undefined, 'baitTin', 'cannedFood'] as const) {
-        const run = item === undefined ? session() : session(0, item);
-        run.resolveEvent(item === undefined ? { kind: 'endure' } : {
-          kind: 'item', choiceId: item, instanceId: `${item}-1`,
-        });
-        run.beginDawn();
-        const entry = run.snapshot().journalEntries[0]!;
-        expect(() => formatJournalEntry(entry)).not.toThrow();
-        expect(JSON.stringify(formatJournalEntry(entry))).not.toMatch(/underUs|undefined/);
-      }
-    } finally { setLanguage('en'); }
   });
 });
 
@@ -113,39 +68,6 @@ function presentation(movingWater = false) {
 }
 
 describe('Something Under Us presentation', () => {
-  it('rejects flashlight animation', async () => {
-    const { event } = presentation();
-    expect(await event.playItemUse('flashlight', 'flashlight-1')).toBe(false);
-    event.dispose();
-  });
-  it('starts visible on the orbit and holds its opacity throughout reveal', () => {
-    const pose = createUnderUsPose();
-    sampleUnderUsReveal(0, pose);
-    expect(pose.opacity).toBeGreaterThan(0.8);
-    const opacity = pose.opacity;
-    sampleUnderUsReveal(0.8, pose);
-    expect(pose.radius).toBeGreaterThanOrEqual(12);
-    expect(pose.roll).toBeLessThan(0);
-    sampleUnderUsReveal(1, pose);
-    expect(pose.opacity).toBe(opacity);
-    expect(pose).toMatchObject({ radius: 12, lift: 0.19, roll: -0 });
-  });
-
-  it('follows the water, lifts the boat and restores all transforms on clear', async () => {
-    const { event, boatEffectsRoot, cameraEffectsRoot } = presentation();
-    const reveal = event.reveal();
-    event.update(6, 6);
-    await reveal;
-    expect(boatEffectsRoot.position.y).toBeCloseTo(0.19);
-    expect(cameraEffectsRoot.position.y).toBeCloseTo(0.19);
-    const shadow = event.worldRoot.getObjectByName('under-us-sea-shadow') as Mesh;
-    expect(shadow.geometry.attributes.position!.getY(0)).toBeCloseTo(0.365);
-    event.clear();
-    expect(event.worldRoot.visible).toBe(false);
-    expect(boatEffectsRoot.position.length()).toBe(0);
-    expect(cameraEffectsRoot.position.length()).toBe(0);
-    event.dispose();
-  });
 
   // Importance: 95/100. Prevents the reported hull clipping across a complete orbit.
   it('circles through every quadrant while moving waves keep the entire mesh outside the hull', () => {

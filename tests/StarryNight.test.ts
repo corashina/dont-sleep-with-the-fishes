@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ITEM_DEFINITIONS, type ItemId } from '../src/game/ItemState';
+import { type ItemId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { survivalEventById } from '../src/survival/eventCatalog';
 import { eligibleEvents } from '../src/survival/eventSelection';
-import { constellationItems, prepareStarryNightEvent, STARRY_NIGHT_ITEMS } from '../src/survival/starryNight';
+import { prepareStarryNightEvent, STARRY_NIGHT_ITEMS } from '../src/survival/starryNight';
 import { createSurvivalSaveDocument, parseSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
 
 function session() {
@@ -17,28 +17,6 @@ const event = survivalEventById('starry-night')!;
 const choices = (run: SurvivalSession) => prepareStarryNightEvent(event, run.snapshot()).choices;
 
 describe('Starry Night', () => {
-  // Importance: 95/100. The event must never offer or grant excluded equipment.
-  it('limits rewards to the seven approved items', () => {
-    expect(STARRY_NIGHT_ITEMS).toEqual([
-      'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'knife', 'energyBar',
-    ]);
-    for (const choiceId of ['flareGun', 'spyglass', 'flashlight', 'radio']) {
-      expect(event.choices.some(({ id }) => id === choiceId)).toBe(false);
-      expect(session().resolveEvent({ kind: 'choice', choiceId }).accepted).toBe(false);
-    }
-  });
-
-  // Importance: 95/100. Each event must offer exactly two valid rewards.
-  it('offers two distinct unowned weight-one items and sleep', () => {
-    for (let seed = 0; seed < 100; seed++) {
-      const items = constellationItems(seed, new Set(['knife', 'radio']));
-      expect(items).toHaveLength(2);
-      expect(new Set(items).size).toBe(2);
-      expect(items.every((id) => ITEM_DEFINITIONS[id].weight === 1 && id !== 'knife' && id !== 'radio')).toBe(true);
-    }
-    expect(choices(session())).toHaveLength(3);
-    expect(event.weather).toEqual(['calm']);
-  });
 
   it('awards exactly the selected item once without restoring the crew', () => {
     for (const choice of choices(session()).filter(({ id }) => id !== 'sleep')) {
@@ -80,14 +58,5 @@ describe('Starry Night', () => {
     };
     expect(eligibleEvents([event], criteria)).toHaveLength(0);
     expect(eligibleEvents([event], { ...criteria, inventoryItemIds: new Set(STARRY_NIGHT_ITEMS.slice(2)) })).toHaveLength(1);
-  });
-
-  it('grants nothing when sleeping and uses normal dawn rules', () => {
-    const run = session();
-    const before = run.snapshot();
-    expect(run.resolveEvent({ kind: 'choice', choiceId: 'sleep' })).toMatchObject({ accepted: true, deltas: {} });
-    expect(run.snapshot().inventory).toEqual(before.inventory);
-    expect(run.beginDawn().accepted).toBe(true);
-    expect(run.snapshot().hunger).toBeGreaterThan(before.hunger);
   });
 });

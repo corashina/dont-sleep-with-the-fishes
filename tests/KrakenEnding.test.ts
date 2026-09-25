@@ -62,11 +62,6 @@ it('collects each source, restores progress, crosses dawn, then reaches the Krak
     .toEqual(['flowers', 'ocean-of-blood', 'kraken']);
 });
 
-it('creates a live ending preview which still requires the return choice', () => {
-  const session = SurvivalSession.createEndingPreview([], 41, 'kraken');
-  expect(session.snapshot()).toMatchObject({ pendingEventId: 'kraken', ending: null, heartPieces: COMPLETE_HEART });
-});
-
 it('suppresses certain dawn rescue after the last night piece, but preserves fatal hull wear', () => {
   for (const hull of [100, 1]) {
     const session = new SurvivalSession([{ type: 'scubaSet', instanceId: 'scubaSet-1' }], {

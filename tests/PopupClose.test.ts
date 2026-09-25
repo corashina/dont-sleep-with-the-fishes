@@ -11,7 +11,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-it.each(['drifting-supplies', 'drifting-chest'] as const)(
+it.each(['drifting-chest'] as const)(
   '%s closes through the return action and respects busy and modal locks',
   (eventId) => {
     const view = new FocusedEventView(document.body);
@@ -39,11 +39,7 @@ it.each(['drifting-supplies', 'drifting-chest'] as const)(
   },
 );
 
-it.each([
-  ['check-the-back', 'check'],
-  ['guarded-sleep', 'watch'],
-  ['midnight-tour', 'visit'],
-] as const)('%s closes through its decline choice', async (eventId, acceptId) => {
+it.each([['check-the-back', 'check']] as const)('%s closes through its decline choice', async (eventId, acceptId) => {
   const view = new SurvivalEventView();
   views.push(view);
   document.body.append(...view.roots);

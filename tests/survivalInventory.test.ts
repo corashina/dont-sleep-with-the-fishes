@@ -79,6 +79,7 @@ describe('survival foundations', () => {
     expect(Object.values(inventory.snapshot()).filter((item) => item?.type === 'fishingNet')).toHaveLength(1);
   });
 
+  // Importance: 95/100. Each owned utility must be excluded from persistent fishing rewards.
   it('restores unique fishing eligibility only after loss or consumption', () => {
     const inventory = new SurvivalInventoryState(saved('compass', 'ductTape'));
     const activeIds = () => new Set(
@@ -86,8 +87,9 @@ describe('survival foundations', () => {
         .filter((item) => item?.condition === 'usable' || item?.condition === 'broken')
         .map((item) => item!.type),
     );
-    expect(eligibleFishingCatches(3, false, activeIds()).map(({ catch: entry }) => entry.id))
-      .not.toEqual(expect.arrayContaining(['brokenCompass', 'wetDuctTape']));
+    const eligibleIds = eligibleFishingCatches(3, false, activeIds()).map(({ catch: entry }) => entry.id);
+    expect(eligibleIds).not.toContain('brokenCompass');
+    expect(eligibleIds).not.toContain('wetDuctTape');
     inventory.lose('compass-1');
     inventory.consume('ductTape');
     expect(eligibleFishingCatches(3, false, activeIds()).map(({ catch: entry }) => entry.id))

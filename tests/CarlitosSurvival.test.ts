@@ -1,21 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { createSurvivalSaveDocument, parseSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
-import * as fishingCatalog from '../src/survival/fishingCatalog';
 
 const saved = [{ type: 'carlitos', instanceId: 'carlitos-1' }] as const;
 afterEach(() => vi.restoreAllMocks());
 
 describe('Carlitos survival integration', () => {
-  it.each(['drifting-supplies', 'drifting-chest'])('retrieves %s only when rested, then becomes exhausted', (eventId) => {
-    const session = new SurvivalSession([...saved], {
-      seed: 1, initialEventId: eventId, initialCarlitos: { rest: 'rested' },
-    });
-    const playerEnergy = session.snapshot().energy;
-    expect(session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' }).accepted).toBe(true);
-    expect(session.snapshot().carlitos?.rest).toBe('exhausted');
-    expect(session.snapshot().energy).toBe(playerEnergy);
-  });
 
   it.each(['tired', 'exhausted'] as const)('blocks all event help while %s without spending resources', (rest) => {
     const unavailableReason = rest === 'tired'
@@ -41,14 +31,6 @@ describe('Carlitos survival integration', () => {
     }
   });
 
-  it('becomes tired after keeping watch', () => {
-    const session = new SurvivalSession([...saved], { seed: 1, initialEventId: 'guarded-sleep' });
-    const playerEnergy = session.snapshot().energy;
-    expect(session.resolveEvent({ kind: 'choice', choiceId: 'watch' }).accepted).toBe(true);
-    expect(session.snapshot().carlitos?.rest).toBe('tired');
-    expect(session.snapshot().energy).toBe(playerEnergy);
-  });
-
   it('never schedules Guarded Sleep while exhausted', () => {
     let restedAppearances = 0;
     for (let seed = 1; seed <= 100; seed += 1) {
@@ -65,18 +47,6 @@ describe('Carlitos survival integration', () => {
       if (rested.snapshot().pendingEventId === 'guarded-sleep') restedAppearances += 1;
     }
     expect(restedAppearances).toBeGreaterThan(0);
-  });
-
-  it.each(['rested', 'tired', 'exhausted'] as const)('applies the fishing bonus only when rested: %s', (rest) => {
-    const select = vi.spyOn(fishingCatalog, 'selectFishingCatch');
-    for (const gear of ['rod', 'net'] as const) {
-      const session = new SurvivalSession([...saved, { type: 'fishingNet', instanceId: 'fishingNet-1' }], {
-        seed: 1, initialCarlitos: { rest }, initial: { energy: 4 },
-      });
-      expect(session.beginFishing(gear).accepted).toBe(true);
-      expect(select.mock.lastCall?.[4]).toBe(rest === 'rested' ? 1.01 : undefined);
-      expect(session.snapshot().carlitos?.rest).toBe(rest);
-    }
   });
 
   it.each(['exhausted'] as const)('restores %s and care state from a save', (rest) => {

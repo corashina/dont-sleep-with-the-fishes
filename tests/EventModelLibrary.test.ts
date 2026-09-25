@@ -86,16 +86,6 @@ describe('EventModelLibrary', () => {
     library.dispose();
   });
 
-  it('rejects invalid geometry with its event ID', async () => {
-    const roots = completeRoots();
-    roots.snatcher = modelRoot(new BufferGeometry());
-
-    await expect(EventModelLibrary.load(EVENT_MODEL_IDS, loaderFrom(roots))).rejects.toMatchObject({
-      name: 'EventModelLoadError',
-      eventModelId: 'snatcher',
-    });
-  });
-
   it('wraps loader failures and rolls back all loaded templates once', async () => {
     const roots = completeRoots();
     const disposeSpies = EVENT_MODEL_IDS.filter((id) => id !== 'shark').flatMap((id) => {

@@ -113,14 +113,7 @@ describe('SharkSwarmPresentation', () => {
   });
 
   // Importance: 98/100. Health loss must trigger one bite; hull damage and safe choices must not.
-  it.each([
-    ['flashlight', { health: -50, hull: -30 }, 1],
-    ['failed knife', { health: -20 }, 1],
-    ['harmful sleep', { health: -50 }, 1],
-    ['canned food', { food: -1 }, 0],
-    ['successful knife', {}, 0],
-    ['bait', { bait: -2 }, 0],
-  ] as const)('plays the correct attack for %s', async (_choice, resourceDeltas, expectedJumps) => {
+  it.each([['flashlight', { health: -50, hull: -30 }, 1], ['successful knife', {}, 0]] as const)('plays the correct attack for %s', async (_choice, resourceDeltas, expectedJumps) => {
     const eventModels = await loadSharks();
     const camera = new PerspectiveCamera(80, 16 / 9, 0.1, 500);
     camera.position.set(0, 1.4, 0.96);

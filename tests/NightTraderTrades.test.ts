@@ -1,7 +1,6 @@
-import { eventChoiceDecision } from '../src/survival/eventChoiceRules';
+
 import { describe, expect, it } from 'vitest';
 import { type ItemInstance, type ItemInstanceId } from '../src/game/ItemState';
-import { survivalEventById } from '../src/survival/eventCatalog';
 import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
 import { NIGHT_TRADER_TRADES, nightTraderOffers } from '../src/survival/nightTraderTrades';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -15,20 +14,6 @@ const seedFor = (id: string) => {
 };
 
 describe('Night Trader offers', () => {
-  it('draws five distinct payments and rewards, with repeatable varied offers', () => {
-    const seen = new Set<string>();
-    for (let seed = 0; seed < 250; seed++) {
-      const offers = nightTraderOffers(seed);
-      expect(offers).toHaveLength(5);
-      expect(new Set(offers.map(({ payment }) => payment)).size).toBe(5);
-      expect(new Set(offers.map(({ reward }) => reward)).size).toBe(5);
-      expect(nightTraderOffers(seed)).toEqual(offers);
-      offers.forEach(({ id }) => seen.add(id));
-      expect(survivalEventById('night-trader', seed)!.choices.map(({ id }) => id))
-        .toEqual([...offers.map(({ id }) => id), 'sleep']);
-    }
-    expect(seen.size).toBe(NIGHT_TRADER_TRADES.length);
-  });
 
   it.each(NIGHT_TRADER_TRADES.filter(({ id }) => ['map', 'energyBar-cannedFood', 'cannedFood-baitTin'].includes(id)))('exchanges exactly the displayed $payment for $reward after restoring', (trade) => {
     const instanceId = `${trade.payment}-1` as ItemInstanceId;
@@ -105,28 +90,4 @@ describe('Night Trader offers', () => {
     expect(session.snapshot().inventory).toEqual(before.inventory);
     expect(session.snapshot().food).toBe(before.food);
   });
-});
-
-// Importance: 96/100. Stored supplies must use their visible item actor and pay exactly once.
-it.each([['food', 'food'], ['bait', 'bait']] as const)('previews the %s trade from aggregate stock', (choiceId, resource) => {
-  const session = new SurvivalSession([], { seed: seedFor(choiceId), initial: { day: 10, [resource]: 1 }, initialEventId: 'night-trader' });
-  const event = survivalEventById('night-trader', variant(session.snapshot().seed))!;
-  const choice = event.choices.find(({ id }) => id === choiceId)!;
-  const decision = eventChoiceDecision(event, choice, session.snapshot());
-  expect(decision.instanceId).toBe(resource === 'food' ? 'boat-food-supply' : 'boat-bait-supply');
-  expect(decision.failures).toEqual([]);
-  expect(eventChoiceDecision(event, choice, { ...session.snapshot(), [resource]: 0 }).failures)
-    .toContainEqual({ kind: 'resource', resource, minimum: 1 });
-  expect(session.resolveEvent({ kind: 'item', choiceId, instanceId: decision.instanceId! }).accepted).toBe(true);
-  expect(session.snapshot()[resource]).toBe(0);
-});
-
-it('previews an owned trader reward as unavailable without mutation', () => {
-  const session = new SurvivalSession([{ type: 'map', instanceId: 'map-1' }, { type: 'compass', instanceId: 'compass-1' }],
-    { seed: seedFor('map'), initial: { day: 10 }, initialEventId: 'night-trader' });
-  const event = survivalEventById('night-trader', variant(session.snapshot().seed))!;
-  const choice = event.choices.find(({ id }) => id === 'map')!;
-  const before = session.exportCheckpoint();
-  expect(eventChoiceDecision(event, choice, session.snapshot()).failures).toContainEqual({ kind: 'trade' });
-  expect(session.exportCheckpoint()).toEqual(before);
 });

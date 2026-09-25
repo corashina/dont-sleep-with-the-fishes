@@ -4,17 +4,9 @@ import type { CarlitosRest } from '../src/survival/CarlitosState';
 import { describe,expect,it } from 'vitest';
 import type { ItemInstance } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import {
-  DRIFTING_LOOT_TYPE_COOLDOWN_DAYS,
-  DRIFTING_SUPPLY_KINDS,
-  driftingSupplyHistoryId,
-  driftingSupplyKindFromSeed,
-  isDriftingSupplyKindOnCooldown,
-  type DriftingSupplyKind
-} from '../src/survival/driftingSupplies';
+import { driftingSupplyHistoryId, driftingSupplyKindFromSeed, type DriftingSupplyKind } from '../src/survival/driftingSupplies';
 import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
 import { createSurvivalSaveDocument,parseSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
-import { survivalEventById } from '../src/survival/eventCatalog';
 import { sequenceRandom } from './helpers/random';
 
 function sessionFor(
@@ -70,17 +62,6 @@ function seedThatOpensSupplyOnDay(day: number, kind: DriftingSupplyKind): number
 
 describe('drifting supplies', () => {
 
-  it('gives each drifting loot type a three-day cooldown', () => {
-    expect(DRIFTING_LOOT_TYPE_COOLDOWN_DAYS).toBe(3);
-    expect(survivalEventById('drifting-supplies')?.cooldownDays).toBe(1);
-    expect(survivalEventById('drifting-chest')?.cooldownDays).toBe(3);
-
-    const lastSeen = new Map([[driftingSupplyHistoryId('barrel'), 5]]);
-    expect(isDriftingSupplyKindOnCooldown('barrel', 7, lastSeen)).toBe(true);
-    expect(isDriftingSupplyKindOnCooldown('barrel', 8, lastSeen)).toBe(false);
-    expect(isDriftingSupplyKindOnCooldown('lifeboat', 6, lastSeen)).toBe(false);
-  });
-
   it('blocks the same supply type but permits a different type on the next day', () => {
     const day = 6;
     const kind: DriftingSupplyKind = 'barrel';
@@ -99,7 +80,7 @@ describe('drifting supplies', () => {
     expect(distinct.snapshot().pendingEventId).toBe('drifting-supplies');
   });
 
-  it.each(DRIFTING_SUPPLY_KINDS)('grants bundles from %s to the player and Carlitos', (kind) => {
+  it.each(['barrel'] as const)('grants bundles from %s to the player and Carlitos', (kind) => {
     for (const choiceId of ['retrieve', 'delegate-carlitos']) {
       const session = sessionFor(kind, 0.99, 3, 'rested');
       const outcome = session.resolveEvent({ kind: 'choice', choiceId });

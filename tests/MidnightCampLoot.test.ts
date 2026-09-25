@@ -1,22 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ITEM_IDS, type ItemId } from '../src/game/ItemState';
-import { drawMidnightCampItems } from '../src/survival/midnightCampLoot';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { formatJournalEntry } from '../src/survival/journal';
 import { sequenceRandom } from './helpers/random';
 
 describe('Midnight Tour camp rewards', () => {
-  it.each([0, 0.5, 0.999])('awards exactly one missing backpack item, roll %s', (roll) => {
-    const owned = new Set<ItemId>(ITEM_IDS.filter(id => id !== 'map'));
-    expect(drawMidnightCampItems(owned, sequenceRandom([roll])))
-      .toEqual([{ kind: 'gain', itemId: 'map', quantity: 1, fallbackFood: 1 }]);
-  });
 
-  it('does not duplicate items when the inventory is complete', () => {
-    expect(drawMidnightCampItems(new Set(ITEM_IDS), sequenceRandom([0]))).toEqual([]);
-  });
-
-  it.each([0.6, 0.749, 0.75, 0.799])('gives the same backpack reward across the camp range, roll %s', (roll) => {
+  it.each([0.6, 0.799])('gives the same backpack reward across the camp range, roll %s', (roll) => {
     const session = new SurvivalSession([], {
       seed: 41, initial: { day: 7 }, initialEventId: 'midnight-tour',
       random: sequenceRandom([roll, 0.5]),

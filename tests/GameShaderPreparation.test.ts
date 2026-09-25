@@ -47,45 +47,59 @@ function fixture(menu: GamePhase, ship = phase()) {
 
 afterEach(() => vi.unstubAllGlobals());
 
+async function preparingFixture(route: 'menu' | 'scavenge', preparation: Promise<void>) {
+  const pendingPhase = phase(preparation);
+  const f = route === 'menu' ? fixture(pendingPhase) : fixture(phase(), pendingPhase);
+  f.game.start();
+  if (route === 'scavenge') {
+    await f.game.ready;
+    f.enterShip();
+  }
+  await flushPhases();
+  return { ...f, pendingPhase, releasePhase: route === 'menu' ? f.releaseMenu : f.releaseShip };
+}
+
 describe('phase shader preparation', () => {
-  it('keeps frames and phase start behind preparation, with loading visible', async () => {
+  // Importance: 95/100. Both initial entry and phase transitions must gate gameplay on GPU readiness.
+  it.each(['menu', 'scavenge'] as const)('keeps %s frames and start behind preparation, with loading visible', async route => {
     let frame!: FrameRequestCallback;
     vi.stubGlobal('requestAnimationFrame', vi.fn((callback) => { frame = callback; return 1; }));
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     const ready = deferred();
-    const menu = phase(ready.promise);
-    const f = fixture(menu);
-    f.game.start();
-    await flushPhases();
+    const f = await preparingFixture(route, ready.promise);
+    const pendingPhase = f.pendingPhase;
     expect(f.mount.querySelector('.system-screen--loading')).not.toBeNull();
     expect(f.mount.querySelector('progress')?.position).toBe(-1);
     expect(f.mount.querySelector('.system-loading-status')?.textContent).toBe('Building scene');
     frame(16);
-    expect(menu.start).not.toHaveBeenCalled();
-    expect(menu.update).not.toHaveBeenCalled();
-    expect(menu.render).not.toHaveBeenCalled();
+    expect(pendingPhase.prepare).toHaveBeenCalledOnce();
+    expect(pendingPhase.start).not.toHaveBeenCalled();
+    expect(pendingPhase.update).not.toHaveBeenCalled();
+    expect(pendingPhase.render).not.toHaveBeenCalled();
     ready.resolve();
-    await f.game.ready;
-    expect(menu.start).toHaveBeenCalledOnce();
+    await flushPhases();
+    expect(pendingPhase.start).toHaveBeenCalledOnce();
     expect(f.mount.querySelector('.system-screen--loading')).toBeNull();
     frame(32);
-    expect(menu.render).toHaveBeenCalledOnce();
+    expect(pendingPhase.render).toHaveBeenCalledOnce();
     f.game.dispose();
   });
 
-  it('releases the phase and lease after failed preparation', async () => {
+  // Importance: 95/100. Failed preparation must release its owner before shutdown and never start gameplay.
+  it.each(['menu', 'scavenge'] as const)('releases the %s phase and lease after failed preparation', async route => {
     const ready = deferred();
-    const menu = phase(ready.promise);
-    const f = fixture(menu);
-    await flushPhases();
+    const f = await preparingFixture(route, ready.promise);
     const error = new Error('shader failed');
     ready.reject(error);
-    await f.game.ready;
-    expect(menu.dispose).toHaveBeenCalledOnce();
-    expect(f.releaseMenu).toHaveBeenCalledOnce();
-    expect(f.onFatalError).toHaveBeenCalledWith(error);
+    await flushPhases();
+    expect(f.pendingPhase.start).not.toHaveBeenCalled();
+    expect(f.pendingPhase.dispose).toHaveBeenCalledOnce();
+    expect(f.releasePhase).toHaveBeenCalledOnce();
+    expect(f.onFatalError).toHaveBeenCalledExactlyOnceWith(error);
     expect(f.mount.querySelector('.system-screen--loading')).toBeNull();
     f.game.dispose();
+    expect(f.pendingPhase.dispose).toHaveBeenCalledOnce();
+    expect(f.releasePhase).toHaveBeenCalledOnce();
   });
 
   it('waits before disposing materials and shared rendering resources', async () => {

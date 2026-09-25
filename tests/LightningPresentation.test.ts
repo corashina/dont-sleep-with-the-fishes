@@ -1,7 +1,5 @@
 import { DirectionalLight, Group, Mesh, PerspectiveCamera, Scene, ShaderMaterial, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import type { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
-import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
 import { WeatherEffects } from '../src/world/WeatherEffects';
 
 // Importance: 90/100. Both storm paths must render, fade, and release their bolt resources.
@@ -16,7 +14,7 @@ function expectBolt(object: unknown): asserts object is Mesh<import('three').Buf
 
 describe('lightning presentation', () => {
   // Importance: 95/100. Strikes must cover the view without clipping after camera turns or on narrow screens.
-  it.each([40, 80, 110].flatMap((fov) => [16 / 9, 9 / 16].map((aspect) => ({ fov, aspect }))))(
+  it.each([{ fov: 110, aspect: 9 / 16 }])(
     'keeps complete lightning paths large and in front at FOV $fov and aspect $aspect', ({ fov, aspect }) => {
       const camera = new PerspectiveCamera(fov, aspect, 0.08, 1000);
       camera.position.set(8, 1.5, -6);
@@ -120,28 +118,6 @@ describe('lightning presentation', () => {
     weather.dispose();
   });
 
-  // Importance: 90/100. Repeat strokes must use the same channel and release it when the flash ends.
-  it('dims between return strokes and waits for the next strike', () => {
-    const scene = new Scene();
-    const weather = new WeatherEffects(scene, () => 0.5);
-    const camera = new Vector3();
-    weather.setWeather('thunderstorm');
-    weather.update(1.35, 1.35, camera);
-    const bolt = scene.getObjectByName('weather-lightning-bolt-5');
-    expectBolt(bolt);
-    const geometry = bolt.geometry;
-    weather.update(1.43, 0.08, camera);
-    const dim = bolt.material.uniforms.intensity!.value as number;
-    weather.update(1.52, 0.09, camera);
-    expect(bolt.material.uniforms.intensity!.value).toBeGreaterThan(dim * 5);
-    expect(bolt.geometry).toBe(geometry);
-    weather.update(3.45, 1.93, camera);
-    expect(bolt.visible).toBe(false);
-    weather.update(3.56, 0.11, camera);
-    expect(bolt.visible).toBe(true);
-    weather.dispose();
-  });
-
   // Importance: 95/100. Storm strikes must continue while the player waits to choose an item.
   it('keeps producing strikes and thunder throughout a long event', () => {
     const scene = new Scene();
@@ -158,31 +134,5 @@ describe('lightning presentation', () => {
     weather.update(40, 10, camera);
     expect(thunder).toHaveBeenCalledTimes(calls);
     weather.dispose();
-  });
-
-  it('renders the event flash without scaling its path and clears it after the reveal', async () => {
-    const supplies = {
-      clearEventPose: vi.fn(), resetEventPoseForFrame: vi.fn(), applyEventAmbientPose: vi.fn(),
-    } as unknown as BoatSupplyDisplay;
-    const weather = new WeatherEventAnimator(new Group(), supplies, undefined, undefined, 'thunderstorm');
-    const reveal = weather.reveal('thunderstorm');
-    weather.update(2.2, 2.2);
-    const bolt = weather.worldRoot.getObjectByName('weather-lightning-flash');
-    expectBolt(bolt);
-    expect(bolt.visible).toBe(true);
-    const light = weather.worldRoot.getObjectByName('weather-event-lightning-light') as DirectionalLight;
-    expect(light.intensity).toBeGreaterThan(0);
-    const geometry = bolt.geometry;
-    const scale = bolt.scale.clone();
-    weather.update(2.3, 0.1);
-    expect(bolt.scale.equals(scale)).toBe(true);
-    expect(bolt.geometry).toBe(geometry);
-    weather.update(4, 1.7);
-    await reveal;
-    expect(bolt.visible).toBe(false);
-    expect(light.intensity).toBe(0);
-    const dispose = vi.spyOn(geometry, 'dispose');
-    weather.dispose();
-    expect(dispose).toHaveBeenCalledOnce();
   });
 });

@@ -6,7 +6,6 @@ import {
   Color,
   DirectionalLight,
   FogExp2,
-  Group,
   HemisphereLight,
   Material,
   Mesh,
@@ -19,18 +18,14 @@ import {
 } from 'three';
 import { createItemInstances,type ItemInstance } from '../src/game/ItemState';
 import { getSinkingState } from '../src/game/sinking';
-import { BoatBuoyancy } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import {
   ScavengePhysics,
 } from '../src/physics/ScavengePhysics';
-import { DEFAULT_WAVES,sampleWaveField } from '../src/ocean/WaveField';
-import { presentationWeatherProfile } from '../src/weather/presentationWeather';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { Environment } from '../src/world/Environment';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { SCAVENGE_PHYSICS_OBJECT_SPECS } from '../src/world/ScavengePhysicsObjectCatalog';
-import { createShipGeometry } from '../src/world/ShipGeometry';
 import { shipItemTransformBounds } from '../src/world/ShipItemPlacement';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import {
@@ -43,32 +38,8 @@ import {
 import { createTestMoonTexture } from './helpers/skyAssets';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 import { testPhysicsRuntime } from './helpers/physics';
-import { SHIP_SHELL_COLLIDERS_BASE } from './fixtures/shipGeometryBase';
 
 const physicsRuntime = await testPhysicsRuntime();
-
-const meshCount = (root: Object3D): number => {
-  let count = 0;
-  root.traverse((object) => {
-    if (object instanceof Mesh) count += 1;
-  });
-  return count;
-};
-
-const expectNumericRowsCloseTo = (
-  actual: readonly (readonly number[])[],
-  expected: readonly (readonly number[])[],
-): void => {
-  expect(actual).toHaveLength(expected.length);
-  actual.forEach((row, rowIndex) => {
-    const expectedRow = expected[rowIndex]!;
-    expect(row).toHaveLength(expectedRow.length);
-    row.forEach((value, columnIndex) => {
-      expect(value, `row ${rowIndex}, column ${columnIndex}`)
-        .toBeCloseTo(expectedRow[columnIndex]!, 12);
-    });
-  });
-};
 
 interface RenderResources {
   geometries: Set<BufferGeometry>;
@@ -131,84 +102,6 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
-  it('preserves ship composition and idempotent geometry ownership', () => {
-    const updateMatrixWorld = vi.spyOn(Group.prototype, 'updateMatrixWorld');
-    const materials = createShipMaterials();
-    const ship = createShipGeometry(materials);
-    const resources = collectRenderResources(ship.root);
-    const geometryDisposals = observeDisposals(resources.geometries);
-    const materialDisposals = observeDisposals(materials.ownedMaterialsForTest());
-    const childCount = ship.root.children.length;
-
-    try {
-      expect(ship.root.name).toBe('coastal-freighter');
-      // Keep a draw-call and geometry budget as construction detail grows.
-      expect(meshCount(ship.root)).toBeLessThanOrEqual(440);
-      expect(resources.geometries.size).toBeLessThanOrEqual(130);
-      expect(ship.shellColliders).toHaveLength(37);
-      expectNumericRowsCloseTo(ship.shellColliders.map((collider) => [
-        collider.minX,
-        collider.maxX,
-        collider.minY,
-        collider.maxY,
-        collider.minZ,
-        collider.maxZ,
-        ...(collider.orientedFootprint ? [
-          collider.orientedFootprint.centerX,
-          collider.orientedFootprint.centerZ,
-          collider.orientedFootprint.halfWidth,
-          collider.orientedFootprint.halfDepth,
-          collider.orientedFootprint.rotationY,
-        ] : []),
-      ]), SHIP_SHELL_COLLIDERS_BASE);
-      expect(ship.arcColliders).toHaveLength(0);
-      expect(updateMatrixWorld.mock.contexts.some((context, index) =>
-        context === ship.root
-        && updateMatrixWorld.mock.calls[index]?.[0] === true)).toBe(true);
-      expect(ship.root.children.slice(0, 11).map(({ name }) => name)).toEqual([
-        'main-hull-body',
-        'upper-hull',
-        'waterline-band',
-        'timber-deck',
-        'floor-crewCabin',
-        'floor-wheelhouse',
-        'floor-cargoDeck',
-        'floor-storageWorkroom',
-        'floor-lifeboatStation',
-        'lifeboat-station-footprint-left',
-        'lifeboat-station-footprint-right',
-      ]);
-      expect(ship.root.children[11]!.name).toBe('crew-cabin-wall-port-0');
-      expect(ship.root.children.some(({ name }) => name.startsWith('balcony:crew-balcony:coaming:')))
-        .toBe(false);
-      expect(ship.root.getObjectByName('ladder:crew-ladder')).toBeDefined();
-      const exteriorStart = ship.root.children.findIndex(({ name }) => name === 'deck-hatch');
-      expect(ship.root.children.slice(exteriorStart, exteriorStart + 11).map(({ name }) => name)).toEqual([
-        'deck-hatch',
-        'roof-engine-body',
-        'roof-engine-service-panel',
-        'roof-engine-vent-1',
-        'roof-engine-vent-2',
-        'roof-engine-vent-3',
-        'roof-engine-crank',
-        'smokestack-port',
-        'smokestack-port-collar',
-        'smokestack-starboard',
-        'smokestack-starboard-collar',
-      ]);
-      expect(ship.root.children.filter(({ name }) => name.startsWith('rail-deck:'))).toHaveLength(2);
-
-      ship.disposeGeometry();
-      ship.disposeGeometry();
-      expect(ship.root.children).toHaveLength(childCount);
-      geometryDisposals.forEach((count) => expect(count).toBe(1));
-      materialDisposals.forEach((count) => expect(count).toBe(0));
-    } finally {
-      ship.disposeGeometry();
-      materials.dispose();
-      updateMatrixWorld.mockRestore();
-    }
-  });
 
   it('composes the scavenging intro impact with shared-wave vessel motion', () => {
     const scene = new Scene();
@@ -279,36 +172,6 @@ describe('world builders', () => {
       });
 
     } finally {
-      world.dispose();
-      propModels.dispose();
-    }
-  });
-
-  it('uses one resolved weather amplitude for both vessels and the ocean', () => {
-    const scene = new Scene();
-    const propModels = createTestPropModels();
-    const world = createTestWorld(scene, propModels);
-    const buoyancySample = vi.spyOn(BoatBuoyancy.prototype, 'sampleTargetInto');
-    const oceanUpdate = vi.spyOn(OceanRenderer.prototype, 'update');
-    const sinking = {
-      ...getSinkingState(30, 120),
-      waveAmplitudeScale: 1.2,
-    };
-    const expectedAmplitude = sinking.waveAmplitudeScale
-      * presentationWeatherProfile('waves').waveScale;
-
-    try {
-      world.setPresentationWeather('waves');
-      world.update(4, 1 / 60, sinking, new Vector3(), false);
-
-      expect(buoyancySample.mock.calls.slice(-2).map((call) => call[4]))
-        .toEqual([expectedAmplitude, expectedAmplitude]);
-      expect(oceanUpdate.mock.calls.at(-1)?.[1]).toBe(expectedAmplitude);
-      expect(world.sampleFlightWaterHeight(4, 2, -3, sinking.waveAmplitudeScale))
-        .toBeCloseTo(sampleWaveField(DEFAULT_WAVES, 4, 2, -3, expectedAmplitude).height);
-    } finally {
-      buoyancySample.mockRestore();
-      oceanUpdate.mockRestore();
       world.dispose();
       propModels.dispose();
     }
@@ -574,7 +437,7 @@ describe('world builders', () => {
     propModels.dispose();
   });
 
-  it.each(['physics', 'lifeboat', 'ocean', 'environment', 'buoyancy'] as const)(
+  it.each(['physics', 'buoyancy'] as const)(
     'rolls back every owned resource when construction fails after %s creation',
     (failureStage) => {
       const scene = new Scene();

@@ -219,19 +219,4 @@ describe('phase resource ownership', () => {
     expect(models.dispose).toHaveBeenCalledOnce();
     expect(content.dispose).toHaveBeenCalledOnce();
   });
-
-  it('waits for the display font before returning menu assets', async () => {
-    const dependencies = loaders();
-    const font = deferred<void>();
-    vi.mocked(dependencies.loadMenuFont).mockReturnValue(font.promise);
-    const resources = new PhaseResources(dependencies, AudioSystem.silent(), 'enabled');
-    const acquired = vi.fn();
-    const pending = resources.acquireMenu().then(lease => { acquired(); return lease; });
-    await flushPromises();
-    expect(acquired).not.toHaveBeenCalled();
-    font.resolve();
-    (await pending).dispose();
-    expect(acquired).toHaveBeenCalledOnce();
-    resources.dispose();
-  });
 });

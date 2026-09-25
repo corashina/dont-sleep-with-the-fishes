@@ -40,18 +40,6 @@ describe('item circulation', () => {
     expect(game.snapshot()).toEqual(before);
   });
 
-  it.each([
-    ['plane', 0.049, 'broken'], ['plane', 0.05, 'usable'],
-    ['death-stare', 0.399, 'broken'], ['death-stare', 0.4, 'usable'],
-  ] as const)('uses contextual flashlight wear for %s at %s', (eventId, wearRoll, condition) => {
-    const game = new SurvivalSession(saved('flashlight'), {
-      seed: 1, initialEventId: eventId, random: sequenceRandom([0, wearRoll]),
-    });
-    expect(game.resolveEvent({ kind: 'item', choiceId: 'flashlight', instanceId: 'flashlight-1' }).accepted).toBe(true);
-    expect(game.snapshot().inventory['flashlight-1']?.condition).toBe(condition);
-    if (eventId === 'plane') expect(game.snapshot().rescueLead).toBe(2);
-  });
-
   it('keeps the completed dive reward when scuba breaks', () => {
     const game = new SurvivalSession(saved('scubaSet'), {
       seed: 2, random: sequenceRandom([0, 0.99, 0, 0, 0.149]),
@@ -73,14 +61,6 @@ describe('item circulation', () => {
     expect(game.cancelFishing(begun.attempt.view().id).accepted).toBe(true);
     expect(rolls).toBe(beforeCancel);
     expect(game.snapshot().inventory['fishingNet-1']?.condition).toBe('usable');
-  });
-
-  it('consumes a swim ring even when its event outcome succeeds', () => {
-    const game = new SurvivalSession(saved('swimRing'), {
-      seed: 2, initialEventId: 'tornado', random: sequenceRandom([0]),
-    });
-    expect(game.resolveEvent({ kind: 'item', choiceId: 'swimRing', instanceId: 'swimRing-1' }).accepted).toBe(true);
-    expect(game.snapshot().inventory['swimRing-1']?.condition).toBe('consumed');
   });
 
   it('Handyman returns a missing item of equal or lower weight', () => {

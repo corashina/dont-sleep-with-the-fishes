@@ -24,21 +24,33 @@ const result = (resultId: string): EventResultPresentation => ({ eventId: 'flyin
 const outcome: ActionOutcome = { accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'none' };
 
 describe('flying saucer presentation', () => {
+  // Importance: 95/100. Visibility settlement must release the event flow before disposal can cancel it.
   it.each(['settle', 'dispose'] as const)('settles the pending beam hit on %s', async (action) => {
     const { presentation, camera, mesh } = fixture();
     const disposed = vi.fn();
+    const finished = vi.fn();
     mesh.geometry.addEventListener('dispose', disposed);
-    presentation.stage();
-    const hit = presentation.react(result('ufo-beam-hit'), outcome);
-    if (action === 'settle') {
-      presentation.settleForVisibilityChange();
-      expect(presentation.root.userData.state).toBe('hit');
+    try {
+      presentation.stage();
+      const hit = presentation.react(result('ufo-beam-hit'), outcome).then(finished);
+      await Promise.resolve();
+      expect(finished).not.toHaveBeenCalled();
+      if (action === 'settle') {
+        presentation.settleForVisibilityChange();
+        await Promise.resolve();
+        expect(finished).toHaveBeenCalledOnce();
+        expect(disposed).not.toHaveBeenCalled();
+        expect(presentation.root.userData.state).toBe('hit');
+      }
+      presentation.dispose();
+      await hit;
+      expect(finished).toHaveBeenCalledOnce();
+      expect(camera.position.y).toBe(1);
+      expect(disposed).toHaveBeenCalledOnce();
+      presentation.dispose();
+      expect(disposed).toHaveBeenCalledOnce();
+    } finally {
+      presentation.dispose();
     }
-    presentation.dispose();
-    await hit;
-    expect(camera.position.y).toBe(1);
-    expect(disposed).toHaveBeenCalledOnce();
-    presentation.dispose();
-    expect(disposed).toHaveBeenCalledOnce();
   });
 });

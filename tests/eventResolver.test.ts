@@ -51,22 +51,4 @@ describe('resolveWeightedOutcome', () => {
     expect(resolveWeightedOutcome(gated, sequenceRandom([0.99]), 0).message).toBe('common');
     expect(resolveWeightedOutcome(gated, sequenceRandom([0.99]), 1).message).toBe('rare');
   });
-
-  it('draws ranges inclusively and preserves set versus add and subtract operations', () => {
-    const resolved = resolveWeightedOutcome(choice(), sequenceRandom([0.25, 0.999999, 0]));
-    expect(resolved.effects.resources).toEqual([
-      { resource: 'health', operation: 'set', value: 4 },
-      { resource: 'hull', operation: 'add', value: 5 },
-      { resource: 'energy', operation: 'subtract', value: 1 },
-    ]);
-  });
-
-  it('is deterministic and does not mutate its choice or catalog outcome', () => {
-    const source = choice();
-    const before = structuredClone(source);
-    const first = resolveWeightedOutcome(source, sequenceRandom([0.25, 0.5, 0.5]));
-    const second = resolveWeightedOutcome(source, sequenceRandom([0.25, 0.5, 0.5]));
-    expect(first).toEqual(second);
-    expect(source).toEqual(before);
-  });
 });

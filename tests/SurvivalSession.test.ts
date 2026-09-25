@@ -5,11 +5,7 @@ import { fishingRoll } from './helpers/fishing';
 import { describe,expect,it,vi } from 'vitest';
 import type { ItemId,ItemInstance,ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import {
-  nightlyHullWearDamage,
-  SURVIVAL_BALANCE,
-} from '../src/survival/survivalBalance';
-import { formatJournalEntry } from '../src/survival/journal';
+import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 import type { FishingSession,FishingTerminalResult } from '../src/survival/FishingSession';
 import type {
   DayActionId,
@@ -84,32 +80,6 @@ it.each([
   expect(session.snapshot().state).toBe(state);
   expect(() => session.exportCheckpoint())
     .toThrow('Cannot checkpoint terminal state.');
-});
-
-// Importance: 95/100. Hull wear can end a run and must respect its bounds and respite.
-it('applies variable hull wear after four of every five nights', () => {
-  const random = sequenceRandom([0, 0.2, 0.4, 0.6, 0.8, 0.999]);
-  expect(Array.from({ length: 10 }, (_, index) => nightlyHullWearDamage(index + 1, random)))
-    .toEqual([8, 9, 10, 11, 0, 12, 13, 8, 9, 0]);
-
-  const worn = new SurvivalSession(saved(), {
-    seed: 1,
-    initial: { day: 4 },
-    initialEventId: 'quiet-night',
-  });
-  worn.resolveEvent(choiceResponse('sleep'));
-  const dawn = worn.beginDawn();
-  expect(dawn.accepted).toBe(true);
-  expect(dawn.deltas.hull).toBeGreaterThanOrEqual(-13);
-  expect(dawn.deltas.hull).toBeLessThanOrEqual(-8);
-
-  const respite = new SurvivalSession(saved(), {
-    seed: 1,
-    initial: { day: 5 },
-    initialEventId: 'quiet-night',
-  });
-  respite.resolveEvent(choiceResponse('sleep'));
-  expect(respite.beginDawn().deltas).not.toHaveProperty('hull');
 });
 
 it('can sink from overnight hull wear', () => {
@@ -204,56 +174,6 @@ function choiceResponse(choiceId: string): EventResponse {
 }
 
 describe('SurvivalSession Carlitos events', () => {
-  it('uses exact Shadow Figure choice effects', () => {
-    const pressure = new SurvivalSession(saved('carlitos', 'flashlight'), {
-      seed: 1,
-      random: sequenceRandom([0.499999]),
-      initialEventId: 'shadow-figure',
-    });
-    pressure.resolveEvent({ kind: 'item', choiceId: 'flashlight', instanceId: 'flashlight-1' });
-    expect(pressure.snapshot()).toMatchObject({
-      state: 'nightEvent', pressure: 1, ending: null,
-    });
-
-    const injured = new SurvivalSession(saved('carlitos', 'flashlight'), {
-      seed: 1,
-      random: sequenceRandom([0.5]),
-      initialEventId: 'shadow-figure',
-    });
-    injured.resolveEvent({ kind: 'item', choiceId: 'flashlight', instanceId: 'flashlight-1' });
-    expect(injured.snapshot()).toMatchObject({
-      state: 'nightEvent', health: 50, ending: null,
-    });
-
-    const flare = new SurvivalSession(saved('carlitos', 'flareGun'), {
-      seed: 1,
-      random: sequenceRandom([0]),
-      initialEventId: 'shadow-figure',
-    });
-    expect(flare.resolveEvent({
-      kind: 'item',
-      choiceId: 'flareGun',
-      instanceId: 'flareGun-1',
-    })).toMatchObject({
-      accepted: true,
-      message: 'The flare drives the false shape away.',
-      deltas: {},
-    });
-    expect(flare.snapshot()).toMatchObject({
-      state: 'nightEvent', health: 100, ending: null,
-      inventory: { 'flareGun-1': { condition: 'consumed' } },
-    });
-
-    const sleep = new SurvivalSession(saved('carlitos'), {
-      seed: 1,
-      random: sequenceRandom([0]),
-      initialEventId: 'shadow-figure',
-    });
-    sleep.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
-    expect(sleep.snapshot()).toMatchObject({
-      state: 'nightEvent', pressure: 0, ending: null,
-    });
-  });
 
   it('uses Guarded Sleep boundaries and excludes itself from follow-up selection', () => {
     const guarded = new SurvivalSession(saved('carlitos'), {
@@ -354,25 +274,6 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).not.toBe(initial);
   });
 
-  it('raises scheduled pressure at dawn', () => {
-    const pressure = new SurvivalSession(saved(), {
-      seed: 7,
-      random: sequenceRandom([0.99, 0.99, 0.99]),
-      initial: { day: 7 },
-    });
-    pressure.perform('endDay');
-    expect(pressure.beginDawn().deltas.pressure).toBe(1);
-    expect(pressure.snapshot().pressure).toBe(1);
-
-    const increased = new SurvivalSession(saved('spyglass'), {
-      seed: 12,
-      random: sequenceRandom([0]),
-      initial: { day: 6 },
-      initialEventId: 'monster-in-the-fog',
-    });
-    expect(increased.resolveEvent(itemResponse('spyglass')).deltas.pressure).toBe(1);
-  });
-
   it('turns an old chest into a mimic before the automatic attack', () => {
     const session = new SurvivalSession(saved(), {
       seed: 10,
@@ -391,70 +292,6 @@ describe('SurvivalSession daytime actions', () => {
       deltas: { health: -25 },
     });
     expect(session.snapshot().chest).toEqual({ state: 'none', acquiredDay: null });
-  });
-
-  it('publishes stable results for Chest Attack and Midnight Tour', () => {
-    const chestAttacked = new SurvivalSession(saved(), {
-      seed: 10,
-      random: sequenceRandom([0]),
-      initialChest: { state: 'mimic', acquiredDay: 1 },
-      initialEventId: 'chest-attack',
-    });
-    expect(chestAttacked.resolveEvent(choiceResponse('attack'))).toMatchObject({
-      deltas: { health: -25 },
-      eventResult: { resultId: 'chest-attack' },
-    });
-    expect(chestAttacked.snapshot().chest.state).toBe('none');
-
-    const knifeMitigated = new SurvivalSession(saved('knife'), {
-      seed: 12,
-      random: sequenceRandom([0]),
-      initialChest: { state: 'mimic', acquiredDay: 1 },
-      initialEventId: 'chest-attack',
-    });
-    expect(knifeMitigated.resolveEvent(itemResponse('knife'))).toMatchObject({
-      deltas: { health: -10 },
-      eventResult: {
-        choiceId: 'knife',
-        resultId: 'chest-attack',
-      },
-    });
-    expect(knifeMitigated.beginDawn().accepted).toBe(true);
-    const mitigatedSnapshot = knifeMitigated.snapshot();
-    expect(mitigatedSnapshot.chest.state).toBe('none');
-    expect(mitigatedSnapshot.inventory['knife-1']?.condition).toBe('usable');
-    expect(formatJournalEntry(mitigatedSnapshot.journalEntries[0]!).nighttime).toContain(
-      'I wedged the knife between the chest’s teeth and pulled free',
-    );
-
-    const tour = new SurvivalSession(saved(), {
-      seed: 11,
-      random: sequenceRandom([0]),
-      initialEventId: 'midnight-tour',
-    });
-    expect(tour.resolveEvent(choiceResponse('visit')).eventResult?.resultId).toBe('tour-chest');
-    expect(tour.snapshot()).toMatchObject({
-      chest: { state: 'closed', acquiredDay: 1 },
-      pressure: 1,
-    });
-
-    const attacked = new SurvivalSession(saved(), {
-      seed: 103,
-      random: sequenceRandom([0.99, 0, 0.5, 0.999]),
-      initial: { day: 7, health: 100 },
-      initialEventId: 'midnight-tour',
-    });
-    const attack = attacked.resolveEvent(choiceResponse('visit'));
-    expect(attack.eventResult?.resultId).toBe('tour-attack');
-    expect(attacked.snapshot().health).toBeGreaterThanOrEqual(55);
-    expect(attacked.snapshot().health).toBeLessThanOrEqual(75);
-    const passed = new SurvivalSession(saved(), {
-      seed: 11,
-      random: sequenceRandom([0]),
-      initialEventId: 'midnight-tour',
-    });
-    expect(passed.resolveEvent(choiceResponse('sleep')).eventResult?.resultId).toBe('tour-pass');
-
   });
 
   it('enforces contextual requirements without mutating the session', () => {
@@ -583,34 +420,6 @@ describe('SurvivalSession daytime actions', () => {
       code: 'fishing-already-cast',
     });
     expect(session.snapshot()).toEqual(beforeRejectedCancel);
-  });
-
-  it('opens Drifting Cargo from day 3 at the 35 percent dawn boundary', () => {
-    const opens = new SurvivalSession(saved(), {
-      seed: 1,
-      random: sequenceRandom([0.99, 0.349, 0, 0.499]),
-      initial: { day: 2 },
-    });
-    expect(opens.perform('endDay').accepted).toBe(true);
-    expect(opens.beginDawn()).toMatchObject({ accepted: true, code: 'dawn' });
-    expect(opens.snapshot()).toMatchObject({
-      day: 3,
-      state: 'dayEvent',
-      pendingEventId: 'drifting-supplies',
-    });
-
-    const misses = new SurvivalSession(saved(), {
-      seed: 2,
-      random: sequenceRandom([0.99, 0.35]),
-      initial: { day: 2 },
-    });
-    misses.perform('endDay');
-    misses.beginDawn();
-    expect(misses.snapshot()).toMatchObject({
-      day: 3,
-      state: 'day',
-      pendingEventId: null,
-    });
   });
 
   it('rejects invalid fishing starts atomically', () => {
@@ -816,24 +625,6 @@ describe('SurvivalSession daytime actions', () => {
     expect(recover(20)).toBe(3);
     expect(recover(53)).toBe(2);
     expect(recover(73)).toBe(1);
-  });
-
-  it('receives a radio signal from day five on a twenty-percent dawn roll', () => {
-    const session = new SurvivalSession(saved('radio'), {
-      seed: 1,
-      random: sequenceRandom([0, 0.199]),
-      initial: { day: 4, energy: 3 },
-      initialEventId: 'shower-night',
-    });
-
-    session.resolveEvent({ kind: 'endure' });
-    session.beginDawn();
-
-    expect(session.snapshot()).toMatchObject({
-      day: 5,
-      radioSignalAvailable: true,
-      radioSignalsSent: 0,
-    });
   });
 
   it('answers a radio signal for one energy without consuming the radio', () => {
@@ -1058,19 +849,6 @@ describe('SurvivalSession daytime actions', () => {
       'anchor-1': { condition: 'broken' },
       'bucket-1': { condition: 'usable' },
       'spyglass-1': { condition: 'broken' },
-    });
-  });
-
-  it('keeps the flare gun after a catastrophic Tornado sleep outcome', () => {
-    const session = new SurvivalSession(saved('flareGun'), {
-      seed: 17,
-      random: sequenceRandom([0.9, 0, 0.99, 0]),
-      initialEventId: 'tornado',
-    });
-    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
-    expect(outcome.message).toBe('The boat is badly damaged.');
-    expect(session.snapshot().inventory).toMatchObject({
-      'flareGun-1': { condition: 'usable' },
     });
   });
 

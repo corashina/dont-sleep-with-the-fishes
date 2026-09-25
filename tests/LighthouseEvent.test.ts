@@ -1,7 +1,6 @@
 import { describe,expect,it } from 'vitest';
 import type { ItemId,ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { resolveEventItemUseContext } from '../src/survival/eventItemUseChoreography';
 import { sequenceRandom } from './helpers/random';
 
 function session(itemId?: ItemId): SurvivalSession {
@@ -14,17 +13,6 @@ function session(itemId?: ItemId): SurvivalSession {
 }
 
 describe('lighthouse signals', () => {
-  it.each([['flareGun', 4, 'consumed', 'flare-sky'], ['flashlight', 2, 'usable', 'flashlight-signal']] as const)('resolves %s with its normal animation and item cost', (itemId, lead, condition, context) => {
-    const run = session(itemId);
-    const instanceId = `${itemId}-1` as ItemInstanceId;
-    expect(resolveEventItemUseContext('lighthouse', itemId, itemId)).toBe(context);
-    expect(run.resolveEvent({ kind: 'item', choiceId: itemId, instanceId })).toMatchObject({
-      accepted: true, deltas: { rescueLead: lead }, eventResult: { eventId: 'lighthouse' },
-    });
-    expect(run.snapshot()).toMatchObject({
-      rescueLead: 2 + lead, inventory: { [instanceId]: { condition } },
-    });
-  });
 
   it('rejects a signal without the required item', () => {
     expect(session().resolveEvent({

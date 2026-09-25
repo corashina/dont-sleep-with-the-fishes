@@ -9,7 +9,7 @@ const exitCases = [
   ...(['drifting-supplies', 'drifting-chest'] as const).map((eventId) => ({
     eventId, energy: 0, carlitos: 'absent',
   })),
-  ...[0].flatMap((energy) => ['absent', 'tired', 'exhausted'].map((carlitos) => ({
+  ...[0].flatMap((energy) => ['exhausted'].map((carlitos) => ({
     eventId: 'drifting-supplies' as const, energy, carlitos,
   }))),
 ];

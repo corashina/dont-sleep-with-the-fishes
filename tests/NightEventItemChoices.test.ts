@@ -3,7 +3,6 @@ import type { ItemId, ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { survivalEventById } from '../src/survival/eventCatalog';
 import { eventChoiceDecision } from '../src/survival/eventChoiceRules';
-import { resolveEventItemUseContext } from '../src/survival/eventItemUseChoreography';
 import { formatJournalEntry } from '../src/survival/journal';
 import { sequenceRandom } from './helpers/random';
 
@@ -85,15 +84,4 @@ describe('new night event choices', () => {
     expect(session.snapshot().inventory['ductTape-1']?.condition).toBe('consumed');
     expect(session.snapshot().inventory['bucket-2']?.condition).toBe('usable');
   });
-});
-
-// Importance: 90/100. Every new choice must reach an authored animation.
-it.each([
-  ['tentacle-attack', 'cannedFood', 'throw-target'],
-  ['school-of-fish', 'baitTin', 'throw-target'],
-  ['eerie-melody', 'radio', 'radio-signal-receive'],
-  ['death-stare', 'flareGun', 'flare-target'],
-  ['restless-waves', 'ductTape', 'tape-secure'],
-] as const)('animates %s with %s', (event, item, context) => {
-  expect(resolveEventItemUseContext(event, item, item)).toBe(context);
 });

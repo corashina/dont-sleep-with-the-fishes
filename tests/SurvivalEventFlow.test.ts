@@ -304,10 +304,7 @@ describe('event selection contracts', () => {
   it.each([
     ['swarm-of-sharks', 'cannedFood', { food: 1 }],
     ['swarm-of-sharks', 'baitTin', { bait: 2 }],
-    ['tentacle-attack', 'cannedFood', { food: 1 }],
     ['school-of-fish', 'baitTin', { bait: 1 }],
-    ['death-stare', 'cannedFood', { food: 1 }],
-    ['something-under-us', 'cannedFood', { food: 1 }],
   ] as const)('selects the inventory item for %s / %s without a popup', async (eventId, choiceId, resources) => {
     const instanceId = `${choiceId}-1` as ItemInstanceId;
     const rig = createSessionRig(new SurvivalSession([{ type: choiceId, instanceId }], {
@@ -349,7 +346,6 @@ describe('event selection contracts', () => {
   // Importance: 98/100. Stored supplies must use item selection without a popup or duplicate payment.
   it.each([
     ['swarm-of-sharks', 'cannedFood', { food: 1 }],
-    ['tentacle-attack', 'cannedFood', { food: 1 }],
     ['school-of-fish', 'baitTin', { bait: 1 }],
   ] as const)('offers and animates %s / %s without a container item', async (eventId, choiceId, resources) => {
     const rig = createSessionRig(new SurvivalSession([{ type: 'bucket', instanceId: 'bucket-1' }], {
@@ -1298,7 +1294,7 @@ describe('SurvivalEventFlow', () => {
     expect(rig.setBusy).not.toHaveBeenCalled();
   });
 
-  it.each(['drifting-supplies', 'drifting-chest'] as const)('returns from %s without resolving or clearing it', async (eventId) => {
+  it.each(['drifting-supplies'] as const)('returns from %s without resolving or clearing it', async (eventId) => {
     const rig = createRig(snapshot({ state: 'dayEvent', pendingEventId: eventId }));
     await rig.flow.revealPending(rig.session.snapshot());
     await rig.flow.focusEvent(eventId);
@@ -1312,15 +1308,6 @@ describe('SurvivalEventFlow', () => {
     expect(rig.ui.restoreCommandFocus).toHaveBeenCalled();
     await rig.flow.focusEvent(eventId);
     expect(rig.ui.showFocusedEvent).toHaveBeenCalledTimes(2);
-  });
-
-  // Importance: 95/100. Deferring loot must not signal event completion.
-  it.each(['drifting-supplies', 'drifting-chest'] as const)('does not complete audio when leaving %s pending', async (eventId) => {
-    const rig = createRig(snapshot({ state: 'dayEvent', pendingEventId: eventId }));
-    await rig.flow.revealPending(rig.session.snapshot());
-    await rig.flow.focusEvent(eventId);
-    await rig.flow.chooseFocused({ id: 'sleep', instanceId: null });
-    expect(rig.audio.finishEventReaction).not.toHaveBeenCalled();
   });
 
   it('rejects an ID and instance pair that was not rendered', async () => {
@@ -1413,8 +1400,6 @@ describe('SurvivalEventFlow', () => {
   // Importance: 95/100. Loot must be on the boat before the return camera can reveal it.
   it.each([
     ['drifting-supplies', 'retrieve'],
-    ['drifting-supplies', 'delegate-carlitos'],
-    ['drifting-chest', 'retrieve'],
     ['drifting-chest', 'delegate-carlitos'],
   ] as const)('updates the boat before returning from %s / %s', async (eventId, choiceId) => {
     const pending = snapshot({

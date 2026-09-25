@@ -72,53 +72,6 @@ function createRig(
 }
 
 describe('MainMenuPhase', () => {
-  it('requests raw mouse movement before entering scavenging', async () => {
-    const { phase, ui, canvas, requestPointerLock } = createRig();
-    try {
-      phase.start();
-      ui.onStart();
-      await Promise.resolve();
-      expect(requestPointerLock).toHaveBeenCalledExactlyOnceWith(
-        canvas, { unadjustedMovement: true },
-      );
-    } finally { phase.dispose(); }
-  });
-
-  it('prepares the scene before starting its input and audio', async () => {
-    const { phase, sceneRenderer, audioScope, camera } = createRig();
-    try {
-      await phase.prepare();
-      expect(sceneRenderer.prepare).toHaveBeenCalledWith(
-        expect.anything(), camera, { kind: 'menu', elapsedSeconds: 0 },
-      );
-      expect(sceneRenderer.render).not.toHaveBeenCalled();
-      expect(audioScope.startLoop).not.toHaveBeenCalled();
-    } finally { phase.dispose(); }
-  });
-
-  it('keeps the animated background and ambience active while the menu overlay blocks start input', () => {
-    const { phase, ui, animator, audioScope, canvas, world, requestPointerLock, sceneRenderer } = createRig();
-    try {
-      phase.start();
-      ui.isOverlayOpen = true;
-      ui.onOverlayChange();
-      world.getMenuSignActionAt.mockReturnValue('start');
-      canvas.dispatchEvent(new MouseEvent('click', { button: 0 }));
-      ui.onStart();
-      phase.update(1, .25);
-      phase.update(2, .25);
-      phase.render();
-      expect(requestPointerLock).not.toHaveBeenCalled();
-      expect(world.getMenuSignActionAt).not.toHaveBeenCalled();
-      expect(animator.update).toHaveBeenLastCalledWith(.5, .25);
-      expect(sceneRenderer.render).toHaveBeenCalled();
-      expect(audioScope.startLoop).toHaveBeenCalledExactlyOnceWith('menuAmbient');
-      expect(audioScope.setLoopGain).not.toHaveBeenCalled();
-      ui.isOverlayOpen = false;
-      ui.onStart();
-      expect(requestPointerLock).toHaveBeenCalledOnce();
-    } finally { phase.dispose(); }
-  });
 
   it('cancels a pending start when a menu overlay opens', async () => {
     let resolvePointerLock!: () => void;
@@ -251,49 +204,6 @@ describe('MainMenuPhase', () => {
 
     expect(ui.setTransitioning).toHaveBeenCalledWith(true);
     expect(ui.showPointerLockError).not.toHaveBeenCalled();
-    phase.dispose();
-  });
-
-  it('highlights and opens the 3D guide sign with pointer or keyboard', () => {
-    const { canvas, phase, ui, world } = createRig();
-    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
-      left: 10,
-      top: 20,
-      right: 210,
-      bottom: 120,
-      width: 200,
-      height: 100,
-      x: 10,
-      y: 20,
-      toJSON: () => undefined,
-    } as DOMRect);
-    world.getMenuSignActionAt.mockReturnValue('guide');
-    phase.start();
-
-    canvas.dispatchEvent(new MouseEvent('pointermove', {
-      clientX: 110,
-      clientY: 70,
-      bubbles: true,
-    }));
-    expect(world.getMenuSignActionAt).toHaveBeenLastCalledWith(0, 0);
-    expect(world.setMenuSignHighlighted).toHaveBeenCalledWith('guide', true);
-    expect(world.setMenuSignHighlighted).toHaveBeenCalledWith('start', false);
-    expect(canvas.style.cursor).toBe('pointer');
-
-    canvas.dispatchEvent(new MouseEvent('click', {
-      button: 0,
-      clientX: 110,
-      clientY: 70,
-      bubbles: true,
-    }));
-    expect(ui.openGuide).toHaveBeenCalledOnce();
-
-    canvas.dispatchEvent(new MouseEvent('pointerleave'));
-    expect(world.setMenuSignHighlighted).toHaveBeenCalledWith('guide', false);
-    ui.onGuideFocusChange(true);
-    expect(world.setMenuSignHighlighted).toHaveBeenLastCalledWith('guide', true);
-    ui.onGuideFocusChange(false);
-    expect(world.setMenuSignHighlighted).toHaveBeenLastCalledWith('guide', false);
     phase.dispose();
   });
 

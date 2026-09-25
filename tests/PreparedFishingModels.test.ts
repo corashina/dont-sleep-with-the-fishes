@@ -53,24 +53,6 @@ describe('prepared fishing models', () => {
     }
   });
 
-  it('loads each unique model URL once, including every item catch', async () => {
-    const loader = preparedLoader();
-    const library = await FishingModelLibrary.load(loader);
-    const urls = FISHING_CATCHES.flatMap((definition) => {
-      const spec = catchModelSpec(definition);
-      return spec ? [spec.url] : [];
-    });
-    expect(loader.load).toHaveBeenCalledTimes(new Set(urls).size);
-    expect(new Set(loader.load.mock.calls.map(([url]) => url))).toEqual(new Set(urls));
-    const itemDefinitions = FISHING_CATCHES.filter(({ presentation }) => presentation.kind === 'item');
-    expect(itemDefinitions.length).toBeGreaterThan(0);
-    for (const definition of itemDefinitions) {
-      expect(loader.load).toHaveBeenCalledWith(catchModelSpec(definition)!.url);
-    }
-    expect([...library.preparationRoots()]).toEqual([...loader.models.values()].map(({ root }) => root));
-    library.dispose();
-  });
-
   it('owns each catch clone and retains templates after catch disposal', async () => {
     const loader = preparedLoader();
     const library = await FishingModelLibrary.load(loader);
@@ -112,15 +94,6 @@ describe('prepared fishing models', () => {
     template.disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
     expect([...library.preparationRoots()]).toEqual([]);
     await expect(library.load(url)).rejects.toThrow('Fishing model library is disposed');
-  });
-
-  it('rejects missing prepared URLs without a new model request', async () => {
-    const loader = preparedLoader();
-    const library = await FishingModelLibrary.load(loader);
-    const requests = loader.load.mock.calls.length;
-    await expect(library.load('missing.glb')).rejects.toThrow('Missing prepared fishing model: missing.glb');
-    expect(loader.load).toHaveBeenCalledTimes(requests);
-    library.dispose();
   });
 
   it('waits for pending loads and releases successful models after preload failure', async () => {

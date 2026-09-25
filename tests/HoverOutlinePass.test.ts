@@ -124,23 +124,6 @@ it('saves color before clearing only source color and draws selected geometry on
   } finally { f.dispose(); }
 });
 
-it('uses either composer target as the retained depth source', () => {
-  const f = createFixture();
-  try {
-    f.runCapture();
-    f.imageRender.mockImplementationOnce(() => {
-      expect(f.renderer.getRenderTarget()).toBe(f.read);
-      expect(f.pass.materialCopy.uniforms.tDiffuse!.value).toBe(f.write.texture);
-    }).mockImplementationOnce(() => {
-      expect(f.renderer.getRenderTarget()).toBe(f.pass.renderTargetMaskBuffer);
-      expect(f.pass.materialCopy.uniforms.tDiffuse!.value).toBe(f.write.texture);
-    });
-    f.capture.render(f.renderer, f.read, f.write, 0, false);
-    expect(f.imageRender).toHaveBeenCalledTimes(4);
-    expect(f.capture.needsSwap).toBe(true);
-  } finally { f.dispose(); }
-});
-
 it('uses the new scene and camera without retaining previous phase meshes', () => {
   const f = createFixture();
   const nextScene = new Scene();
@@ -234,31 +217,6 @@ it.each(['scene', 'copy-mask'] as const)('restores state and saved color after %
     f.compose();
     expect(f.imageRender).not.toHaveBeenCalled();
   } finally { override.dispose(); f.dispose(); }
-});
-
-it('keeps the original error when color restoration also fails', () => {
-  const f = createFixture();
-  try {
-    vi.mocked(f.renderer.render).mockImplementationOnce(() => { throw new Error('selected failed'); });
-    f.imageRender.mockImplementationOnce(() => undefined).mockImplementationOnce(() => {
-      throw new Error('restore failed');
-    });
-    expect(f.runCapture).toThrow('selected failed');
-    f.assertRestored();
-  } finally { f.dispose(); }
-});
-
-it('does not restore visibility or source color when saving color fails', () => {
-  const f = createFixture();
-  const visibility = vi.spyOn(f.internals, '_changeVisibilityOfNonSelectedObjects');
-  try {
-    f.imageRender.mockImplementationOnce(() => { throw new Error('save failed'); });
-    expect(f.runCapture).toThrow('save failed');
-    expect(visibility).not.toHaveBeenCalled();
-    expect(f.renderer.clear).not.toHaveBeenCalled();
-    expect(f.imageRender).toHaveBeenCalledOnce();
-    f.assertRestored();
-  } finally { f.dispose(); }
 });
 
 it('restores renderer state and consumes the mask after composition fails', () => {

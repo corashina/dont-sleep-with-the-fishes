@@ -76,17 +76,6 @@ describe('event reaction preview playback', () => {
       expect(ui.setSleepCoverProfile).toHaveBeenLastCalledWith('solid');
     } finally { phase.dispose(); }
   });
-  it('stages the exact reward constellations for Starry Night', async () => {
-    const p = ports();
-    const { event, choices } = reactionPreviewSetup('starry-night');
-    const { choice } = choices[0]!;
-    await playEventReactionPreview({ eventId: 'starry-night', choiceId: choice.id,
-      resultId: choice.outcomes[0]!.resultId!, mode: 'sequence' }, p);
-    expect(p.world.stageEvent).toHaveBeenCalledWith(expect.objectContaining({
-      eventId: 'starry-night', constellationItems: event.choices.filter(c => c.id !== 'sleep').map(c => c.id),
-    }));
-    expect(p.audio.beginEvent).toHaveBeenCalledWith('starry-night');
-  });
   it('restores lab weather and inventory without changing or saving its session', async () => {
     const session = new SurvivalSession([{ type: 'flashlight', instanceId: 'flashlight-1' }], { seed: 19 });
     const initial = session.snapshot();

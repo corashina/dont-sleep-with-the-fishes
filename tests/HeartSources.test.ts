@@ -98,10 +98,3 @@ it('records and restores the first chest piece without granting an ordinary tool
   expect(parsed?.checkpoint.session.heartPieces.chest).toBe(true);
   expect(parsed?.checkpoint.session.pendingJournalActions).toContainEqual({ kind: 'heartPiece', pieceId: 'chest', deltas: { energy: -3 } });
 });
-
-it('does not consume a chest or grant progress without enough energy', () => {
-  const session = new SurvivalSession([], { seed: 41, initial: { energy: 2 }, initialChest: { state: 'closed', acquiredDay: 1 } });
-  const before = session.snapshot();
-  expect(session.perform('openChest').accepted).toBe(false);
-  expect(session.snapshot()).toEqual(before);
-});

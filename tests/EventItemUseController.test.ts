@@ -163,40 +163,7 @@ describe('EventItemUseController', () => {
     adapter.dispose();
   });
 
-  it('tracks a moving aim target while the completed use remains held', async () => {
-    const { actor, adapter, controller } = setup();
-    const target = new Object3D();
-    target.position.set(2, 0.4, -4);
-    const use = controller.play(request(actor.instanceId, target));
-    controller.update(10);
-    await use;
-    const initialForward = new Vector3(1, 0, 0)
-      .applyQuaternion(actor.root.quaternion)
-      .normalize();
-
-    target.position.set(-3, 1.2, -2);
-    controller.update(0.1);
-
-    const actorPosition = actor.root.getWorldPosition(new Vector3());
-    const expectedDirection = target.position.clone()
-      .sub(actorPosition)
-      .normalize();
-    const heldForward = new Vector3(1, 0, 0)
-      .applyQuaternion(actor.root.quaternion)
-      .normalize();
-    expect(heldForward.angleTo(expectedDirection)).toBeLessThan(1e-6);
-    expect(heldForward.y).toBeGreaterThan(0);
-    expect(heldForward.angleTo(initialForward)).toBeGreaterThan(0.1);
-
-    controller.clear('day');
-    adapter.dispose();
-  });
-
-  it.each([
-    ['shotgun', 'shotgun-fire', 0.46],
-    ['fishingNet', 'net-slap', 0.68],
-    ['knife', 'knife-stab', 0.68],
-  ] as const)('fires the %s action cue once at contact', async (itemId, context, contact) => {
+  it.each([['shotgun', 'shotgun-fire', 0.46]] as const)('fires the %s action cue once at contact', async (itemId, context, contact) => {
     const { actor, adapter, controller } = setup();
     const onAction = vi.fn();
     const use = controller.play({

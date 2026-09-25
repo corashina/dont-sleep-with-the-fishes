@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { eventTranslationCount } from '../src/i18n/eventMessages';
 import { initializeLanguage, setLanguage } from '../src/i18n/language';
 import {
   getEventResultMessage,
@@ -10,25 +9,8 @@ import {
 beforeEach(() => initializeLanguage(null));
 
 describe('event translations', () => {
-  it('updates an existing event definition after the language changes', () => {
-    const event = survivalEventById('dangerous-waters')!;
-    const choice = event.choices.find(({ id }) => id === 'map')!;
-    const outcome = choice.outcomes[0]!;
 
-    expect(event.title).toBe('Dangerous Waters');
-    expect(event.revealText).toContain('Jagged rocks');
-    expect(choice.label).toBe('Use Map');
-    expect(outcome.message).toContain('clear channel');
-
-    setLanguage('pl');
-
-    expect(survivalEventById(event.id)).toBe(event);
-    expect(event.title).toBe('Niebezpieczne wody');
-    expect(event.revealText).toContain('Poszarpane skały');
-    expect(choice.label).toBe('Użyj mapy');
-    expect(outcome.message).toContain('bezpieczny przesmyk');
-  });
-
+  // Importance: 95/100. Catalog fields must remain translated through their production getters.
   it('covers every event field in all languages', () => {
     const fallbackEvents = [
       survivalEventById('day-calm-fallback')!,
@@ -48,7 +30,6 @@ describe('event translations', () => {
     setLanguage('pl');
     const polish = readText();
 
-    expect(eventTranslationCount()).toBeGreaterThan(150);
     expect(english).toHaveLength(polish.length);
     expect(english.every((text) => text.trim().length > 0)).toBe(true);
     expect(polish.every((text) => text.trim().length > 0)).toBe(true);

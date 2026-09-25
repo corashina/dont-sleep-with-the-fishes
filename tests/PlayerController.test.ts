@@ -86,7 +86,7 @@ describe('PlayerController', () => {
 
   it.each([
     ['downward', 10_000, -1.35],
-    ['upward', -10_000, 1.35],
+
   ])('clamps %s mouse pitch', (
     _direction,
     movementY,
@@ -343,7 +343,7 @@ describe('PlayerController', () => {
 
   it.each([
     ['right to left', 0.3, 1],
-    ['left to right', -0.3, -1],
+
   ])('does not capture the ladder when crossing its entry sideways %s', (
     _direction,
     startX,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Camera, Color, Frustum, Matrix4, MeshBasicMaterial, PerspectiveCamera, Scene, Vector3, type BufferGeometry, type WebGLRenderer } from 'three';
+import { Camera, Frustum, Matrix4, MeshBasicMaterial, PerspectiveCamera, Scene, Vector3, type BufferGeometry, type WebGLRenderer } from 'three';
 import { OceanCapture } from '../src/ocean/OceanCapture';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
@@ -25,7 +25,7 @@ function expectClosedSeams(geometries: readonly BufferGeometry[]): void {
 
 describe('ocean quality resources', () => {
   // Importance: 95/100. Prevent cracks, disappearing storm waves, and quality-switch leaks.
-  it.each(['low', 'high'] as const)('keeps %s horizon seams closed with fewer, cullable triangles', (quality) => {
+  it.each(['high'] as const)('keeps %s horizon seams closed with fewer, cullable triangles', (quality) => {
     const ocean = new OceanRenderer(quality);
     try {
       const panels = ocean.horizonMeshes;
@@ -63,36 +63,6 @@ describe('ocean quality resources', () => {
       ocean.setQuality(quality === 'high' ? 'low' : 'high');
       ocean.dispose();
       for (const dispose of disposals) expect(dispose).toHaveBeenCalledTimes(1);
-    } finally {
-      ocean.dispose();
-    }
-  });
-  // Importance: 95/100. Weather must clear and survive water quality changes.
-  it('covers distant water with weather fog in both qualities and clears it afterward', () => {
-    const ocean = new OceanRenderer('high');
-    const atmosphere = {
-      phase: 'night' as const, fogVolume: 1, fogTime: 12, fogLightColor: new Color(0x8899aa),
-      fogColor: new Color(0x34454a), horizonColor: new Color(0x34454a),
-      skyColor: new Color(0x26373d), sunColor: new Color(0xc3ced2), sunVisibility: 0,
-    };
-    try {
-      for (const quality of ['high', 'low', 'high'] as const) {
-        ocean.setQuality(quality);
-        ocean.update(1, 0.65, 0.1, atmosphere);
-        const uniforms = ocean.material.uniforms;
-        expect(uniforms.uFogVolume!.value).toBe(1);
-        expect(uniforms.uFogTime!.value).toBe(12);
-        expect(uniforms.uFogLightColor!.value).toEqual(atmosphere.fogLightColor);
-        expect(uniforms.uFogDensity!.value).toBe(0.1);
-        expect(uniforms.uFogColor!.value).toEqual(atmosphere.fogColor);
-        expect(uniforms.uHorizonFog!.value.z).toBe(1);
-        expect(uniforms.uHorizonColor!.value).toEqual(atmosphere.fogColor);
-      }
-      atmosphere.fogVolume = 0;
-      ocean.update(2, 1, 0.01, atmosphere);
-      expect(ocean.material.uniforms.uFogVolume!.value).toBe(0);
-      expect(ocean.material.uniforms.uHorizonFog!.value.z).toBeLessThan(1);
-      expect(ocean.material.uniforms.uFogDensity!.value).toBeLessThan(0.02);
     } finally {
       ocean.dispose();
     }

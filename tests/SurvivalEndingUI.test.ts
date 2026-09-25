@@ -24,71 +24,12 @@ function setup() {
 }
 
 describe('survival ending animation', () => {
-  // Importance: 98/100. Sound must start on the actual popup reveal, once, after the fade.
-  it('notifies when the Kraken popup becomes visible, not when its fade starts', () => {
-    const view = setup();
-    const shown = vi.fn(() => expect(view.panel.hidden).toBe(false));
-    view.ui.onEndingShown = shown;
-    const ending = { id: 'kraken' as const, day: 8, savedPickupCount: 4 };
-    view.ui.showEnding(ending);
-    expect(shown).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1499);
-    expect(shown).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1);
-    expect(shown).toHaveBeenCalledExactlyOnceWith('kraken');
-    view.ui.showEnding(ending);
-    vi.advanceTimersByTime(2000);
-    expect(shown).toHaveBeenCalledOnce();
-  });
-
-  // Importance: 98/100. Leaving during a fade must cancel its sound callback.
-  it('cancels the popup notification when disposed during the Kraken fade', () => {
-    const view = setup();
-    const shown = vi.fn();
-    view.ui.onEndingShown = shown;
-    view.ui.showEnding({ id: 'kraken', day: 8, savedPickupCount: 4 });
-    view.ui.dispose();
-    vi.advanceTimersByTime(2000);
-    expect(shown).not.toHaveBeenCalled();
-  });
-
-  // Importance: 95/100. Reward audio must use the same tick as visible popup content.
-  it('notifies immediately when a reward popup appears', () => {
-    const view = setup();
-    const shown = vi.fn(() => {
-      expect(document.querySelector('[data-dive-result]')?.classList.contains('is-visible')).toBe(true);
-    });
-    view.ui.onRewardShown = shown;
-    void view.ui.showRewardResult({ title: 'SALVAGE', reward: null, lines: [] });
-    expect(shown).toHaveBeenCalledOnce();
-    vi.advanceTimersByTime(2000);
-    expect(shown).toHaveBeenCalledOnce();
-  });
-
-  it('clears the sleep cover and keeps the finish screen closed during rescue', () => {
-    const view = setup();
-    void view.ui.setSleepCovered(true);
-    view.ui.beginEndingSequence();
-    const cover = document.querySelector<HTMLElement>('[data-sleep-cover]')!;
-    expect(cover.classList.contains('is-covered')).toBe(false);
-    expect(cover.style.opacity).toBe('0');
-    expect(document.querySelector('.survival-ui')?.classList.contains('is-ending-sequence')).toBe(true);
-    expect(view.root.getAttribute('aria-hidden')).toBe('true');
-    expect(document.querySelector<HTMLElement>('[data-boat-anchors]')?.inert).toBe(true);
-    view.ui.setRescueFade(0.5);
-    expect(cover.style.opacity).toBe('0.5');
-    view.ui.setRescueFade(1);
-    view.ui.showEnding({ id: 'rescue', day: 8, savedPickupCount: 4, signalAssisted: false });
-    expect(cover.style.opacity).toBe('1');
-    expect(view.root.getAttribute('aria-hidden')).toBe('false');
-    expect(view.panel.hidden).toBe(false);
-  });
 
   // Importance: 99/100. Endings must keep their popup and actions hidden until the fade completes.
   it.each(['death', 'sinking', 'kraken'] as const)('fades %s before showing its popup and menu controls', (id) => {
     const view = setup();
     // Importance: 98/100. Every faded ending must notify at the popup reveal.
-    const shown = vi.fn();
+    const shown = vi.fn(() => expect(view.panel.hidden).toBe(false));
     view.ui.onEndingShown = shown;
     const restart = vi.fn();
     const menu = vi.fn();
@@ -102,6 +43,7 @@ describe('survival ending animation', () => {
 
     view.ui.showEnding(record);
     expect(view.panel.hidden).toBe(true);
+    expect(shown).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(view.root);
     expect(document.querySelector('[data-boat-anchors]')?.hasAttribute('inert')).toBe(true);
     view.restart.click();
@@ -121,6 +63,9 @@ describe('survival ending animation', () => {
       death: 'THE SEA OUTLASTED YOU', sinking: 'THE BOAT IS GONE', kraken: 'THE SEA RELEASES YOU',
     }[id]);
     expect(document.querySelector('[data-ending-stats]')?.textContent).toBe('DAY 8');
+    view.ui.showEnding(record);
+    vi.advanceTimersByTime(2000);
+    expect(shown).toHaveBeenCalledOnce();
     view.menu.click();
     view.menu.click();
     view.restart.click();
@@ -130,11 +75,18 @@ describe('survival ending animation', () => {
     expect(view.restart.disabled).toBe(true);
   });
 
+  // Importance: 98/100. Disposal must cancel popup timers and prevent late sound notifications.
   it('cancels popup work when disposed during the fade', () => {
     const view = setup();
-    view.ui.showEnding({ id: 'death', day: 2, savedPickupCount: 1, cause: { kind: 'other' } });
+    const shown = vi.fn();
+    view.ui.onEndingShown = shown;
+    view.ui.showEnding({ id: 'kraken', day: 8, savedPickupCount: 4 });
     view.ui.dispose();
+    // jsdom queues a zero-delay selectionchange event when focus moves.
+    vi.advanceTimersByTime(0);
+    expect(vi.getTimerCount()).toBe(0);
     vi.advanceTimersByTime(2000);
+    expect(shown).not.toHaveBeenCalled();
     expect(view.panel.hidden).toBe(true);
     expect(document.querySelector('[data-ending]')).toBeNull();
     expect(vi.getTimerCount()).toBe(0);

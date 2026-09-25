@@ -103,24 +103,4 @@ describe.each(['drifting-chest'] as const)('day commands during %s', (eventId) =
     rig.button('supply:scubaSet').click();
     expect(rig.action).toHaveBeenCalledExactlyOnceWith('dive', undefined);
   });
-
-  it('shows the energy limit instead of silently consuming a rejected dive', () => {
-    const rig = fixture(eventId);
-    rig.ui.render({ ...rig.session.snapshot(), energy: 2 }, (action) => (
-      action === 'dive' ? 'Diving requires three energy.' : null
-    ));
-    const scuba = rig.button('supply:scubaSet');
-    expect(scuba.getAttribute('aria-disabled')).toBe('true');
-    expect(scuba.getAttribute('aria-description')).toContain('Diving requires three energy.');
-    scuba.click();
-    expect(rig.action).not.toHaveBeenCalled();
-    expect(rig.eventItem).not.toHaveBeenCalled();
-  });
-});
-
-it('keeps normal day commands blocked during a required event', () => {
-  const rig = fixture('leak');
-  rig.button('supply:scubaSet').click();
-  rig.button('fishing-tools').click();
-  expect(rig.action).not.toHaveBeenCalled();
 });

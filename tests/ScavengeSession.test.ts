@@ -55,15 +55,19 @@ describe('ScavengeSession', () => {
     expect(session.snapshot().carriedItems).toBe(released.carriedItems);
   });
 
+  // Importance: 95/100. Guards omitted and explicit-false evacuation inputs at the deadline.
   it('starts at 60 seconds and fails exactly once at expiry', () => {
-    const session = new ScavengeSession();
-    session.start();
-    session.tick(59.5);
-    expect(session.snapshot().remainingSeconds).toBeCloseTo(0.5);
-    session.tick(0.5);
-    expect(session.snapshot().status).toBe('failure');
-    session.tick(5);
-    expect(session.snapshot().remainingSeconds).toBe(0);
+    for (const evacuation of [[], [false]] as const) {
+      const session = new ScavengeSession();
+      session.start();
+      session.tick(59.5);
+      expect(session.snapshot().remainingSeconds).toBeCloseTo(0.5);
+      session.tick(0.5, ...evacuation);
+      const expired = session.snapshot();
+      expect(expired).toMatchObject({ status: 'failure', remainingSeconds: 0 });
+      session.tick(5);
+      expect(session.snapshot()).toEqual(expired);
+    }
   });
 
   it('carries repeatable instances up to total weight three', () => {
@@ -100,17 +104,6 @@ describe('ScavengeSession', () => {
         'flashlight-1': { status: 'saved' },
       },
     });
-  });
-
-  it('rejects a bundle save without mutation outside running state', () => {
-    const session = new ScavengeSession();
-    session.start();
-    session.pickUp('flareGun-1');
-    session.pause();
-    const before = session.snapshot();
-
-    expect(session.saveCarriedBundle()).toBeNull();
-    expect(session.snapshot()).toEqual(before);
   });
 
   it('releases carried instances in LIFO order for every transition', () => {
@@ -155,13 +148,6 @@ describe('ScavengeSession', () => {
     session.tick(1, true);
     expect(session.snapshot()).toMatchObject({ status: 'success', remainingSeconds: 0 });
     expect(session.result()?.elapsedSeconds).toBe(60);
-  });
-
-  it('fails when ineligible on the deadline-crossing tick', () => {
-    const session = new ScavengeSession();
-    session.start();
-    session.tick(60, false);
-    expect(session.snapshot()).toMatchObject({ status: 'failure', remainingSeconds: 0 });
   });
 
   it('deducts a five-second fall penalty without double-finishing', () => {

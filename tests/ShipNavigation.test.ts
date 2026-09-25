@@ -15,14 +15,22 @@ describe('ship navigation', () => {
     expect(result.secondaryAccessLaneCount).toBeGreaterThan(0);
   });
 
-  it('measures the shortest navigable route around furniture', () => {
-    const metric = createShipRouteMetric(SHIP_LAYOUT);
+  // Importance: 95/100. Route costs drive supply placement; a detour must be shortest and avoid the obstacle.
+  it('measures the shortest route around a rectangular hatch', () => {
+    const cargo = SHIP_LAYOUT.zones.find(({ id }) => id === 'cargoDeck')!;
+    const metric = createShipRouteMetric({
+      ...SHIP_LAYOUT,
+      zones: [{ ...cargo, bounds: { minX: -5, maxX: 5, minZ: -5, maxZ: 5 },
+        polygon: [[-5, -5], [5, -5], [5, 5], [-5, 5]] }],
+      furniture: [], doors: [],
+      rigging: { ...SHIP_LAYOUT.rigging, masts: [] },
+      deckHatch: { ...SHIP_LAYOUT.deckHatch, position: [0, 0, 0], rotationY: 0, colliderSize: [0.4, 1, 1.2] },
+    });
     expect(metric.stable).toBe(true);
     expect(Object.isFrozen(metric)).toBe(true);
-    const direct = Math.hypot(7.025, 9.6);
-    const routed = metric.distance([0, 9.6], [7.025, 0]);
-    expect(routed).not.toBeNull();
-    expect(routed!).toBeGreaterThan(direct);
+    // The inflated hatch blocks x +/-0.55 and z +/-0.95. On the 0.1 grid,
+    // the shortest route has two metres of diagonal travel and two of straight travel.
+    expect(metric.distance([-2, 0], [2, 0])).toBeCloseTo(2 * Math.SQRT2 + 2, 8);
   });
 
   it('returns null when either point has no reachable grid cell', () => {
@@ -30,7 +38,7 @@ describe('ship navigation', () => {
     expect(metric.distance([0, 0], [99, 99])).toBeNull();
   });
 
-  it('caches one symmetric null route for a blocked in-grid endpoint', () => {
+  it('returns null in both directions for a blocked in-grid endpoint', () => {
     const metric = createShipRouteMetric(SHIP_LAYOUT);
     expect(metric.distance([0, 9.6], [0, -7])).toBeNull();
     expect(metric.distance([0, -7], [0, 9.6])).toBeNull();
@@ -44,10 +52,13 @@ describe('ship navigation', () => {
     expect(metric.distance([0, 0], [Number.NEGATIVE_INFINITY, 0])).toBeNull();
   });
 
-  it('uses one exact symmetric cached route distance', () => {
+  // Importance: 90/100. The production layout must yield stable bidirectional route costs.
+  it('returns the same production route distance in both directions and on repeat', () => {
     const metric = createShipRouteMetric(SHIP_LAYOUT);
-    expect(metric.distance([0, 11], [7.025, 0])).toBe(14.878174593051993);
-    expect(metric.distance([7.025, 0], [0, 11])).toBe(14.878174593051993);
+    const distance = metric.distance([0, 11], [7.025, 0]);
+    expect(distance).toBeGreaterThan(Math.hypot(7.025, 11));
+    expect(metric.distance([7.025, 0], [0, 11])).toBe(distance);
+    expect(metric.distance([0, 11], [7.025, 0])).toBe(distance);
   });
 
   it('derives both sides of every current door instead of trusting stale targets', () => {

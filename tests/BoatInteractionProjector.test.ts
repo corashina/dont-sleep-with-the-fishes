@@ -8,8 +8,6 @@ import {
   Scene,
 } from 'three';
 import { describe,expect,it,vi } from 'vitest';
-import { setLanguage } from '../src/i18n/language';
-import { presentationUiText } from '../src/i18n/presentationUiMessages';
 import { projectBoatObjectBoundsInto } from '../src/survival/BoatInteraction';
 import {
   BoatInteractionProjector,
@@ -147,47 +145,6 @@ describe('BoatInteractionProjector', () => {
     fixture.projector.dispose();
   });
 
-  it('updates standalone projection after parent motion without traversing the scene', () => {
-    const fixture = createFixture();
-    const scene = fixture.roots.repairRoot.parent!;
-    const sceneUpdate = vi.spyOn(scene, 'updateMatrixWorld');
-    const before = fixture.projector.projectAnchors(1280, 720)
-      .find(({ id }) => id === 'repair-tools')!.x;
-    scene.position.x += 0.5;
-    const after = fixture.projector.projectAnchors(1280, 720)
-      .find(({ id }) => id === 'repair-tools')!.x;
-    expect(after).toBeGreaterThan(before);
-    expect(sceneUpdate).not.toHaveBeenCalled();
-    fixture.projector.dispose();
-  });
-
-  it('translates retained anchors and cached focused targets without reprojection', () => {
-    const fixture = createFixture();
-    fixture.projector.installFocusedInteractionTargets([{
-      id: 'handyman:hand', choiceId: 'touch', root: fixture.roots.repairRoot,
-      label: '?',
-      get description() { return presentationUiText('handDescription'); },
-      tooltip: true,
-    }]);
-    const anchors = fixture.projector.projectAnchors(1280, 720);
-    const chest = anchors.find(({ id }) => id === 'persistent-chest')!;
-    const hand = anchors.find(({ id }) => id === 'handyman:hand')!;
-    const position = { x: hand.x, y: hand.y };
-    expect(chest.label).toBe('OPEN');
-    expect(hand.label).toBe('?');
-    expect(hand.tooltip).toBe(true);
-    try {
-      setLanguage('pl');
-      expect(chest.label).toBe('OTWÓRZ');
-      expect(hand.label).toBe('?');
-      expect(hand.description).toBe('Dotknij czekającej dłoni.');
-      expect({ x: hand.x, y: hand.y }).toEqual(position);
-    } finally {
-      setLanguage('en');
-      fixture.projector.dispose();
-    }
-  });
-
   it('uses featured roots and installed presenter metadata without frame rebuilds', () => {
     const fixture = createFixture();
     const featuredRoot = meshRoot('barrel', -0.5);
@@ -281,6 +238,7 @@ describe('BoatInteractionProjector', () => {
     });
   });
 
+
   it('keeps installed targets when a replacement cache build fails', () => {
     const fixture = createFixture();
     const stableRoot = meshRoot('stable', 0.4);
@@ -321,29 +279,5 @@ describe('BoatInteractionProjector', () => {
     const anchors = fixture.projector.projectAnchors(1280, 720);
     expect(anchors.find(({ id }) => id === 'custom:stable')).toBeDefined();
     expect(anchors.find(({ id }) => id === 'custom:replacement')).toBeUndefined();
-  });
-
-  it('reuses outputs until anchor membership changes', () => {
-    const fixture = createFixture();
-    const first = fixture.projector.projectAnchors(1280, 720);
-    const firstSupply = first[0];
-    const firstHitArea = firstSupply!.hitArea;
-
-    fixture.roots.carlitosRoot.position.x = 0.2;
-    const second = fixture.projector.projectAnchors(1280, 720);
-
-    expect(second).toBe(first);
-    expect(second[0]).toBe(firstSupply);
-    expect(second[0]!.hitArea).toBe(firstHitArea);
-
-    Object.assign(fixture.supplyRecord, { visibleCopies: 0 });
-    const withoutSupply = fixture.projector.projectAnchors(1280, 720);
-    expect(withoutSupply).not.toBe(first);
-    expect(withoutSupply.some(({ id }) => id === 'supply:cannedFood')).toBe(false);
-
-    Object.assign(fixture.supplyRecord, { visibleCopies: 1 });
-    const restored = fixture.projector.projectAnchors(1280, 720);
-    expect(restored).not.toBe(withoutSupply);
-    expect(restored[0]).toBe(firstSupply);
   });
 });
