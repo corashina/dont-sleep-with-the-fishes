@@ -136,7 +136,8 @@ export class SurvivalUI {
     ];
     this.modalFocus = new ModalFocusManager(
       [
-        this.hudView.topControls,
+        this.hudView.journalControl(),
+        this.hudView.cameraTurn,
         this.hudView.cameraReturn,
         this.anchorView.anchorLayer,
       ],
@@ -151,6 +152,8 @@ export class SurvivalUI {
         [this.fishingView.resultRoot, this.fishingView.resultClose],
         [this.fishingView.interactionRoot, () => this.fishingView.initialFocus()],
       ]),
+      undefined,
+      new Map([[this.fishingView.interactionRoot, [this.hudView.journalControl()]]]),
     );
     this.modalFocus.sync();
     this.modalDismissButtons = new Map<HTMLElement, HTMLButtonElement>([
@@ -696,8 +699,9 @@ export class SurvivalUI {
   }
 
   private syncViewModalState(): void {
-    const open = this.modalFocus.topmostModal() !== null;
-    this.hudView.setModalOpen(open);
+    const topmost = this.modalFocus.topmostModal();
+    const open = topmost !== null;
+    this.hudView.setModalOpen(open, !open || topmost === this.fishingView.interactionRoot);
     this.anchorView.setModalOpen(open);
     this.eventView.setModalOpen(open);
   }
@@ -913,6 +917,7 @@ export class SurvivalUI {
 
   private handleFishingKeyDown(event: KeyboardEvent, topmostModal: HTMLElement | null): boolean {
     if (topmostModal !== this.fishingView.interactionRoot) return false;
+    if (event.target instanceof Node && this.hudView.journalControl().contains(event.target)) return true;
     this.fishingView.handleKeyDown(event);
     return true;
   }

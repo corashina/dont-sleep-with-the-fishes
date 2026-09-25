@@ -22,6 +22,7 @@ import type { SkyPhase } from '../world/skyPalette';
 import type { SurvivalRunCheckpoint } from '../survival/SurvivalCheckpoint';
 import type { SurvivalContent } from '../survival/SurvivalContent';
 import type { ReportLoadingProgress } from './LoadingProgress';
+import type { EventReactionPreviewRequest } from '../survival/EventReactionPreview';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -72,5 +73,6 @@ export interface GamePhase {
   setTimeOfDayOverride?(phase: SkyPhase | null): void;
   getPresentationPhase?(): SkyPhase;
   getSurvivalCheckpoint?(): SurvivalRunCheckpoint | null;
+  previewEventReaction?(request: EventReactionPreviewRequest): Promise<boolean>;
   dispose(): void;
 }

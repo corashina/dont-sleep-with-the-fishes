@@ -1,3 +1,4 @@
+import { BAIT_SUPPLY_ACTOR_ID, FOOD_SUPPLY_ACTOR_ID, resourceSupplyActorId } from './resourceSupplyActors';
 import {
   BufferGeometry,
   DoubleSide,
@@ -215,7 +216,8 @@ function prepareBoatSupplyMaterials(root: Object3D, groupId: BoatSupplyGroupId):
 
 export class BoatSupplyDisplay {
   /** Presentation actor for food units, including food without an inventory can. */
-  readonly foodSupplyActorId = 'boat-food-supply' as ItemInstanceId;
+  readonly foodSupplyActorId = FOOD_SUPPLY_ACTOR_ID;
+  readonly baitSupplyActorId = BAIT_SUPPLY_ACTOR_ID;
   private borrowedFoodCanId: ItemInstanceId | null = null;
   private readonly recordsById = new Map<BoatSupplyGroupId, MutableRecord>();
   private readonly eventMotionRecords: MutableRecord[] = [];
@@ -264,6 +266,7 @@ export class BoatSupplyDisplay {
   ) {
     this.registerInstances(savedItems);
     this.groupByInstanceId.set(this.foodSupplyActorId, 'cannedFood');
+    this.groupByInstanceId.set(this.baitSupplyActorId, 'baitTin');
     this.createSupplyGroups(propModels, parent);
     for (const [instanceId, groupId] of this.groupByInstanceId) {
       this.prepareEventActor(instanceId, groupId);
@@ -853,7 +856,8 @@ export class BoatSupplyDisplay {
       return this.eventSelectedItemId;
     }
     const eligible = usableIds.find((id) => this.eventEligibleItemIds?.has(id) === true);
-    return eligible ?? usableIds[0] ?? brokenIds[0] ?? null;
+    const resourceActor = this.recordsById.get(groupId)!.quantity > 0 ? resourceSupplyActorId(groupId) : null;
+    return eligible ?? usableIds[0] ?? resourceActor ?? brokenIds[0] ?? null;
   }
 
   private cancelActiveAnimation(): void {
@@ -962,7 +966,7 @@ export class BoatSupplyDisplay {
     visibleCopies: number,
     fallback: BorrowedCopyTransform,
   ): BorrowedCopyTransform {
-    if (instanceId !== this.foodSupplyActorId) return fallback;
+    if (instanceId !== this.foodSupplyActorId && instanceId !== this.baitSupplyActorId) return fallback;
     const copy = this.copiesById.get(groupId)![visibleCopies - 1];
     if (copy === undefined) return fallback;
     return {
@@ -984,7 +988,7 @@ export class BoatSupplyDisplay {
     return record !== undefined
       && record.visibleCopies > 0
       && (record.backingInstanceId === instanceId
-        || instanceId === this.foodSupplyActorId);
+        || instanceId === this.foodSupplyActorId || instanceId === this.baitSupplyActorId);
   }
 
   private restoreSelectedGroup(

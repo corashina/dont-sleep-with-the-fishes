@@ -11,17 +11,18 @@ import {
   eventItemOutcomeDuration,
   eventItemUseDurationForItem,
   isReturningSingleUseContext,
+  isDeployedEventItemContext,
   sampleEventItemOutcome,
   sampleEventItemUse,
-  UMBRELLA_WIND_FLIGHT_DURATION,
+  WIND_ITEM_FLIGHT_DURATION,
   type EventItemDisposition,
   type EventItemUseContext,
   type EventItemUseSample,
 } from './eventItemUseChoreography';
 import type { EventOutcomePresentation } from './eventPresentationTypes';
 
-export interface EventNetCatch {
-  capture(net: Object3D): void;
+export interface EventItemCatch {
+  capture(item: Object3D, itemId: ItemId): void;
   release(): void;
 }
 
@@ -34,7 +35,7 @@ export interface EventItemUseRequest {
   readonly aimTarget: Object3D | null;
   readonly landAtTarget?: boolean;
   readonly durationSeconds?: number;
-  readonly netCatch?: EventNetCatch | null;
+  readonly itemCatch?: EventItemCatch | null;
   readonly onAction?: (cueIndex: number) => void;
 }
 
@@ -99,8 +100,8 @@ export class EventItemUseController {
       request.itemId,
       request.aimTarget,
       request.context === 'bucket-helmet'
-        || request.context === 'map-leak-patch',
-      request.context === 'umbrella-shield' ? 'x' : null,
+        || request.context === 'map-leak-patch' || request.context === 'map-cover',
+      request.context === 'umbrella-shield' ? 'x' : request.context === 'net-secure' ? 'y' : null,
       request.context === 'bucket-helmet' || request.context === 'knife-stab'
         || request.context === 'swim-ring-wear',
     );
@@ -139,8 +140,7 @@ export class EventItemUseController {
     }
     const disposition = dispositionFor(held.request, result);
     if ((held.request.context === 'umbrella-overhead' && disposition !== 'depart')
-      || held.request.context === 'anchor-drop'
-      || held.request.context === 'swim-ring-deploy') {
+      || isDeployedEventItemContext(held.request.context)) {
       // Keep deployed items until the event flow clears the scene.
       sampleEventItemUse(held.request.context, held.request.itemId, 1, this.sample);
       this.applyRequestSample(held.request);
@@ -190,8 +190,9 @@ export class EventItemUseController {
         disposition,
         retainUntilClear,
         elapsed: 0,
-        duration: held.request.context === 'umbrella-overhead' && disposition === 'depart'
-          ? UMBRELLA_WIND_FLIGHT_DURATION
+        duration: (held.request.context === 'umbrella-overhead' || held.request.context === 'map-wind')
+          && disposition === 'depart'
+          ? WIND_ITEM_FLIGHT_DURATION
           : eventItemOutcomeDuration(held.request.itemId, disposition),
         resolve,
       };
@@ -220,7 +221,7 @@ export class EventItemUseController {
     const progress = use.elapsed / use.duration;
     sampleEventItemUse(use.request.context, use.request.itemId, progress, this.sample);
     this.applyRequestSample(use.request);
-    if (progress >= 0.75) use.request.netCatch?.capture(use.actor.root);
+    if (progress >= 0.75) use.request.itemCatch?.capture(use.actor.root, use.request.itemId);
     const actionCueProgresses = eventItemActionCueProgresses(use.request.context);
     while (use.request.onAction !== undefined
       && use.nextActionCueIndex < actionCueProgresses.length
@@ -291,7 +292,7 @@ export class EventItemUseController {
       this.sample.cameraTargetBlend = 0;
       this.sample.fovScale = 1;
     }
-    if (request.landAtTarget || (request.netCatch !== undefined && request.netCatch !== null)) {
+    if (request.landAtTarget || (request.itemCatch !== undefined && request.itemCatch !== null)) {
       this.sample.flightTarget = 'event';
       this.sample.ballisticFlight = false;
     }
@@ -307,7 +308,7 @@ export class EventItemUseController {
       this.supplies.stowEventItemUntilDay(request.instanceId);
     }
     this.adapter.clear();
-    request.netCatch?.release();
+    request.itemCatch?.release();
     actor.release();
   }
 }

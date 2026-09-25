@@ -145,6 +145,8 @@ async function writeFreesoundAudio(id, audio, destination) {
       ? splitMp3ByWindows(audio, [[0, 40]])[0]
     : id === 'fishingNet'
       ? splitMp3ByWindows(audio, [[0, 4.8]])[0]
+    : id === 'checkBackAnglerfish'
+      ? splitMp3ByWindows(audio, [[2, 4]])[0]
       : audio;
   await writeFile(destination, output);
   process.stdout.write(`Downloaded ${basename(destination)}\n`);

@@ -1,5 +1,5 @@
 import type { Object3D } from 'three';
-import type { EventNetCatch } from './EventItemUseController';
+import type { EventItemCatch } from './EventItemUseController';
 import type { ItemInstanceId } from '../game/ItemState';
 import { ignoreCleanupError, runCleanupSteps } from '../world/SceneResources';
 import type {
@@ -101,8 +101,8 @@ export class EventPresentationHost {
       : active.playItemUse(choiceId, instanceId, onAction);
   }
 
-  netCatch(): EventNetCatch | null {
-    return this.active?.netCatch?.() ?? null;
+  itemCatch(): EventItemCatch | null {
+    return this.active?.itemCatch?.() ?? null;
   }
 
   itemAimTarget(): Object3D | null {

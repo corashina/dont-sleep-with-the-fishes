@@ -17,7 +17,7 @@ export type EventItemUseContext =
   | 'flare-target' | 'flare-sky' | 'anchor-drop'
   | 'umbrella-overhead' | 'umbrella-shield'
   | 'flashlight-threat-beam' | 'flashlight-signal' | 'shotgun-fire'
-  | 'knife-stab';
+  | 'knife-stab' | 'map-cover' | 'map-wind' | 'net-secure' | 'bucket-bail';
 
 export type EventItemEffectKind =
   | 'none' | 'tape' | 'binocular-mask'
@@ -71,7 +71,7 @@ const UMBRELLA_OVERHEAD_ROTATION = Object.freeze({
 const UMBRELLA_SHIELD_VIEW_Z = -0.2;
 const UMBRELLA_SHIELD_VIEW_Y = -0.075;
 const UMBRELLA_SHIELD_SCALE = 1.5;
-export const UMBRELLA_WIND_FLIGHT_DURATION = 5.8;
+export const WIND_ITEM_FLIGHT_DURATION = 5.8;
 const ANCHOR_FLIGHT_START = 0.56;
 const ANCHOR_IMPACT_PROGRESS = 0.84;
 const ANCHOR_ACTION_CUE_PROGRESSES = Object.freeze([ANCHOR_IMPACT_PROGRESS]);
@@ -105,6 +105,13 @@ const SWIM_RING_WORN_SCALE = 3;
 const SWIM_RING_OVERHEAD_Y = 0.65;
 const SWIM_RING_WORN_Y = -0.62;
 const NO_ACTION_CUE_PROGRESSES: readonly number[] = Object.freeze([]);
+const DEPLOYED_CONTEXTS: ReadonlySet<EventItemUseContext> = new Set([
+  'anchor-drop', 'swim-ring-deploy', 'map-cover', 'net-secure',
+]);
+
+export function isDeployedEventItemContext(context: EventItemUseContext): boolean {
+  return DEPLOYED_CONTEXTS.has(context);
+}
 type StagedEventItemUseSample = EventItemUseSample & {
   [MOTION_PROFILE]?: ReturnType<typeof eventItemMotionProfile>;
   [ANTICIPATE]?: number;
@@ -145,22 +152,22 @@ export interface EventItemUseSample {
 }
 
 const BUCKET_SCOOP_EVENTS: ReadonlySet<string> = new Set([
-  'leak', 'school-of-fish', 'ocean-of-blood',
+  'leak', 'school-of-fish', 'ocean-of-blood', 'flowers',
 ]);
 const BUCKET_HELMET_EVENTS: ReadonlySet<string> = new Set([
-  'shower-night', 'bad-sleep', 'thunderstorm', 'eerie-melody', 'face-on-the-moon',
+  'bad-sleep', 'eerie-melody', 'face-on-the-moon',
 ]);
 const UMBRELLA_OVERHEAD_EVENTS: ReadonlySet<string> = new Set([
-  'shower-night', 'windy-night', 'thunderstorm',
+  'shower-night', 'windy-night', 'thunderstorm', 'tornado',
 ]);
 const UMBRELLA_SHIELD_EVENTS: ReadonlySet<string> = new Set([
   'bad-sleep', 'death-stare', 'eerie-melody', 'face-on-the-moon',
 ]);
 const FLARE_SKY_EVENTS: ReadonlySet<string> = new Set(['other-people', 'ghost-ship', 'plane', 'flying-saucer', 'lighthouse']);
-const FLARE_TARGET_EVENTS: ReadonlySet<string> = new Set(['ghosts', 'snatcher']);
+const FLARE_TARGET_EVENTS: ReadonlySet<string> = new Set(['ghosts', 'tentacle-attack', 'death-stare']);
 const TRADE_EVENTS: ReadonlySet<string> = new Set(['night-trader', 'handyman']);
 const NET_SLAP_EVENTS: ReadonlySet<string> = new Set([
-  'death-stare', 'swarm-of-sharks', 'snatcher',
+  'death-stare', 'swarm-of-sharks', 'tentacle-attack',
 ]);
 const FLASHLIGHT_SIGNAL_EVENTS: ReadonlySet<string> = new Set([
   'other-people', 'ghost-ship', 'plane', 'flying-saucer', 'lighthouse',
@@ -201,6 +208,10 @@ const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number
   'flashlight-signal': 1.7,
   'shotgun-fire': 1.2,
   'knife-stab': 1.15,
+  'map-cover': 1.55,
+  'map-wind': 1.55,
+  'net-secure': 1.9,
+  'bucket-bail': 2.1,
 };
 
 type EventItemContextResolver = (
@@ -211,7 +222,7 @@ type EventItemContextResolver = (
 const EVENT_ITEM_CONTEXT_RESOLVERS: Partial<Record<ItemId, EventItemContextResolver>> = {
   radio: (eventId, choiceId) => eventId === 'other-people' && choiceId === 'radio'
     ? 'radio-call'
-    : exactChoiceContext(choiceId, 'radioSignal', 'radio-signal-receive'),
+    : exactChoiceContext(choiceId, eventId === 'eerie-melody' ? 'radio' : 'radioSignal', 'radio-signal-receive'),
   bucket: resolveBucketContext,
   umbrella: resolveUmbrellaContext,
   flareGun: resolveFlareContext,
@@ -229,7 +240,7 @@ const EVENT_ITEM_CONTEXT_RESOLVERS: Partial<Record<ItemId, EventItemContextResol
       : eventId === 'restless-waves' ? 'swim-ring-deploy' : 'throw-target',
   ),
   ductTape: (eventId, choiceId) => exactChoiceContext(
-    choiceId, 'ductTape', eventId === 'windy-night' ? 'tape-secure' : 'tape-stretch',
+    choiceId, 'ductTape', eventId === 'windy-night' || eventId === 'restless-waves' ? 'tape-secure' : 'tape-stretch',
   ),
   compass: (_eventId, choiceId) => exactChoiceContext(choiceId, 'compass', 'compass-search'),
   map: resolveMapContext,
@@ -297,6 +308,7 @@ function exactChoiceContext(
 
 function resolveBucketContext(eventId: string, choiceId: string): EventItemUseContext | null {
   if (choiceId !== 'bucket') return null;
+  if (eventId === 'shower-night' || eventId === 'thunderstorm') return 'bucket-bail';
   if (BUCKET_SCOOP_EVENTS.has(eventId)) return 'bucket-scoop';
   return BUCKET_HELMET_EVENTS.has(eventId) ? 'bucket-helmet' : null;
 }
@@ -321,6 +333,8 @@ function resolveAnchorContext(eventId: string, choiceId: string): EventItemUseCo
 
 function resolveMapContext(eventId: string, choiceId: string): EventItemUseContext | null {
   if (choiceId !== 'map') return null;
+  if (eventId === 'shower-night') return 'map-cover';
+  if (eventId === 'windy-night' || eventId === 'tornado') return 'map-wind';
   return eventId === 'leak' ? 'map-leak-patch' : 'map-read';
 }
 
@@ -330,7 +344,7 @@ function resolveFishingNetContext(
 ): EventItemUseContext | null {
   if (choiceId === 'attack') return 'net-slap';
   if (choiceId !== 'fishingNet') return null;
-  if (eventId === 'windy-night') return null;
+  if (eventId === 'windy-night') return 'net-secure';
   return NET_SLAP_EVENTS.has(eventId) ? 'net-slap' : 'net-scoop';
 }
 
@@ -497,6 +511,46 @@ function sampleTapeSecure(
   const press = smoothstep((progress - 0.62) / 0.28);
   output.targetBlend = press;
   output.pitch = -0.28 * press;
+}
+
+function sampleCargoCover(
+  output: EventItemUseSample, pickup: number, hold: number, progress: number,
+): void {
+  samplePickupAndHold(output, pickup, hold);
+  const place = smoothstep((progress - 0.4) / 0.5);
+  output.targetBlend = place;
+  output.flightArc = Math.sin(place * Math.PI);
+  output.flightArcHeight = 0.35;
+  output.surfaceFacing = 'target-plane';
+  output.aimBlend = place;
+  output.cameraTargetBlend = place * 0.45;
+}
+
+function sampleWindMap(
+  output: EventItemUseSample, pickup: number, hold: number, progress: number,
+): void {
+  samplePickupAndHold(output, pickup, hold);
+  const gust = smoothstep((progress - 0.4) / 0.6);
+  output.viewY += 0.2 * gust;
+  output.roll = Math.sin(progress * Math.PI * 6) * 0.12 * gust;
+  output.pitch = -0.3 * gust;
+}
+
+function sampleBucketBail(
+  output: EventItemUseSample, pickup: number, hold: number, progress: number,
+): void {
+  samplePickupAndHold(output, pickup, hold);
+  applyBucketBenchClearance(output, pickup);
+  const scooping = progress < 0.65;
+  const travel = scooping
+    ? pulse(progress, 0.34, 0.47, 0.65)
+    : pulse(progress, 0.65, 0.84, 1);
+  output.targetBlend = travel;
+  output.flightTarget = scooping ? 'event' : 'bucket-water';
+  output.flightArc = scooping ? 0 : Math.sin(travel * Math.PI) + 0.6 * travel;
+  output.flightArcHeight = SCOOP_FLIGHT_ARC_HEIGHT;
+  output.pitch = (scooping ? 0.65 : 1.65) * travel;
+  output.cameraTargetBlend = travel * 0.6;
 }
 
 function sampleRadioCall(
@@ -994,6 +1048,7 @@ export function sampleEventItemUse(
   staged[MOTION_PROFILE] = eventItemMotionProfile(itemId ?? 'cannedFood');
   staged[ANTICIPATE] = anticipate;
 
+  if (sampleWeatherItemUse(context, output, pickup, hold, t)) return;
   if (context === 'tape-secure') {
     sampleTapeSecure(output, pickup, hold, t);
   } else if (context === 'radio-call') {
@@ -1006,6 +1061,19 @@ export function sampleEventItemUse(
 
   if (!SETTLE_ROLL_EXCLUDED_CONTEXTS.has(context)) {
     output.roll += 0.03 * settle;
+  }
+}
+
+function sampleWeatherItemUse(
+  context: EventItemUseContext, output: EventItemUseSample,
+  pickup: number, hold: number, progress: number,
+): boolean {
+  switch (context) {
+    case 'map-cover':
+    case 'net-secure': sampleCargoCover(output, pickup, hold, progress); return true;
+    case 'map-wind': sampleWindMap(output, pickup, hold, progress); return true;
+    case 'bucket-bail': sampleBucketBail(output, pickup, hold, progress); return true;
+    default: return false;
   }
 }
 
@@ -1105,8 +1173,8 @@ export function sampleEventItemOutcome(
 ): void {
   sampleEventItemUse(context, itemId, 1, output);
   // Keep worn and deployed items in place throughout the result.
-  if (context === 'swim-ring-wear' || context === 'anchor-drop'
-    || context === 'swim-ring-deploy' || context === 'map-leak-patch') return;
+  if (isDeployedEventItemContext(context) || context === 'swim-ring-wear'
+    || context === 'map-leak-patch' || context === 'bucket-helmet' || context === 'umbrella-shield') return;
   const t = clamp01(progress);
   const profile = eventItemMotionProfile(itemId);
 
@@ -1134,10 +1202,9 @@ function sampleImmediateEventItemOutcome(
   output: EventItemUseSample,
 ): boolean {
   switch (context) {
+    case 'map-wind': sampleWindMapOutcome(disposition, progress, output); return true;
     case 'tape-secure': sampleTapeSecureOutcome(progress, profile, output); return true;
     case 'throw-target': output.itemVisible = false; return true;
-    case 'bucket-helmet': return true;
-    case 'umbrella-shield': return true;
     case 'trade-handover': sampleTradeOutcome(itemId, disposition, progress, output); return true;
     case 'shotgun-fire': sampleShotgunOutcome(progress, output); return true;
     case 'binocular-look': sampleBinocularOutcome(progress, output); return true;
@@ -1147,6 +1214,20 @@ function sampleImmediateEventItemOutcome(
     case 'tape-stretch': sampleTapeOutcome(progress, profile, output); return true;
     default: return false;
   }
+}
+
+function sampleWindMapOutcome(
+  disposition: EventItemDisposition, progress: number, output: EventItemUseSample,
+): void {
+  if (disposition !== 'depart') {
+    sampleEventItemUse('map-wind', 'map', 1 - progress, output);
+    return;
+  }
+  sampleWindItemDeparture(progress, output);
+  const flutter = smoothstep(progress / 0.12);
+  output.surfaceFacing = 'none';
+  output.pitch += flutter * 0.35 * Math.sin(progress * Math.PI * 24);
+  output.roll += flutter * 0.25 * Math.sin(progress * Math.PI * 30);
 }
 
 function sampleTradeOutcome(
@@ -1186,33 +1267,37 @@ function sampleFlareOutcome(progress: number, output: EventItemUseSample): void 
   sampleFlare(output, pickup, pickup, 1);
 }
 
+function sampleWindItemDeparture(progress: number, output: EventItemUseSample): void {
+  // Fly toward the bow, then curve right late enough to keep the flight visible.
+  const pull = smoothstep(progress / 0.07);
+  const flight = clamp01((progress - 0.07) / 0.93);
+  const gustPhase = Math.PI * 6 * flight;
+  const travel = flight - 0.5 * Math.sin(gustPhase) / (Math.PI * 6)
+    - 0.2 * Math.sin(Math.PI * 14 * flight) / (Math.PI * 14);
+  const flutter = smoothstep(flight / 0.12);
+  output.windFlight = true;
+  output.viewX += 0.08 * pull + 2 * travel + 30 * travel ** 8;
+  output.viewY += 0.04 * pull + flutter * (
+    0.35 + 0.22 * Math.sin(gustPhase) + 0.1 * Math.sin(Math.PI * 13 * flight)
+  );
+  output.viewZ -= 0.02 * pull + 12 * travel + 24 * travel ** 3;
+  output.yaw += 1.2 * travel + flutter * 0.65 * Math.sin(Math.PI * 5 * flight);
+  output.pitch += flutter * (
+    0.45 * Math.sin(gustPhase) + 0.16 * Math.sin(Math.PI * 15 * flight)
+  );
+  output.roll += -0.15 * pull - 1.8 * travel + flutter * (
+    0.5 * Math.sin(Math.PI * 7 * flight) + 0.14 * Math.sin(Math.PI * 17 * flight)
+  );
+  output.itemVisible = progress < 1;
+}
+
 function sampleUmbrellaOutcome(
   disposition: EventItemDisposition,
   progress: number,
   output: EventItemUseSample,
 ): void {
   if (disposition === 'depart') {
-    // Pull right, then drift with alternating gusts and lulls.
-    const pull = smoothstep(progress / 0.07);
-    const flight = clamp01((progress - 0.07) / 0.93);
-    const gustPhase = Math.PI * 6 * flight;
-    const travel = flight - 0.5 * Math.sin(gustPhase) / (Math.PI * 6)
-      - 0.2 * Math.sin(Math.PI * 14 * flight) / (Math.PI * 14);
-    const flutter = smoothstep(flight / 0.12);
-    output.windFlight = true;
-    output.viewX += 0.08 * pull + 6 * travel + 30 * travel ** 3;
-    output.viewY += 0.04 * pull + flutter * (
-      0.35 + 0.22 * Math.sin(gustPhase) + 0.1 * Math.sin(Math.PI * 13 * flight)
-    );
-    output.viewZ -= 0.02 * pull + 4 * travel;
-    output.yaw += 1.2 * travel + flutter * 0.65 * Math.sin(Math.PI * 5 * flight);
-    output.pitch += flutter * (
-      0.45 * Math.sin(gustPhase) + 0.16 * Math.sin(Math.PI * 15 * flight)
-    );
-    output.roll += -0.15 * pull - 1.8 * travel + flutter * (
-      0.5 * Math.sin(Math.PI * 7 * flight) + 0.14 * Math.sin(Math.PI * 17 * flight)
-    );
-    output.itemVisible = progress < 1;
+    sampleWindItemDeparture(progress, output);
     return;
   }
   resetSample(output);

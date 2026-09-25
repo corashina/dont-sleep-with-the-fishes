@@ -1,4 +1,5 @@
 export const SOUND_IDS = [
+  'fogMonsterBite',
   'seagulls',
   'menuAmbient',
   'calmOcean',
@@ -92,6 +93,7 @@ export type SoundId = typeof SOUND_IDS[number];
 export type AudioBusId = 'music' | 'ambience' | 'effects' | 'interface';
 
 export const EVENT_ONLY_SOUND_IDS = Object.freeze([
+  'fogMonsterBite',
   'stormRumble',
   'seagulls',
   'netImpact',
@@ -176,6 +178,7 @@ function asset(
 
 export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
   Object.freeze({
+    fogMonsterBite: asset('fogMonsterBite', 'effects', 0.85, false, 1, 'wav'),
     seagulls: asset('seagulls', 'ambience', 0.24, true),
     menuAmbient: asset('menuAmbient', 'ambience', 0.3, true, 1),
     calmOcean: asset('calmOcean', 'ambience', 0.42, true),

@@ -1,8 +1,11 @@
-import { BoxGeometry,DataTexture,Group,Mesh,MeshStandardMaterial } from 'three';
+import { readFile } from 'node:fs/promises';
+import { Box3,BoxGeometry,DataTexture,Group,Mesh,MeshStandardMaterial,Texture,Vector3 } from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { describe,expect,it,vi } from 'vitest';
 import { FishingCatchLibrary,catchModelSpec } from '../src/survival/FishingCatchLibrary';
 import { FishingModelLibrary } from '../src/survival/FishingModelLibrary';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
+import { FISHING_MODEL_SIZES } from '../src/game/fishingModelSizes';
 
 function model() {
   const texture = new DataTexture(new Uint8Array(16), 2, 2);
@@ -26,6 +29,30 @@ function preparedLoader() {
 }
 
 describe('prepared fishing models', () => {
+  // Importance: 95. Damage must not rescale a catch after its intact size is set.
+  it('preserves the intact model scale when preparing a broken compass catch', async () => {
+    const bytes = await readFile('src/assets/models/items/compass.glb');
+    const data = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(data).set(bytes);
+    const loader = new GLTFLoader().register(() => ({
+      name: 'size-check-textures', loadTexture: async () => new Texture(),
+    }));
+    const { scene } = await loader.parseAsync(data, '');
+    const definition = FISHING_CATCHES.find(({ id }) => id === 'brokenCompass')!;
+    scene.rotation.set(...catchModelSpec(definition)!.rotation);
+    const size = new Box3().setFromObject(scene, true).getSize(new Vector3());
+    const expectedScale = FISHING_MODEL_SIZES.brokenCompass / Math.max(size.x, size.y, size.z);
+    const library = new FishingCatchLibrary({ load: async () => scene });
+    try {
+      const root = (await library.prepare('brokenCompass'))!;
+      expect(root.scale.x).toBeCloseTo(expectedScale, 8);
+      expect(root.scale.y).toBe(root.scale.x);
+      expect(root.scale.z).toBe(root.scale.x);
+    } finally {
+      library.dispose();
+    }
+  });
+
   it('loads each unique model URL once, including every item catch', async () => {
     const loader = preparedLoader();
     const library = await FishingModelLibrary.load(loader);

@@ -110,6 +110,7 @@ const ITEM_CHOREOGRAPHY: Readonly<
     umbrella: Object.freeze({ duration: 1.55, effectKind: 'none' }),
   }),
   'restless-waves': Object.freeze({
+    ductTape: Object.freeze({ duration: 1.9, effectKind: 'none' }),
     anchor: Object.freeze({ duration: 1.75, effectKind: 'wave-anchor-stabilize' }),
     swimRing: Object.freeze({ duration: 1.3, effectKind: 'wave-ring-buffer' }),
   }),

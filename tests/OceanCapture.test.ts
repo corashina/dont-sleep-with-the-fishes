@@ -9,6 +9,7 @@ import {
   Object3D,
   PerspectiveCamera,
   Scene,
+  Texture,
   Vector4,
   WebGLRenderTarget,
   type WebGLRenderer,
@@ -18,6 +19,7 @@ import { OceanCapture } from '../src/ocean/OceanCapture';
 import { WEATHER_PARTICLE_LAYER } from '../src/rendering/renderLayers';
 import { WeatherEffects } from '../src/world/WeatherEffects';
 import { BoatRainEffects } from '../src/world/BoatRainEffects';
+import { Skybox } from '../src/world/Skybox';
 
 type RenderRecord = {
   camera: Camera;
@@ -113,6 +115,39 @@ function createSceneInput() {
 
 describe('OceanCapture', () => {
   afterEach(() => vi.restoreAllMocks());
+
+  // Importance: 95/100. Captures must reuse transforms and keep sky in reflections only.
+  it.each([false, true])('restores sky and transform state after captures (failure: %s)', (fail) => {
+    const capture = new OceanCapture();
+    const testRenderer = createRenderer();
+    const { scene, water, camera } = createSceneInput();
+    const moon = new Texture();
+    const sky = new Skybox(scene, { phase: 'day', weather: 'calm', severity: 0 }, moon);
+    const background = scene.getObjectByName('procedural-skybox')!;
+    scene.updateMatrixWorld(true);
+    const updateMatrices = vi.spyOn(scene, 'updateMatrixWorld');
+    const visibility: boolean[] = [];
+    testRenderer.setWater(water);
+    vi.mocked(testRenderer.renderer.render).mockImplementation(() => {
+      if (scene.matrixWorldAutoUpdate) scene.updateMatrixWorld();
+      visibility.push(background.visible);
+      if (fail && visibility.length === 2) throw new Error('capture failure');
+    });
+    try {
+      const draw = () => capture.update(testRenderer.renderer, scene, camera, water);
+      if (fail) expect(draw).toThrow('capture failure');
+      else draw();
+      expect(visibility).toEqual([false, true]);
+      expect(updateMatrices).not.toHaveBeenCalled();
+      expect(background.visible).toBe(true);
+      expect(scene.matrixWorldAutoUpdate).toBe(true);
+      expect(camera.matrixWorldAutoUpdate).toBe(true);
+    } finally {
+      sky.dispose();
+      moon.dispose();
+      capture.dispose();
+    }
+  });
 
   it('captures color, depth, and reflection at a capped half resolution', () => {
     const capture = new OceanCapture();

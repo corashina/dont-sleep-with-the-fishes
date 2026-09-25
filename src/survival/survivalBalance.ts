@@ -1,7 +1,9 @@
+import type { RandomSource } from './survivalTypes';
+
 export const SURVIVAL_BALANCE = {
   start: { health: 100, hunger: 0, energy: 3, hull: 100 },
   dawn: { hungerIncrease: { min: 22, max: 28 }, healthRecovery: 5, starvationDamage: 7, normalEnergy: 3, hungryEnergy: 2, starvingEnergy: 1 },
-  nightHullWear: { damage: 6, respiteInterval: 5 },
+  nightHullWear: { damage: { min: 8, max: 13 }, respiteInterval: 5 },
   thresholds: { hungry: 70, starving: 90, maximum: 100 },
   actions: {
     fishEnergy: 1, netEnergy: 2, diveEnergy: 3, openChestEnergy: 3,
@@ -117,10 +119,10 @@ export function rescueChanceForDay(realDay: number, rescueLead: number): number 
 
 validateRescueChanceSteps(RESCUE_CHANCE_STEPS);
 
-export function nightlyHullWearDamage(completedDay: number): number {
-  return completedDay % SURVIVAL_BALANCE.nightHullWear.respiteInterval === 0
-    ? 0
-    : SURVIVAL_BALANCE.nightHullWear.damage;
+export function nightlyHullWearDamage(completedDay: number, random: RandomSource): number {
+  const { damage, respiteInterval } = SURVIVAL_BALANCE.nightHullWear;
+  if (completedDay % respiteInterval === 0) return 0;
+  return damage.min + Math.floor(random.next() * (damage.max - damage.min + 1));
 }
 
 export function calculateHullRepair(

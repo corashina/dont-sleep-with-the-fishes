@@ -12,6 +12,7 @@ export class ModalFocusManager {
     private readonly modals: readonly HTMLElement[],
     private readonly initialFocus: ReadonlyMap<HTMLElement, ModalInitialFocus> = new Map(),
     private readonly isModal: (layer: HTMLElement) => boolean = () => true,
+    private readonly sharedControls: ReadonlyMap<HTMLElement, readonly HTMLElement[]> = new Map(),
   ) {}
 
   topmostModal(): HTMLElement | null {
@@ -63,7 +64,8 @@ export class ModalFocusManager {
       modal.setAttribute('aria-hidden', accessible ? 'false' : 'true');
     });
     const modalOpen = topmost !== null;
-    this.background.forEach((region) => region.toggleAttribute('inert', modalOpen));
+    const shared = topmost === null ? undefined : this.sharedControls.get(topmost);
+    this.background.forEach((region) => region.toggleAttribute('inert', modalOpen && !shared?.includes(region)));
   }
 
   focusInitial(modal: HTMLElement): void {
@@ -77,7 +79,8 @@ export class ModalFocusManager {
     if (this.disposed || event.key !== 'Tab') return false;
     const modal = this.topmostModal();
     if (modal === null) return false;
-    const controls = [...modal.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)]
+    const shared = this.sharedControls.get(modal) ?? [];
+    const controls = [...shared, ...modal.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)]
       .filter((element) => (
         element.closest('[hidden]') === null
         && !element.hasAttribute('inert')
@@ -88,21 +91,18 @@ export class ModalFocusManager {
       this.focusInitial(modal);
       return true;
     }
-    const first = controls[0]!;
-    const last = controls[controls.length - 1]!;
+    this.cycleFocus(event, controls);
+    return true;
+  }
+
+  private cycleFocus(event: KeyboardEvent, controls: readonly HTMLElement[]): void {
+    event.preventDefault();
     const active = document.activeElement;
-    const activeIsControl = active instanceof HTMLElement && controls.includes(active);
-    if (event.shiftKey && (active === first || !activeIsControl)) {
-      event.preventDefault();
-      last.focus();
-      return true;
-    }
-    if (!event.shiftKey && (active === last || !activeIsControl)) {
-      event.preventDefault();
-      first.focus();
-      return true;
-    }
-    return false;
+    const index = active instanceof HTMLElement ? controls.indexOf(active) : -1;
+    const next = index < 0
+      ? (event.shiftKey ? controls.length - 1 : 0)
+      : (index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length;
+    controls[next]!.focus();
   }
 
   restore(target: HTMLElement | null = null): void {

@@ -22,7 +22,7 @@ export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   'dangerous-waters': 'dangerousWaters',
   leak: 'dedicated',
   'school-of-fish': 'dedicated',
-  snatcher: 'dedicated',
+  'tentacle-attack': 'dedicated',
   'death-stare': 'dedicated',
   'swarm-of-sharks': 'dedicated',
   'something-under-us': 'dedicated',

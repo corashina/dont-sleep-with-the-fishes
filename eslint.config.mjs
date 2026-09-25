@@ -5,6 +5,7 @@ export default tseslint.config(
     ignores: [
       "node_modules/**",
       "dist/**",
+      "artifacts/*-build/**",
       "artifacts/ocean-foam/**",
       ".superpowers/**",
       "coverage/**",

@@ -12,7 +12,8 @@ import {
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { LightningBolt } from '../world/LightningBolt';
-import { FogMonster } from './FogMonster';
+import { FOG_MONSTER_ATTACK_DURATION, FOG_MONSTER_STRIKE_PROGRESS, FogMonster } from './FogMonster';
+import type { EventPresentationCue } from './eventPresentationCue';
 import { collectMeshResources, disposeResourceSets, runCleanupSteps } from '../world/SceneResources';
 import { clamp01, pulse, smoothstep } from './animationMath';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
@@ -55,6 +56,7 @@ type ActiveWeatherAnimation =
       readonly response: EventPhysicalResponsePresentation | null;
       readonly actors: readonly WeatherReactionActor[];
       readonly outcome: ActionOutcome;
+      bitePlayed: boolean;
       elapsed: number;
       readonly duration: number;
       readonly resolve: () => void;
@@ -187,6 +189,8 @@ export class WeatherEventAnimator {
     viewCamera?: Object3D,
     onlyEventId?: string,
     waveEnvironment?: WeatherWaveEnvironment,
+    private readonly emitCue: (cue: EventPresentationCue) => void = () => undefined,
+    boat?: Object3D,
   ) {
     this.cameraLook = viewCamera === undefined
       ? null
@@ -195,7 +199,7 @@ export class WeatherEventAnimator {
     this.boatRoot.name = 'weather-event-boat';
     this.monster = eventModels !== undefined && (
       onlyEventId === undefined || onlyEventId === 'monster-in-the-fog'
-    ) ? new FogMonster(eventModels.create('fogMonster'), viewCamera, waveEnvironment) : null;
+    ) ? new FogMonster(eventModels.create('fogMonster'), viewCamera, waveEnvironment, boat) : null;
     this.lightningFlash = new LightningBolt(14, 0x57024);
     this.lightningFlash.name = 'weather-lightning-flash';
     this.lightningFlash.position.set(-3.8, -0.3, -18);
@@ -315,7 +319,10 @@ export class WeatherEventAnimator {
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
     const actors = reactionActors(response, selectedInstanceId, this.selectedActorId);
-    const duration = weatherReactionDuration(eventId, response?.choiceId ?? '', actors.length);
+    const monsterAttack = eventId === 'monster-in-the-fog' && (outcome.deltas.hull ?? 0) < 0;
+    const duration = monsterAttack
+      ? FOG_MONSTER_ATTACK_DURATION
+      : weatherReactionDuration(eventId, response?.choiceId ?? '', actors.length);
     if (duration === null) {
       this.cancelActive();
       return Promise.resolve();
@@ -326,6 +333,7 @@ export class WeatherEventAnimator {
     this.hideTransientEffects();
     this.showStagedFogMonster();
     this.pinReactionActors(eventId, actors);
+    if (monsterAttack) this.monster?.beginAttack();
     return new Promise((resolve) => {
       this.active = {
         kind: 'react',
@@ -333,6 +341,7 @@ export class WeatherEventAnimator {
         response,
         actors,
         outcome,
+        bitePlayed: false,
         elapsed: 0,
         duration,
         resolve,
@@ -362,7 +371,9 @@ export class WeatherEventAnimator {
       case 'item':
         break;
       case 'react':
+        this.monster?.updateAttack(time, progress);
         this.updateReaction(active, progress);
+        this.emitBite(active, progress);
         break;
     }
 
@@ -372,6 +383,13 @@ export class WeatherEventAnimator {
 
   clear(): void {
     if (!this.disposed) this.clearPresentation();
+  }
+
+  private emitBite(active: Extract<ActiveWeatherAnimation, { kind: 'react' }>, progress: number): void {
+    if (active.eventId !== 'monster-in-the-fog' || (active.outcome.deltas.hull ?? 0) >= 0
+      || active.bitePlayed || progress < FOG_MONSTER_STRIKE_PROGRESS) return;
+    active.bitePlayed = true;
+    this.emitCue({ eventId: 'monster-in-the-fog', cue: 'bite' });
   }
 
   private clearPresentation(): void {
@@ -427,7 +445,6 @@ export class WeatherEventAnimator {
   ): void {
     const { eventId, outcome, response } = active;
     resetItemSample(this.itemSample);
-    const healthDamage = Math.min(0, outcome.deltas.health ?? 0);
     const hullDamage = Math.min(0, outcome.deltas.hull ?? 0);
     const actorCount = active.actors.length;
     const sampleCount = Math.max(1, actorCount);
@@ -458,7 +475,7 @@ export class WeatherEventAnimator {
       sample.cameraRoll,
     );
 
-    this.applyReactionCamera(eventId, healthDamage, hullDamage, progress);
+    this.applyReactionCamera(eventId, hullDamage, progress);
   }
 
   private pinReactionActors(
@@ -512,20 +529,12 @@ export class WeatherEventAnimator {
 
   private applyReactionCamera(
     eventId: string,
-    healthDamage: number,
     hullDamage: number,
     progress: number,
   ): void {
-    if (eventId === 'monster-in-the-fog' && healthDamage < 0) {
-      const grab = pulse(progress, 0.08, 0.44, 0.9);
-      this.applyCameraPose(
-        -0.14 * grab,
-        0.05 * grab,
-        0.11 * grab,
-        -0.2 * grab,
-        0.04 * grab,
-        -0.06 * grab,
-      );
+    if (eventId === 'monster-in-the-fog' && hullDamage < 0) {
+      const impact = this.monster?.attackImpact(progress) ?? 0;
+      this.cameraLook?.apply(0, 0.025 * impact, 0.025 * impact);
       return;
     }
     if (eventId === 'restless-waves' && hullDamage < 0) {
@@ -640,6 +649,8 @@ export class WeatherEventAnimator {
         active.resolve(true);
         break;
       case 'react':
+        this.monster?.endAttack();
+        this.restoreCamera();
         if (active.response === null) {
           active.resolve();
           break;
@@ -666,6 +677,7 @@ export class WeatherEventAnimator {
   private cancelActive(): void {
     const active = this.active;
     this.active = null;
+    this.monster?.endAttack();
     if (active !== null) this.restoreCamera();
     this.hideTransientEffects();
     this.showStagedFogMonster();

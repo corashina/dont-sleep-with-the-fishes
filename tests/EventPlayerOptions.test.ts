@@ -20,8 +20,16 @@ function use(game: SurvivalSession, type: ItemId) {
 }
 
 describe('new event player options', () => {
+  // Importance: 98/100. Both outcomes must charge the stated one-Food cost.
+  it.each([0, 0.99])('spends exactly one Food at Death Stare, roll %s', (roll) => {
+    const game = session('death-stare', ['cannedFood'], roll, 3);
+    expect(use(game, 'cannedFood').accepted).toBe(true);
+    expect(game.snapshot().food).toBe(2);
+    expect(Object.values(game.snapshot().inventory)[0]?.condition).toBe('consumed');
+  });
+
   it.each([0])('protects the Snatcher target with the net, roll %s', (roll) => {
-    const game = session('snatcher', ['fishingNet', 'bucket'], roll);
+    const game = session('tentacle-attack', ['fishingNet', 'bucket'], roll);
     const result = use(game, 'fishingNet');
     expect(result.accepted).toBe(true);
     expect(game.snapshot().health).toBe(100);
@@ -31,7 +39,7 @@ describe('new event player options', () => {
   });
 
   it.each([
-    ['swarm-of-sharks', 2],
+    ['swarm-of-sharks', 1],
     ['something-under-us', 1],
   ] as const)('spends Food to divert %s', (event, cost) => {
     const game = session(event, ['cannedFood']);
@@ -45,7 +53,7 @@ describe('new event player options', () => {
   });
 
   it('rejects a shark distraction without enough Food', () => {
-    const game = session('swarm-of-sharks', ['cannedFood'], 0, 1);
+    const game = session('swarm-of-sharks', ['cannedFood'], 0, 0);
     const before = game.snapshot();
     expect(use(game, 'cannedFood').accepted).toBe(false);
     expect(game.snapshot()).toEqual(before);

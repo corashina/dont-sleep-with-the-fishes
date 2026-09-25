@@ -76,7 +76,7 @@ const EVENT_WEATHER: Readonly<Record<string, PresentationWeatherId>> = Object.fr
   'ocean-of-blood': 'calm',
   'dangerous-waters': 'squall',
   leak: 'rain',
-  snatcher: 'waves',
+  'tentacle-attack': 'waves',
   'death-stare': 'waves',
   'swarm-of-sharks': 'overcast',
   'something-under-us': 'calm',

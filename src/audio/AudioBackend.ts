@@ -1,4 +1,4 @@
-import type { AudioBusId, SoundId } from './audioManifest';
+import type { SoundId } from './audioManifest';
 
 export interface AudioVector3 {
   readonly x: number;
@@ -42,7 +42,6 @@ export interface AudioBackend {
     options: Readonly<SpatialAudioOptions>,
   ): AudioVoice | null;
   setListenerPose(pose: Readonly<AudioListenerPose>): void;
-  setBusGain(bus: AudioBusId, gain: number, rampSeconds?: number): void;
   setMasterGain(gain: number, rampSeconds?: number): void;
   dispose(): void;
 }

@@ -10,7 +10,8 @@ import {
 } from 'three';
 import { OceanCapture } from './OceanCapture';
 import { applyHighWaterLook } from './highWaterLook';
-import type { VortexWaveState } from './WaveField';
+import { DEFAULT_WAVES, type VortexWaveState } from './WaveField';
+import { WAVE_MODULATION } from './waveModulation';
 import {
   UNBOUNDED_MAXIMUM_LOCAL_Y,
   UNBOUNDED_MINIMUM_LOCAL_Y,
@@ -33,7 +34,7 @@ import {
   type OceanShaderUniforms,
 } from './oceanShader';
 import {
-  createOceanHorizonGeometry,
+  createOceanHorizonGeometries,
   createOceanSurfaceGeometry,
 } from './oceanGeometry';
 
@@ -50,19 +51,22 @@ const OCEAN_SURFACE_QUALITY = Object.freeze({
     segments: 192,
     surfaceExtent: 180,
     horizonHalfExtent: 1100,
-    horizonRadialSegments: 48,
+    horizonRadialSegments: 24,
     horizonRadialExponent: 1.75,
   }),
   high: Object.freeze({
     segments: 288,
     surfaceExtent: 180,
     horizonHalfExtent: 1100,
-    horizonRadialSegments: 72,
+    horizonRadialSegments: 36,
     horizonRadialExponent: 1.75,
   }),
 }) satisfies Readonly<Record<WaterQuality, Readonly<OceanSurfaceQuality>>>;
 
 const finiteOrZero = (value: number): number => Number.isFinite(value) ? value : 0;
+const WAVE_BOUND = DEFAULT_WAVES.reduce((sum, wave) => (
+  sum + Math.abs(wave.amplitude) * (1 + Math.abs(wave.steepness))
+), 0) * (WAVE_MODULATION.groupMinimum + WAVE_MODULATION.groupRange);
 
 export interface OceanAtmosphere {
   phase: 'day' | 'night';
@@ -79,7 +83,7 @@ export interface OceanAtmosphere {
 export class OceanRenderer {
   readonly material: ShaderMaterial;
   readonly mesh: Mesh<BufferGeometry, ShaderMaterial>;
-  readonly horizonMesh: Mesh<BufferGeometry, ShaderMaterial>;
+  readonly horizonMeshes: readonly Mesh<BufferGeometry, ShaderMaterial>[];
   private readonly uniforms: OceanShaderUniforms;
   private quality: WaterQuality;
   private disposed = false;
@@ -90,6 +94,8 @@ export class OceanRenderer {
   private preparing = false;
   private atmosphere: OceanAtmosphere | undefined;
   private fogDensity = 0;
+  private amplitudeScale = 1;
+  private vortexBound = 0;
 
   constructor(
     quality: WaterQuality = 'low',
@@ -106,30 +112,33 @@ export class OceanRenderer {
       uniforms: definition.uniforms,
     });
     let surface: BufferGeometry | undefined;
-    let horizon: BufferGeometry | undefined;
+    let horizons: BufferGeometry[] = [];
     try {
       surface = createOceanSurfaceGeometry(surfaceQuality);
       const mesh = new Mesh(surface, material);
       mesh.name = 'procedural-ocean';
       mesh.frustumCulled = false;
       mesh.receiveShadow = true;
-      horizon = createOceanHorizonGeometry(surfaceQuality);
-      const horizonMesh = new Mesh(horizon, material);
-      horizonMesh.name = 'procedural-ocean-horizon';
-      horizonMesh.frustumCulled = false;
-      mesh.add(horizonMesh);
+      horizons = createOceanHorizonGeometries(surfaceQuality);
+      const horizonMeshes = horizons.map((geometry, index) => {
+        const panel = new Mesh(geometry, material);
+        panel.name = `procedural-ocean-horizon-${index}`;
+        panel.onBeforeRender = this.prepareWater;
+        mesh.add(panel);
+        return panel;
+      });
       this.uniforms = definition.uniforms;
       this.applyAtmosphere();
       this.material = material;
       this.mesh = mesh;
-      this.horizonMesh = horizonMesh;
+      this.horizonMeshes = horizonMeshes;
+      this.updateHorizonBounds();
       mesh.onBeforeRender = this.prepareWater;
-      horizonMesh.onBeforeRender = this.prepareWater;
       if (quality === 'high') this.createHighResources();
     } catch (error) {
       ignoreCleanupError(() => runCleanupSteps([
         () => surface?.dispose(),
-        () => horizon?.dispose(),
+        ...horizons.map((geometry) => () => geometry.dispose()),
         () => material.dispose(),
       ]));
       throw error;
@@ -140,19 +149,20 @@ export class OceanRenderer {
     if (this.disposed || value === this.quality) return;
     const surfaceQuality = OCEAN_SURFACE_QUALITY[value];
     const nextSurface = createOceanSurfaceGeometry(surfaceQuality);
-    let nextHorizon: BufferGeometry;
+    let nextHorizons: BufferGeometry[] = [];
     try {
-      nextHorizon = createOceanHorizonGeometry(surfaceQuality);
+      nextHorizons = createOceanHorizonGeometries(surfaceQuality);
       if (value === 'high') this.createHighResources();
     } catch (error) {
       ignoreCleanupError(() => nextSurface.dispose());
-      ignoreCleanupError(() => nextHorizon?.dispose());
+      ignoreCleanupError(() => runCleanupSteps(nextHorizons.map((geometry) => () => geometry.dispose())));
       throw error;
     }
     const previousSurface = this.mesh.geometry;
-    const previousHorizon = this.horizonMesh.geometry;
+    const previousHorizons = this.horizonMeshes.map((panel) => panel.geometry);
     this.mesh.geometry = nextSurface;
-    this.horizonMesh.geometry = nextHorizon;
+    this.horizonMeshes.forEach((panel, index) => { panel.geometry = nextHorizons[index]!; });
+    this.updateHorizonBounds();
     this.material.defines = applyOceanShaderQuality(this.uniforms, value);
     this.material.needsUpdate = true;
     this.quality = value;
@@ -161,7 +171,7 @@ export class OceanRenderer {
     runCleanupSteps([
       () => { if (value === 'low') this.releaseHighResources(); },
       () => previousSurface.dispose(),
-      () => previousHorizon.dispose(),
+      ...previousHorizons.map((geometry) => () => geometry.dispose()),
     ]);
   }
 
@@ -174,6 +184,11 @@ export class OceanRenderer {
     this.updateVersion += 1;
     this.uniforms.uTime.value = timeSeconds;
     this.uniforms.uAmplitudeScale.value = amplitudeScale;
+    const boundScale = finiteOrZero(amplitudeScale);
+    if (this.amplitudeScale !== boundScale) {
+      this.amplitudeScale = boundScale;
+      this.updateHorizonBounds();
+    }
     this.fogDensity = fogDensity;
     this.atmosphere = atmosphere;
     this.applyAtmosphere();
@@ -226,6 +241,27 @@ export class OceanRenderer {
     this.uniforms.uVortexTangentStrength.value = finiteOrZero(state.tangentStrength);
     this.uniforms.uVortexPhase.value = finiteOrZero(state.phase);
     this.uniforms.uVortexStrength.value = finiteOrZero(state.strength);
+    const vortexBound = Math.abs(finiteOrZero(state.strength)) * (
+      Math.abs(finiteOrZero(state.depression)) + Math.abs(finiteOrZero(state.tangentStrength))
+    );
+    if (this.vortexBound !== vortexBound) {
+      this.vortexBound = vortexBound;
+      this.updateHorizonBounds();
+    }
+  }
+
+  private updateHorizonBounds(): void {
+    const displacement = WAVE_BOUND * Math.abs(this.amplitudeScale) + this.vortexBound;
+    for (const panel of this.horizonMeshes) {
+      const geometry = panel.geometry;
+      const bounds = geometry.boundingBox!;
+      // Keep CPU culling conservative while the vertex shader moves waves and vortices.
+      geometry.boundingSphere!.radius = Math.hypot(
+        (bounds.max.x - bounds.min.x) / 2,
+        (bounds.max.y - bounds.min.y) / 2,
+        (bounds.max.z - bounds.min.z) / 2,
+      ) + displacement;
+    }
   }
 
   setBloodOceanIntensity(intensity: number): void {
@@ -333,7 +369,7 @@ export class OceanRenderer {
     runCleanupSteps([
       () => this.releaseHighResources(),
       () => this.mesh.geometry.dispose(),
-      () => this.horizonMesh.geometry.dispose(),
+      ...this.horizonMeshes.map((panel) => () => panel.geometry.dispose()),
       () => this.material.dispose(),
     ]);
   }

@@ -9,8 +9,8 @@ import type { EventPresentationCue } from './eventPresentationCue';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 
 export const SEAGULL_WATCH_SECONDS = 3;
-export const SEAGULL_DIVE_SECONDS = 0.7;
-export const SEAGULL_ESCAPE_SECONDS = 0.8;
+export const SEAGULL_DIVE_SECONDS = 1.12;
+export const SEAGULL_ESCAPE_SECONDS = 1.28;
 const FLIGHT_SECONDS = SEAGULL_DIVE_SECONDS + SEAGULL_ESCAPE_SECONDS;
 const FORWARD = new Vector3(0, 0, 1);
 const FLOCK_DISTANCE = 80;

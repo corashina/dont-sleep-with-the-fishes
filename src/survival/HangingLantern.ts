@@ -125,6 +125,7 @@ export function createHangingLantern(
   light.name = 'hanging-lantern:light';
   light.position.y = model.position.y + modelCenterY;
   light.castShadow = true;
+  light.shadow.autoUpdate = false;
   light.shadow.mapSize.set(1024, 1024);
   light.shadow.camera.near = 0.08;
   light.shadow.camera.far = HANGING_LANTERN_LIGHT_DISTANCE;
@@ -165,6 +166,8 @@ export function createHangingLantern(
     setNight: (night) => {
       if (disposed || nightLit === night) return;
       nightLit = night;
+      light.shadow.autoUpdate = night;
+      light.shadow.needsUpdate = night;
       light.intensity = night
         ? HANGING_LANTERN_NIGHT_INTENSITY
         : HANGING_LANTERN_DAY_INTENSITY;

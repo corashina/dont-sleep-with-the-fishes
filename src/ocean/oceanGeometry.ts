@@ -2,7 +2,6 @@ import {
   BufferGeometry,
   PlaneGeometry,
 } from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   ignoreCleanupError,
   runCleanupSteps,
@@ -90,9 +89,9 @@ export function createOceanSurfaceGeometry(
   return geometry;
 }
 
-export function createOceanHorizonGeometry(
+export function createOceanHorizonGeometries(
   quality: Readonly<OceanSurfaceQuality>,
-): BufferGeometry {
+): BufferGeometry[] {
   const innerHalfExtent = quality.surfaceExtent / 2;
   const outerHalfExtent = quality.horizonHalfExtent;
   const ringSpan = outerHalfExtent - innerHalfExtent;
@@ -110,8 +109,6 @@ export function createOceanHorizonGeometry(
     exponent: quality.horizonRadialExponent,
   });
   const panels: PlaneGeometry[] = [];
-  let geometry: BufferGeometry | undefined;
-  let primaryFailed = false;
   try {
     panels.push(createOceanPanel(
       quality.surfaceExtent, ringSpan, edgeSegments, radialSegments,
@@ -145,26 +142,13 @@ export function createOceanHorizonGeometry(
       ringSpan, ringSpan, radialSegments, radialSegments,
       -ringCenter, -ringCenter, grade(-1, -1),
     ));
-    geometry = mergeGeometries(panels) ?? undefined;
-    if (!geometry) {
-      throw new Error('Unable to build ocean horizon geometry.');
+    for (const panel of panels) {
+      panel.computeBoundingBox();
+      panel.computeBoundingSphere();
     }
   } catch (error) {
-    primaryFailed = true;
+    ignoreCleanupError(() => runCleanupSteps(panels.map((panel) => () => panel.dispose())));
     throw error;
-  } finally {
-    if (primaryFailed) {
-      ignoreCleanupError(() => runCleanupSteps(
-        panels.map((panel) => () => panel.dispose()),
-      ));
-    } else {
-      try {
-        runCleanupSteps(panels.map((panel) => () => panel.dispose()));
-      } catch (error) {
-        ignoreCleanupError(() => geometry?.dispose());
-        throw error;
-      }
-    }
   }
-  return geometry;
+  return panels;
 }

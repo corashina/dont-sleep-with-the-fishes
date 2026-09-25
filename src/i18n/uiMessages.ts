@@ -208,6 +208,7 @@ export const uiCatalog = {
     "pl": "ANULUJ",
     "es-AR": "CANCELAR"
   },
+  "closePopup": { en: "Close popup", pl: "Zamknij okno", "es-AR": "Cerrar ventana" },
   "paused": {
     "en": "Game paused",
     "pl": "Gra wstrzymana",

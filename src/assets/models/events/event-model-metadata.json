@@ -319,28 +319,6 @@
     ],
     "processing": "pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data"
   },
-  "tornadoCore": {
-    "triangles": 324,
-    "rawBounds": {
-      "min": [
-        -0.6645879745483398,
-        -1.000635027885437,
-        -0.6388189792633057
-      ],
-      "max": [
-        0.5920479893684387,
-        1.2087810039520264,
-        0.562608003616333
-      ]
-    },
-    "sourceSha256": "A3199265639E07658F4D30AB1384CF9CE33832D0CDAFBCAB6CD268357A91AF4F",
-    "sourceTriangles": 324,
-    "outputSha256": "A3060A591DE5B796C495FD7B329CE83766D2DFE39F9387B2DE44CF620FB3A24F",
-    "hasSkins": false,
-    "animationCount": 0,
-    "animations": [],
-    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
-  },
   "midnightShovel": {
     "triangles": 322,
     "rawBounds": {

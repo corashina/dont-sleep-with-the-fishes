@@ -1,5 +1,5 @@
 import type { Object3D } from 'three';
-import type { EventNetCatch } from './EventItemUseController';
+import type { EventItemCatch } from './EventItemUseController';
 import type { ItemInstanceId } from '../game/ItemState';
 import type {
   EventChoicePresentation,
@@ -34,7 +34,7 @@ export interface EventPresentationAdapter {
   ): Promise<boolean>;
   itemAimTarget(): Object3D | null;
   hasPassed?(): boolean;
-  netCatch?(): EventNetCatch | null;
+  itemCatch?(): EventItemCatch | null;
   interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;
   resultRoot(id: string): Object3D | null;

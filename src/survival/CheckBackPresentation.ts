@@ -17,6 +17,9 @@ const CAMERA_FORWARD_TRAVEL = 0.95;
 const REVEAL_DURATION = 0.25;
 const REACTION_DURATION = 4.2;
 const ACTOR_CUE_PROGRESS = 0.55;
+const ANGLERFISH_REVEAL_TIME = 0.45;
+const ANGLERFISH_TURN_DURATION = 1.6;
+const ANGLERFISH_SOUND_TIME = 1.8;
 
 function smoothstep(value: number): number {
   const clamped = Math.min(1, Math.max(0, value));
@@ -74,8 +77,7 @@ export class CheckBackPresentation extends KeyedEventPresentation {
 
   protected reset(): void {
     this.placeSubjectAt(this.badPositionTarget);
-    this.actorRig.position.set(0, this.anglerfishFloorY, 0);
-    this.actorRig.rotation.set(0, 0, 0);
+    this.resetActorPose();
     this.actorRig.scale.setScalar(1);
     this.fish.position.set(0, this.fishFloorY - this.anglerfishFloorY, 0);
     this.fish.rotation.set(0, 0, 0);
@@ -83,6 +85,7 @@ export class CheckBackPresentation extends KeyedEventPresentation {
     this.anglerfish.position.set(0, 0, 0);
     this.anglerfish.rotation.set(0, 0, 0);
     this.anglerfish.visible = false;
+    this.actorLight.visible = false;
     this.cueEmitted = false;
     this.cameraLook.apply(0, 0);
   }
@@ -97,6 +100,7 @@ export class CheckBackPresentation extends KeyedEventPresentation {
       this.placeSubjectAt(this.fishBenchTarget);
       this.fish.visible = false;
       this.anglerfish.visible = true;
+      this.actorLight.visible = true;
       this.applySettledActor(this.anglerfish);
     } else {
       this.cameraLook.apply(0, 0);
@@ -106,8 +110,10 @@ export class CheckBackPresentation extends KeyedEventPresentation {
   }
 
   protected prepareAnimation(_kind: string): void {
+    this.resetActorPose();
     this.fish.visible = false;
     this.anglerfish.visible = false;
+    this.actorLight.visible = false;
     this.cueEmitted = false;
   }
 
@@ -124,25 +130,25 @@ export class CheckBackPresentation extends KeyedEventPresentation {
     }
     if (kind !== 'check-the-back.fish' && kind !== 'check-the-back.bad') return;
     this.placeSubjectAt(this.fishBenchTarget);
-    const actor = kind === 'check-the-back.fish' ? this.fish : this.anglerfish;
-    actor.visible = true;
+    this.resetActorPose();
+    if (kind === 'check-the-back.bad') {
+      this.applyAnglerfishReveal(progress * REACTION_DURATION);
+      return;
+    }
+    this.fish.visible = true;
+    this.actorLight.visible = true;
     const actorProgress = smoothstep(progress);
     this.actorRig.rotation.z = Math.sin(actorProgress * Math.PI * 3)
       * (1 - actorProgress) * 0.18;
-    this.actorRig.position.y = this.anglerfishFloorY;
-    const turn = smoothstep(progress / 0.68);
     this.cameraLook.applyLookAtWithFixedYaw(
-      actor,
+      this.fish,
       STERN_YAW,
-      turn,
+      smoothstep(progress / 0.68),
       CAMERA_FORWARD_TRAVEL,
     );
     if (!this.cueEmitted && progress >= ACTOR_CUE_PROGRESS) {
       this.cueEmitted = true;
-      this.emitCue({
-        eventId: 'check-the-back',
-        cue: kind === 'check-the-back.fish' ? 'fish' : 'anglerfish',
-      });
+      this.emitCue({ eventId: 'check-the-back', cue: 'fish' });
     }
   }
 
@@ -151,9 +157,7 @@ export class CheckBackPresentation extends KeyedEventPresentation {
   }
 
   protected reactionDuration(kind: EventPresentationKey): number {
-    if (kind === 'check-the-back.fish' || kind === 'check-the-back.bad') {
-      return REACTION_DURATION;
-    }
+    if (kind === 'check-the-back.bad' || kind === 'check-the-back.fish') return REACTION_DURATION;
     return kind === 'check-the-back.ignore' ? 0.25 : super.reactionDuration(kind);
   }
 
@@ -171,14 +175,38 @@ export class CheckBackPresentation extends KeyedEventPresentation {
   }
 
   private applySettledActor(actor: Object3D): void {
-    this.actorRig.position.y = this.anglerfishFloorY;
-    this.actorRig.rotation.z = 0;
+    this.resetActorPose();
     this.cameraLook.applyLookAtWithFixedYaw(
       actor,
       STERN_YAW,
       1,
       CAMERA_FORWARD_TRAVEL,
     );
+  }
+
+  private resetActorPose(): void {
+    this.actorRig.position.set(0, this.anglerfishFloorY, 0);
+    this.actorRig.rotation.set(0, 0, 0);
+    this.actorLight.position.set(0, 0.8, 0);
+  }
+
+  private applyAnglerfishReveal(elapsed: number): void {
+    this.anglerfish.visible = elapsed >= ANGLERFISH_REVEAL_TIME;
+    this.actorLight.visible = this.anglerfish.visible;
+    const turn = smoothstep(
+      (elapsed - ANGLERFISH_REVEAL_TIME) / (ANGLERFISH_TURN_DURATION - ANGLERFISH_REVEAL_TIME),
+    );
+    // Move clear of the stern before revealing the lure and turning toward it.
+    this.cameraLook.applyLookAtWithFixedYaw(
+      this.anglerfish,
+      STERN_YAW * turn,
+      smoothstep(elapsed / ANGLERFISH_REVEAL_TIME),
+      CAMERA_FORWARD_TRAVEL,
+    );
+    if (!this.cueEmitted && elapsed >= ANGLERFISH_SOUND_TIME) {
+      this.cueEmitted = true;
+      this.emitCue({ eventId: 'check-the-back', cue: 'anglerfish' });
+    }
   }
 
   private placeSubjectAt(target: Object3D): void {

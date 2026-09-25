@@ -1,7 +1,7 @@
-import { Box3, Group, PerspectiveCamera, Vector3 } from 'three';
+import { Box3, Group, Mesh, PerspectiveCamera, ShaderMaterial, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { StarryNightPresentation } from '../src/survival/events/StarryNightPresentation';
-import type { DedicatedEventEnvironment } from '../src/survival/eventPresentationTypes';
+import type { DedicatedEventEnvironment, EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
 
 function setup(aspect = 16/9) {
   const camera = new PerspectiveCamera(80, aspect, 0.1, 1000);
@@ -41,6 +41,37 @@ describe('Starry Night presentation', () => {
     }
     expect(camera.position).toEqual(position);
     expect(camera.quaternion.equals(quaternion)).toBe(true);
+    presentation.dispose();
+  });
+
+  // Importance: 90/100. Selecting a gift must keep both constellations visible.
+  it.each(['animate', 'skip', 'settle'] as const)('keeps both constellations after a gift (%s)', async (completion) => {
+    const { presentation } = setup();
+    presentation.reveal();
+    presentation.skip();
+    const reaction = presentation.react({
+      outcome: { eventResult: { choiceId: 'ductTape' } },
+    } as EventOutcomePresentation);
+    const expectVisible = () => {
+      expect(presentation.worldRoot.visible).toBe(true);
+      for (const target of presentation.interactionTargets()) {
+        for (const mesh of target.root.children as Mesh[]) {
+          const uniforms = (mesh.material as ShaderMaterial).uniforms;
+          expect(uniforms.reveal!.value).toBe(1);
+          expect(uniforms.opacity!.value).toBeGreaterThanOrEqual(1);
+        }
+      }
+    };
+    presentation.update(0.9, 0.9);
+    expectVisible();
+    if (completion === 'animate') presentation.update(1.8, 0.9);
+    else if (completion === 'skip') presentation.skip();
+    else presentation.settleForVisibilityChange();
+    await reaction;
+    presentation.update(3.8, 2);
+    expectVisible();
+    presentation.clear();
+    expect(presentation.worldRoot.visible).toBe(false);
     presentation.dispose();
   });
 

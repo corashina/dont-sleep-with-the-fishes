@@ -1,0 +1,5 @@
+<!doctype html><html><head><title>Check the Back popup layout</title><style>body{margin:0;background:#1b292f;color:white;font:16px sans-serif}main{display:flex;flex-wrap:wrap;gap:16px;padding:12px}iframe{height:380px;border:0}figure{margin:0}figcaption{padding:4px}</style></head><body><main></main><script type="module">
+const widths = [320,375,535,1280]; const results=[];
+window.addEventListener('message',async event=>{if(!event.data?.popupMetrics)return;results.push(event.data.popupMetrics);if(results.length===widths.length)await fetch('/__popup-complete',{method:'POST',body:JSON.stringify(results)});});
+for(const width of widths){const figure=document.createElement('figure');figure.innerHTML=`<figcaption>${width}px viewport</figcaption><iframe width="${width}" src="./sample.html"></iframe>`;document.querySelector('main').append(figure);}
+</script></body></html>

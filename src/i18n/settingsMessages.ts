@@ -1,6 +1,15 @@
 import { defineMessages } from './messages';
 
 export const settingsCatalog = {
+  eventReactions: { en: 'EVENT REACTIONS', pl: 'REAKCJE ZDARZEŃ', 'es-AR': 'REACCIONES DE EVENTOS' },
+  reactionChoice: { en: 'Choice', pl: 'Wybór', 'es-AR': 'Elección' },
+  reactionResult: { en: 'Result', pl: 'Wynik', 'es-AR': 'Resultado' },
+  playReaction: { en: 'PLAY REACTION', pl: 'ODTWÓRZ REAKCJĘ', 'es-AR': 'VER REACCIÓN' },
+  playSequence: { en: 'PLAY FULL SEQUENCE', pl: 'ODTWÓRZ CAŁĄ SEKWENCJĘ', 'es-AR': 'VER SECUENCIA COMPLETA' },
+  reactionPreviewNote: { en: 'Opens the lab. Previews reset items and health.', pl: 'Otwiera laboratorium. Podgląd przywraca przedmioty i zdrowie.', 'es-AR': 'Abre el laboratorio. Restaura objetos y salud después de cada prueba.' },
+  reactionPlaying: { en: 'Playing…', pl: 'Odtwarzanie…', 'es-AR': 'Reproduciendo…' },
+  reactionReady: { en: 'Ready to replay.', pl: 'Gotowe do powtórzenia.', 'es-AR': 'Listo para repetir.' },
+  reactionFailed: { en: 'Preview failed.', pl: 'Błąd podglądu.', 'es-AR': 'Falló la vista previa.' },
   simulation: {"en":"SIMULATION","pl":"SYMULACJA","es-AR":"SIMULACIÓN"},
   barrels: {"en":"Barrel simulation","pl":"Symulacja beczek","es-AR":"Simulación de barriles"},
   physics: {"en":"PHYSICS VIEW","pl":"WIDOK FIZYKI","es-AR":"VISTA DE FÍSICA"},

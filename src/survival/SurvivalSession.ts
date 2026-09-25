@@ -1,4 +1,5 @@
-import { eventChoiceDecision, type EventChoiceDecision } from './eventChoiceRules';
+import { eventChoiceDecision, eventChoiceResource, type EventChoiceDecision } from './eventChoiceRules';
+import { resourceSupplyActorId } from './resourceSupplyActors';
 import { EMPTY_HEART, COMPLETE_HEART, isHeartComplete, collectHeartPiece, type HeartPieceId, type HeartPieces } from './heartOfTheSea';
 import { cloneActionOutcome, domainMessageId, domainText, resolveOutcomeText, withOutcomeText, type OutcomeText } from './outcomeText';
 import { domainMessage as t } from '../i18n/domainMessages';
@@ -32,7 +33,6 @@ import {
   isDriftingSupplyKindOnCooldown,
 } from './driftingSupplies';
 import { deriveEventVariantSeed } from './eventPresentationOutcome';
-import { ownsNightTraderReward } from './nightTraderTrades';
 import {
   FishingSession,
   type BeginFishingResult,
@@ -916,8 +916,7 @@ export class SurvivalSession {
   ): ActionOutcome {
     const choice = this.pendingEvent!.choices.find(({ id }) => id === response.choiceId);
     if (choice?.itemId !== undefined) {
-      if (this.pendingEvent!.id === 'night-trader'
-        && (choice.itemId === 'cannedFood' || choice.itemId === 'baitTin')) {
+      if (eventChoiceResource(this.pendingEvent!, choice) !== null) {
         return this.resolveEventChoice(
           response.choiceId,
           null,
@@ -937,6 +936,10 @@ export class SurvivalSession {
     const choice = this.pendingEvent!.choices.find(({ id }) => id === response.choiceId);
     if (choice?.itemId === undefined) {
       return this.reject('choice-unavailable', t('unavailableResponse'));
+    }
+    if (eventChoiceResource(this.pendingEvent!, choice) !== null
+      && response.instanceId === resourceSupplyActorId(choice.itemId)) {
+      return this.resolveEventChoice(choice.id, null, choice.itemId, response.resultId);
     }
     if (item === undefined) return this.reject('item-unavailable', t('itemGone'));
     if (item.type !== choice.itemId) {
@@ -1279,7 +1282,10 @@ export class SurvivalSession {
 
   private resetForDawn(): number {
     this.finalizeJournalNight();
-    const hullWear = nightlyHullWearDamage(this.day);
+    const hullWear = nightlyHullWearDamage(
+      this.day,
+      mulberry32(deriveEventVariantSeed(this.seed, this.day, 'night-hull-wear')),
+    );
     this.day += 1;
     this.radioSignalAvailable = false;
     this.pendingJournalDaytime = null;
@@ -1829,26 +1835,14 @@ export class SurvivalSession {
     return candidates[index] ?? null;
   }
 
-  private canUseEventItem(id: ItemId): boolean {
-    return this.usableEventItemInstanceId(id) !== null;
-  }
-
   private hasUsableEventChoice(event: SurvivalEventDefinition): boolean {
+    const snapshot = this.snapshot();
     return event.choices.some((choice) => (
       choice.itemId !== undefined
-      && (choice.requiredChestState === undefined || choice.requiredChestState === this.chestState)
-      && this.canUseEventItem(choice.itemId)
-      && (event.id !== 'night-trader' || !ownsNightTraderReward(choice.id, this.inventory.snapshot()))
+      && eventChoiceDecision(event, choice, snapshot).failures.length === 0
     ));
   }
 
-
-  private usableEventItemInstanceId(id: ItemId): ItemInstanceId | null {
-    return Object.values(this.inventory.snapshot())
-      .filter((item) => item?.type === id && item.condition === 'usable')
-      .map((item) => item!.instanceId)
-      .sort()[0] ?? null;
-  }
 
   private reject(code: string, message: string | OutcomeText): ActionOutcome {
     const text = typeof message === 'string' ? domainText(domainMessageId(message)) : message;

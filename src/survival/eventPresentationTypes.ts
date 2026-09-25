@@ -3,11 +3,12 @@ import type { ItemId, ItemInstanceId } from '../game/ItemState';
 import type { WaveSample, VortexWaveState } from '../ocean/WaveField';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { BoatHeartDisplay } from './BoatHeartDisplay';
-import type { EventNetCatch } from './EventItemUseController';
+import type { EventItemCatch } from './EventItemUseController';
 import type { CarlitosPresentation } from './CarlitosPresentation';
 import type { DivePresentationController } from './DivePresentationController';
 import type { EventModelLibrary } from './EventModelLibrary';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
+import type { EventPresentationCue } from './eventPresentationCue';
 import type {
   EventChoicePresentation,
   FocusedEventInteractionTarget,
@@ -68,6 +69,7 @@ export interface UnderwaterViewEnvironment {
 }
 
 export interface DedicatedEventEnvironment {
+  readonly emitCue: (cue: EventPresentationCue) => void;
   readonly heartDisplay: BoatHeartDisplay;
   readonly setBloodOceanIntensity: (intensity: number) => void;
   readonly eventModels: EventModelLibrary;
@@ -88,7 +90,7 @@ export interface DedicatedEventEnvironment {
 }
 
 export interface DedicatedEventPresentation {
-  netCatch?(): EventNetCatch | null;
+  itemCatch?(): EventItemCatch | null;
   readonly eventId: DedicatedEventId;
   readonly worldRoot: Group;
   readonly boatRoot: Group;

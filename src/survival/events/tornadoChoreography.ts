@@ -20,8 +20,6 @@ export interface TornadoSample {
   visibility: number;
   funnelScale: number;
   spinRate: number;
-  spinPhase: number;
-  sway: number;
   effectStrength: number;
   supplyTravel: number;
   itemX: number;
@@ -40,8 +38,6 @@ export function resetTornadoSample(output: TornadoSample): void {
   output.visibility = 0;
   output.funnelScale = 0;
   output.spinRate = 0;
-  output.spinPhase = 0;
-  output.sway = 0;
   output.effectStrength = 0;
   output.supplyTravel = 0;
   output.itemX = 0;
@@ -60,8 +56,6 @@ function holdTornado(output: TornadoSample): void {
   output.visibility = 1;
   output.funnelScale = 1;
   output.spinRate = 1;
-  output.spinPhase = 1;
-  output.sway = 1;
   output.effectStrength = 1;
 }
 

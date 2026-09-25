@@ -419,7 +419,7 @@ export class SurvivalAudio {
       this.scope.setLoopGain('seagulls', 1, 2);
       return;
     }
-    if (eventId === 'snatcher') {
+    if (eventId === 'tentacle-attack') {
       this.scope.startLoop('tentacleMovement');
       return;
     }
@@ -517,6 +517,14 @@ export class SurvivalAudio {
   checkBackCue(cue: CheckBackAudioCue): void {
     if (this.disposed) return;
     this.scope.play(cue === 'fish' ? 'checkBackFish' : 'checkBackAnglerfish');
+  }
+
+  sharkBite(): void {
+    if (!this.disposed) this.scope.play('midnightMonsterAttack');
+  }
+
+  fogMonsterBite(): void {
+    if (!this.disposed) this.scope.play('fogMonsterBite');
   }
 
   clearMidnightTour(): void {

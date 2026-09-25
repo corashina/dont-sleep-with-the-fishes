@@ -20,7 +20,7 @@ import type {
 import { EventItemEffects } from './EventItemEffects';
 import { StationaryEventCamera } from './StationaryEventCamera';
 import { NetAttackPose } from './NetAttackPose';
-import { UmbrellaWindFlight } from './UmbrellaWindFlight';
+import { WindItemFlight } from './WindItemFlight';
 import type { EventItemFlightTarget, EventItemUseSample } from './eventItemUseChoreography';
 import {
   eventItemMotionProfile,
@@ -68,7 +68,7 @@ interface InteriorMaterialBinding {
 /** Adapts sampled item-use poses to a borrowed supply actor. */
 export class EventItemUseAdapter {
   private readonly netAttackPose = new NetAttackPose();
-  private readonly umbrellaWindFlight = new UmbrellaWindFlight();
+  private readonly windItemFlight = new WindItemFlight();
   private readonly cameraLook: StationaryEventCamera;
   private readonly storedActorPosition = new Vector3();
   private readonly cameraSpacePosition = new Vector3();
@@ -207,7 +207,7 @@ export class EventItemUseAdapter {
       );
 
     if (sample.windFlight) {
-      this.umbrellaWindFlight.apply(this.cameraSpacePosition, sample, this.cameraWorldMatrix, actor.root);
+      this.windItemFlight.apply(this.cameraSpacePosition, sample, this.cameraWorldMatrix, actor.root);
     }
 
     const parent = actor.root.parent;
@@ -240,14 +240,11 @@ export class EventItemUseAdapter {
     actor.applyPose(this.pose);
     this.applyCameraAlignedRotation(sample, actor);
     this.applyKnifeAimBeforeTravel(sample, actor, profile);
-    if (sample.netSwing) {
-      this.netAttackPose.apply(actor.root, sample, this.cameraWorldMatrix, this.aimTarget);
-    } else {
-      this.applyTargetTravel(sample, actor, profile);
-    }
+    this.applyTravel(sample, actor, profile);
     this.applyKnifeGripAfterTravel(sample, actor);
     this.applyFloatingRingRotation(sample, actor);
     this.applyCameraFacing(sample, actor);
+    if (sample.windFlight) this.windItemFlight.applyRotation(actor.root, sample);
     this.applyAim(sample, actor, profile);
     this.applyRecoil(sample, actor);
     this.effects.apply(sample, actor.root, this.heldFill);
@@ -276,7 +273,7 @@ export class EventItemUseAdapter {
     this.lockItemToHeldCamera = false;
     this.alignItemToCamera = false;
     this.anchorReleased = false;
-    this.umbrellaWindFlight.clear();
+    this.windItemFlight.clear();
     this.active = false;
   }
 
@@ -426,6 +423,18 @@ export class EventItemUseAdapter {
     if (this.camera.fov === this.baseFieldOfView) return;
     this.camera.fov = this.baseFieldOfView;
     this.camera.updateProjectionMatrix();
+  }
+
+  private applyTravel(
+    sample: Readonly<EventItemUseSample>, actor: BorrowedSupplyActor, profile: EventItemMotionProfile,
+  ): void {
+    // Align the cargo cover before positioning its contact point on the supplies.
+    if (sample.surfaceFacing === 'target-plane') this.applyCameraFacing(sample, actor);
+    if (sample.netSwing) {
+      this.netAttackPose.apply(actor.root, sample, this.cameraWorldMatrix, this.aimTarget);
+    } else {
+      this.applyTargetTravel(sample, actor, profile);
+    }
   }
 
   private applyTargetTravel(

@@ -1,18 +1,21 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
 import { scaleEventItemDuration, scaleThrownItemDuration } from '../eventItemTiming';
 import { resetTransformPose, type MutableTransformPose } from '../transformPose';
+import { eventItemUseDurationForItem } from '../eventItemUseChoreography';
 
 export const SCHOOL_REVEAL_DURATION = 2.6;
 export const SCHOOL_ITEM_DURATION = scaleEventItemDuration(1.25);
 export const SCHOOL_REACTION_DURATION = 1.1;
 
 export function schoolItemDuration(choiceId: string): number {
+  if (choiceId === 'baitTin') return eventItemUseDurationForItem('throw-target', 'baitTin');
   return choiceId === 'fishingNet'
     ? scaleThrownItemDuration(1.25)
     : SCHOOL_ITEM_DURATION;
 }
 export const SCHOOL_CENTER_X = 0;
 export const SCHOOL_CENTER_Z = 0;
+export const SCHOOL_BAIT_X = 4.65;
 
 const SCHOOL_RADIUS_X_BY_BAND = [2.4, 3.15, 3.9, 4.65, 8] as const;
 const SCHOOL_RADIUS_Z_BY_BAND = [3.4, 4.75, 6.1, 7.45, 14] as const;
@@ -43,6 +46,7 @@ export interface SchoolReactionState {
 
 export interface SchoolSample extends MutableTransformPose {
   gather: number;
+  baitAttraction: number;
   schoolAlpha: number;
   surfaceFlash: number;
   splash: number;
@@ -107,6 +111,7 @@ export function createSchoolVariants(count: number, seed: number): readonly Scho
 function resetSchoolSample(output: SchoolSample): void {
   resetTransformPose(output);
   output.gather = 0;
+  output.baitAttraction = 0;
   output.schoolAlpha = 0;
   output.surfaceFlash = 0;
   output.splash = 0;
@@ -128,6 +133,7 @@ export function identitySchoolSample(): SchoolSample {
     scaleY: 1,
     scaleZ: 1,
     gather: 0,
+    baitAttraction: 0,
     schoolAlpha: 0,
     surfaceFlash: 0,
     splash: 0,
@@ -166,7 +172,7 @@ export function sampleSchoolItemUse(
 ): boolean {
   resetSchoolSample(output);
   const telescope = choiceId === 'spyglass' || choiceId === 'telescope';
-  if (choiceId !== 'fishingNet' && choiceId !== 'bucket' && !telescope) return false;
+  if (choiceId !== 'fishingNet' && choiceId !== 'bucket' && choiceId !== 'baitTin' && !telescope) return false;
 
   const t = clamp01(progress);
   const lift = Math.min(
@@ -178,7 +184,10 @@ export function sampleSchoolItemUse(
   output.schoolAlpha = 1;
   output.effect = action;
 
-  if (choiceId === 'fishingNet') {
+  if (choiceId === 'baitTin') {
+    output.baitAttraction = smoothstep((t - 0.7) / 0.3);
+    output.splash = pulse(t, 0.82, 0.95, 1);
+  } else if (choiceId === 'fishingNet') {
     output.x = 1.6 * lift + 0.9 * action;
     output.y = 0.54 * lift - 0.16 * action;
     output.z = -0.42 * lift + 0.68 * action;
@@ -259,6 +268,8 @@ export function sampleSchoolFishPose(
     + Math.cos(angle) * variant.orbitRadiusX * radiusScale;
   output.z = SCHOOL_CENTER_Z
     + Math.sin(angle) * variant.orbitRadiusZ * radiusScale;
+  output.x += (SCHOOL_BAIT_X + Math.cos(angle) * 0.65 - output.x) * school.baitAttraction;
+  output.z += (Math.sin(angle) * 0.9 - output.z) * school.baitAttraction;
   const tangentX = -Math.sin(angle) * variant.orbitRadiusX * radiusScale;
   const tangentZ = Math.cos(angle) * variant.orbitRadiusZ * radiusScale;
   output.yaw = Math.atan2(tangentZ, -tangentX);

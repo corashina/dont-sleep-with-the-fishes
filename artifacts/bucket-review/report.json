@@ -1,0 +1,25 @@
+{
+  "generatedAt": "2026-09-25T11:26:00.272Z",
+  "items": [
+    {
+      "id": "bucket",
+      "label": "BUCKET",
+      "meshes": 1
+    }
+  ],
+  "views": [
+    {
+      "id": "front",
+      "label": "Front three-quarter"
+    },
+    {
+      "id": "reverse",
+      "label": "Reverse three-quarter"
+    },
+    {
+      "id": "top",
+      "label": "Top"
+    }
+  ],
+  "note": "Models use production damage and storage fitting. Studio lighting; each item is fitted separately. Not a world-scale comparison."
+}

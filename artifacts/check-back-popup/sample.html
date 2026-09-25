@@ -1,0 +1,14 @@
+<!doctype html><html><body><script type="module">
+import '../../src/styles/fonts.css';
+import '../../src/styles/main.css';
+import { SurvivalEventView } from '../../src/ui/SurvivalEventView';
+const view=new SurvivalEventView(); document.body.append(...view.roots);
+await view.showReveal({id:'check-the-back',revealText:'',danger:'uncertain'});
+view.setSelection([{id:'check',label:'Yes',unavailableReason:null},{id:'sleep',label:'No',unavailableReason:null}]);
+await document.fonts.ready;
+await new Promise(resolve=>setTimeout(resolve,300));
+const title=view.caption.querySelector('h2');const close=view.caption.querySelector('[data-event-close]');
+const titleRect=title.getBoundingClientRect(), closeRect=close.getBoundingClientRect();
+const range=document.createRange();range.selectNodeContents(title);const textRect=range.getBoundingClientRect();
+parent.postMessage({popupMetrics:{width:innerWidth,title:title.textContent,lines:range.getClientRects().length,titleWidth:titleRect.width,textWidth:textRect.width,centerDifference:Math.abs(titleRect.top+titleRect.height/2-closeRect.top-closeRect.height/2),overlap:textRect.right>closeRect.left}},location.origin);
+</script></body></html>

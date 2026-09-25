@@ -36,6 +36,8 @@ export class SurvivalEventView {
   onAnnouncement: () => void = () => undefined;
 
   private readonly title: HTMLElement;
+  private readonly header: HTMLElement;
+  private readonly closeButton: HTMLButtonElement;
   private readonly detail: HTMLElement;
   private readonly risk: HTMLElement;
   private readonly choices: HTMLElement;
@@ -57,8 +59,10 @@ export class SurvivalEventView {
       if (!button) continue;
       const label = eventChoiceLabel(this.caption.dataset.eventId, choice);
       if (button.firstChild?.nodeType === Node.TEXT_NODE) button.firstChild.textContent = label;
-      const reason = button.querySelector('.event-choice__reason');
-      if (reason && choice.unavailableReason !== null) { reason.textContent = choice.unavailableReason; button.dataset.unavailableReason = choice.unavailableReason; button.setAttribute('aria-description', choice.unavailableReason); }
+      if (choice.unavailableReason !== null) {
+        button.dataset.unavailableReason = choice.unavailableReason;
+        button.setAttribute('aria-description', choice.unavailableReason);
+      }
     }
   }
 
@@ -77,7 +81,10 @@ export class SurvivalEventView {
         <i></i><i></i><i></i>
       </div>
       <section class="event-caption" data-event-caption aria-hidden="true" aria-live="polite">
-        <h2 class="ui-role-display" data-event-title hidden></h2>
+        <header class="popup-header" data-event-header hidden>
+          <button type="button" class="popup-header__close" data-event-close data-ui-aria="closePopup" aria-label="${uiText('closePopup')}" hidden></button>
+          <h2 class="ui-role-display" data-event-title hidden></h2>
+        </header>
         <p class="event-caption__detail ui-role-narrative" data-event-detail hidden></p>
         <p class="event-caption__risk ui-role-context" data-event-risk hidden></p>
         <nav class="event-choices" data-event-choices data-ui-aria="eventChoices" aria-label="${uiText('eventChoices')}" hidden></nav>
@@ -87,6 +94,8 @@ export class SurvivalEventView {
     this.caption = roots[1]!;
     this.roots = [this.sleepMask, this.caption];
     this.title = requireElement(this.caption, '[data-event-title]');
+    this.header = requireElement(this.caption, '[data-event-header]');
+    this.closeButton = requireElement(this.caption, '[data-event-close]');
     this.detail = requireElement(this.caption, '[data-event-detail]');
     this.risk = requireElement(this.caption, '[data-event-risk]');
     this.choices = requireElement(this.caption, '[data-event-choices]');
@@ -332,6 +341,8 @@ export class SurvivalEventView {
       () => { delete this.caption.dataset.danger; },
       () => this.updateText('title', this.title, ''),
       () => { this.title.hidden = true; },
+      () => { this.header.hidden = true; },
+      () => { this.closeButton.hidden = true; },
       () => { this.detail.textContent = ''; },
       () => { this.detail.hidden = true; },
       () => { this.risk.textContent = ''; },
@@ -448,15 +459,14 @@ export class SurvivalEventView {
     if (choice.unavailableReason !== null) {
       button.dataset.unavailableReason = choice.unavailableReason;
       button.setAttribute('aria-description', choice.unavailableReason);
-      const reason = document.createElement('span');
-      reason.className = 'event-choice__reason ui-role-narrative';
-      reason.textContent = choice.unavailableReason;
-      button.append(reason);
     }
     return button;
   }
 
   private syncChoiceState(): void {
+    this.header.hidden = this.title.hidden;
+    this.closeButton.hidden = !this.caption.classList.contains('confirmation-dialog') || this.choiceButton('sleep') === null;
+    this.closeButton.disabled = !this.active || this.busy || this.selectedChoiceId !== null;
     this.choices.querySelectorAll<HTMLButtonElement>('[data-event-choice]').forEach((button) => {
       const unavailable = button.dataset.unavailableReason !== undefined;
       const selected = button.dataset.eventChoice === this.selectedChoiceId;
@@ -479,6 +489,11 @@ export class SurvivalEventView {
   private readonly handleClick = (event: MouseEvent): void => {
     const target = event.target;
     if (!(target instanceof Element)) return;
+    if (target.closest('[data-event-close]') !== null) {
+      const decline = this.choiceButton('sleep');
+      if (!this.closeButton.hidden && !this.closeButton.disabled && decline !== null) this.activateChoice(decline);
+      return;
+    }
     const button = target.closest<HTMLButtonElement>('[data-event-choice]');
     if (button !== null) this.activateChoice(button);
   };

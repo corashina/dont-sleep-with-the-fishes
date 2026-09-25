@@ -79,8 +79,13 @@ function hullFillBoundary(percentage: number): number {
   return 61 - (61 - 29) * progress;
 }
 
+function healthFillBoundary(percentage: number): number {
+  // Map health to the heart's silhouette, excluding the SVG's empty margins.
+  return 63 - (63 - 9) * percentage / 100;
+}
+
 const METERS: readonly MeterDefinition[] = [
-  { id: 'health', get label() { return uiText('health'); }, min: 0, max: 100, get dangerLabel() { return uiText('low'); }, displayValue: identity, isDanger: (value) => value <= 20 },
+  { id: 'health', get label() { return uiText('health'); }, min: 0, max: 100, fillBoundary: healthFillBoundary, get dangerLabel() { return uiText('low'); }, displayValue: identity, isDanger: (value) => value <= 20 },
   { id: 'hunger', get label() { return uiText('food'); }, min: 0, max: 100, fillBoundary: hungerFillBoundary, get dangerLabel() { return uiText('low'); }, displayValue: (value) => 100 - value, isDanger: (value) => value <= 30 },
   { id: 'energy', get label() { return uiText('energy'); }, min: 0, max: SURVIVAL_BALANCE.actions.maximumEnergy, fillBoundary: energyFillBoundary, get dangerLabel() { return uiText('low'); }, displayValue: identity, isDanger: (value) => value <= 1 },
   { id: 'hull', get label() { return uiText('hull'); }, min: 0, max: 100, fillBoundary: hullFillBoundary, get dangerLabel() { return uiText('low'); }, displayValue: identity, isDanger: (value) => value <= 20 },
@@ -116,6 +121,7 @@ export class SurvivalHudView {
   readonly topControls: HTMLElement;
   readonly meters: HTMLElement;
   readonly cameraReturn: HTMLButtonElement;
+  readonly cameraTurn: HTMLButtonElement;
   readonly roots: readonly [HTMLElement, HTMLElement, HTMLButtonElement];
 
   onJournal: () => void = () => undefined;
@@ -124,7 +130,6 @@ export class SurvivalHudView {
   private readonly day: HTMLElement;
   private readonly journalMarker: HTMLButtonElement;
   private readonly journalUnread: HTMLElement;
-  private readonly cameraTurn: HTMLButtonElement;
   private readonly cameraTurnTooltip: HTMLElement;
   private readonly meterElements = new Map<MeterId, HTMLElement>();
   private readonly meterTooltips = new Map<MeterId, HTMLElement>();
@@ -133,6 +138,7 @@ export class SurvivalHudView {
   private busy = false;
   private paused = false;
   private modalOpen = false;
+  private journalAvailable = true;
   private readonly unsubscribeLanguage: () => void;
   private refreshLanguage(): void {
     refreshUiText(...this.roots);
@@ -210,9 +216,10 @@ export class SurvivalHudView {
     this.paused = paused;
   }
 
-  setModalOpen(open: boolean): void {
-    if (this.disposed || this.modalOpen === open) return;
+  setModalOpen(open: boolean, journalAvailable: boolean): void {
+    if (this.disposed) return;
     this.modalOpen = open;
+    this.journalAvailable = journalAvailable;
   }
 
   setJournalUnread(unread: boolean): void {
@@ -315,7 +322,7 @@ export class SurvivalHudView {
 
   private handleHudButton(button: HTMLButtonElement): void {
     if (button === this.journalMarker) {
-      if (!this.modalOpen) this.onJournal();
+      if (this.journalAvailable) this.onJournal();
       return;
     }
     if (this.isCameraButton(button) && !this.busy && !this.paused && !this.modalOpen) this.onCameraTurn();

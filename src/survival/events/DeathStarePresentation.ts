@@ -76,6 +76,7 @@ const IDENTITY_ITEM_POSE: Readonly<SupplyAdditivePose> = {
 
 function isSupportedChoice(choiceId: string): boolean {
   return choiceId === 'flashlight'
+    || choiceId === 'flareGun'
     || choiceId === 'umbrella'
     || choiceId === 'cannedFood'
     || choiceId === 'food'

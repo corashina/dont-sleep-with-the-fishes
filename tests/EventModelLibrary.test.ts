@@ -60,7 +60,6 @@ describe('EventModelLibrary', () => {
       'snatcher',
       'shark',
       'deathStareBlob',
-      'tornadoCore',
     ] as const) {
       const instance = library.create(id);
       const bounds = new Box3().setFromObject(instance.root);

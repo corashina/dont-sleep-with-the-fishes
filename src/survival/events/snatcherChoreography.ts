@@ -9,6 +9,7 @@ export const SNATCHER_REACTION_DURATION = 1.2;
 const SNATCHER_REVEAL_DEPTH = 2.4;
 
 export function snatcherItemDuration(choiceId: string): number {
+  if (choiceId === 'cannedFood') return eventItemUseDurationForItem('throw-target', 'cannedFood');
   if (choiceId === 'fishingNet') return eventItemUseDurationForItem('net-slap', 'fishingNet');
   return SNATCHER_ITEM_DURATION;
 }
@@ -94,10 +95,17 @@ export function sampleSnatcherItemUse(
   output: SnatcherSample,
 ): boolean {
   resetSnatcherSample(output);
-  if (choiceId !== 'shotgun' && choiceId !== 'knife' && choiceId !== 'fishingNet') return false;
+  if (choiceId !== 'shotgun' && choiceId !== 'knife' && choiceId !== 'fishingNet' && choiceId !== 'cannedFood') return false;
 
   holdCrouchedThreat(output);
   const t = clamp01(progress);
+  if (choiceId === 'cannedFood') {
+    const follow = smoothstep((t - 0.7) / 0.3);
+    output.creatureX = follow * 0.8;
+    output.creatureYaw = follow * 0.45;
+    output.pointStrength = 1 - follow;
+    return true;
+  }
   if (t === 0 || t === 1) return true;
   const action = choiceId === 'fishingNet' ? sampleNetAttackContact(t) : choiceId === 'knife'
     ? pulse(t, 0.52, 0.7, 0.84)
@@ -111,7 +119,15 @@ export function sampleSnatcherItemUse(
 export function sampleSnatcherReaction(
   progress: number,
   output: SnatcherSample,
+  foodOffered = false,
 ): boolean {
+  if (foodOffered) {
+    sampleSnatcherItemUse('cannedFood', 1, output);
+    const leave = smoothstep(progress);
+    output.creatureX += leave * 1.2;
+    output.creatureY -= leave * 1.5;
+    return true;
+  }
   resetSnatcherSample(output);
   holdCrouchedThreat(output);
   const t = clamp01(progress);

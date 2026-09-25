@@ -308,11 +308,6 @@ export class WebAudioBackend implements AudioBackend {
     );
   }
 
-  setBusGain(bus: AudioBusId, gain: number, rampSeconds = 0.05): void {
-    if (this.disposed) return;
-    rampGain(this.buses[bus].gain, this.context, gain, rampSeconds);
-  }
-
   setMasterGain(gain: number, rampSeconds = 0.05): void {
     if (this.disposed) return;
     rampGain(this.master.gain, this.context, gain, rampSeconds);

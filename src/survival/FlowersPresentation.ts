@@ -8,7 +8,8 @@ import {
   sampleWaveFieldInto,
   type WaveSample,
 } from '../ocean/WaveField';
-import type { EventNetCatch } from './EventItemUseController';
+import type { EventItemCatch } from './EventItemUseController';
+import type { ItemId } from '../game/ItemState';
 import { eventItemMotionProfile } from './eventItemMotionProfile';
 import { KeyedEventPresentation } from './KeyedEventPresentation';
 import type { SurvivalEventModels } from './SurvivalEventModelLibrary';
@@ -33,9 +34,9 @@ export class FlowersPresentation extends KeyedEventPresentation {
   private readonly scoopTarget = new Object3D();
   private readonly brain: Group;
   private caught = false;
-  readonly netCatch: EventNetCatch = {
-    capture: (net) => this.captureInNet(net),
-    release: () => this.releaseFromNet(),
+  readonly itemCatch: EventItemCatch = {
+    capture: (item, itemId) => this.captureInItem(item, itemId),
+    release: () => this.releaseFromItem(),
   };
   private readonly basePositions: Vector3[] = [];
   private readonly target = new Vector3();
@@ -115,7 +116,7 @@ export class FlowersPresentation extends KeyedEventPresentation {
   }
 
   protected disposeOwned(): void {
-    // Restore the brain from the net before removing this presentation.
+    // Restore the brain from the collection tool before removing this presentation.
     this.subject.add(this.brain);
   }
 
@@ -135,17 +136,17 @@ export class FlowersPresentation extends KeyedEventPresentation {
     }
   }
 
-  private captureInNet(net: Object3D): void {
+  private captureInItem(item: Object3D, itemId: ItemId): void {
     if (this.caught) return;
     this.caught = true;
-    net.add(this.brain);
-    this.brain.position.set(...eventItemMotionProfile('fishingNet').actionOrigin);
+    item.add(this.brain);
+    this.brain.position.set(...eventItemMotionProfile(itemId).actionOrigin);
     this.brain.position.y += 0.055;
     this.brain.rotation.set(0.15, -0.3, 0.1);
     this.brain.visible = true;
   }
 
-  private releaseFromNet(): void {
+  private releaseFromItem(): void {
     if (!this.caught) return;
     // The collected copy is now shown in the boat's basket.
     this.subject.add(this.brain);

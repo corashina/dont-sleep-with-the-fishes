@@ -119,7 +119,7 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
       this.revealProgress = progress;
       this.light.intensity = ease(progress)*0.6;
     } else {
-      this.visibility = 1-ease(progress);
+      this.visibility = beat === 'gift' ? 1 : 1-ease(progress);
       this.flash = beat === 'gift' ? Math.sin(progress * Math.PI) : 0;
       this.light.intensity = this.visibility*0.6;
     }

@@ -34,6 +34,7 @@ export class FocusedEventView {
 
   private readonly choicesRoot: HTMLElement;
   private readonly title: HTMLElement;
+  private readonly closeButton: HTMLButtonElement;
   private currentEventId: InspectableEventId | null = null;
   private readonly choicesById = new Map<EventResponseId, FocusedEventChoiceView>();
   private selectedChoiceId: EventResponseId | null = null;
@@ -52,8 +53,10 @@ export class FocusedEventView {
       if (main?.firstChild) main.firstChild.textContent = choice.label;
       const cost = button.querySelector('.focused-event-view__cost');
       if (cost) cost.setAttribute('aria-label', uiDynamic('energyCount', choice.energyCost ?? 0));
-      const reason = button.querySelector('.event-choice__reason');
-      if (reason && choice.unavailableReason !== null) { reason.textContent = choice.unavailableReason; button.dataset.unavailableReason = choice.unavailableReason; button.setAttribute('aria-description', choice.unavailableReason); }
+      if (choice.unavailableReason !== null) {
+        button.dataset.unavailableReason = choice.unavailableReason;
+        button.setAttribute('aria-description', choice.unavailableReason);
+      }
     }
   }
 
@@ -64,7 +67,10 @@ export class FocusedEventView {
     template.innerHTML = `
       <section class="focused-event-view" data-focused-event-view role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="focused-event-title" inert>
         <div class="dive-result__paper focused-event-view__card scuba-popup-paper">
-          <h2 class="dive-result__title scuba-popup-title ui-role-display" id="focused-event-title" data-focused-event-title></h2>
+          <header class="popup-header">
+            <button type="button" class="popup-header__close" data-focused-event-close data-ui-aria="returnBoat" aria-label="${uiText('returnBoat')}"></button>
+            <h2 class="dive-result__title scuba-popup-title ui-role-display" id="focused-event-title" data-focused-event-title></h2>
+          </header>
           <nav data-focused-event-choices data-ui-aria="eventChoices" aria-label="${uiText('eventChoices')}"></nav>
         </div>
         <button type="button" class="focused-event-view__back" data-focused-event-back data-ui-aria="returnBoat" aria-label="${uiText('returnBoat')}">
@@ -74,6 +80,7 @@ export class FocusedEventView {
     this.root = template.content.firstElementChild as HTMLElement;
     this.card = requireElement(this.root, '.focused-event-view__card');
     this.backButton = requireElement(this.root, '[data-focused-event-back]');
+    this.closeButton = requireElement(this.root, '[data-focused-event-close]');
     this.title = requireElement(this.root, '[data-focused-event-title]');
     this.choicesRoot = requireElement(this.root, '[data-focused-event-choices]');
     this.root.addEventListener('click', this.handleClick);
@@ -228,10 +235,6 @@ export class FocusedEventView {
       if (choice.unavailableReason !== null) {
         button.dataset.unavailableReason = choice.unavailableReason;
         button.setAttribute('aria-description', choice.unavailableReason);
-        const reason = document.createElement('span');
-        reason.className = 'event-choice__reason ui-role-narrative';
-        reason.textContent = choice.unavailableReason;
-        button.append(reason);
       }
       return button;
     });
@@ -241,6 +244,7 @@ export class FocusedEventView {
   }
 
   private syncChoiceState(): void {
+    this.closeButton.disabled = this.busy || this.selectedChoiceId !== null;
     this.choicesRoot.querySelectorAll<HTMLButtonElement>('[data-event-choice]').forEach((button) => {
       const unavailable = button.dataset.unavailableReason !== undefined;
       const selected = button.dataset.eventChoice === this.selectedChoiceId;
@@ -283,6 +287,10 @@ export class FocusedEventView {
     const choice = target.closest<HTMLButtonElement>('[data-event-choice]');
     if (choice !== null && this.choicesRoot.contains(choice)) {
       this.activateChoice(choice);
+      return;
+    }
+    if (target.closest('[data-focused-event-close]') !== null) {
+      if (!this.closeButton.disabled) this.onBack();
       return;
     }
     if (target.closest('[data-focused-event-back]') !== null) this.onBack();

@@ -1,4 +1,6 @@
 import { WEATHER_PARTICLE_LAYER } from './rendering/renderLayers';
+import type { EventReactionPreviewRequest } from './survival/EventReactionPreview';
+import { ITEM_ANIMATION_LAB_ID } from './survival/ItemAnimationLab';
 import type { Clock, PerspectiveCamera, WebGLRenderer } from 'three';
 import type { GameRuntimeDependencies } from './app/GameRuntimeDependencies';
 import type { GamePhase, PhaseContext, MenuPhaseContext, ShipPhaseContext, SurvivalPhaseContext } from './app/GamePhase';
@@ -237,6 +239,7 @@ export class Game {
             options: EVENT_TEST_OPTIONS,
             enterEvent: (id) => this.enterTestEvent(id),
           },
+          request => this.previewEventReaction(request),
         );
       }
       this.settingsMenu = new SettingsMenu(mount, {
@@ -535,6 +538,20 @@ export class Game {
       initialEventId: option.eventId,
       initialEventResultId: option.resultId,
     });
+  }
+
+  private async previewEventReaction(request: EventReactionPreviewRequest): Promise<void> {
+    if (this.disposed || this.preparing) return;
+    if (await this.activePhase?.previewEventReaction?.(request)) return;
+    if (this.disposed) return;
+    const option = EVENT_TEST_OPTIONS.find(option => option.id === ITEM_ANIMATION_LAB_ID)!;
+    const result = createEventTestResult(option, 19);
+    this.exitPointerLock();
+    await this.activateSurvival({
+      kind: 'fresh', savedItems: result.savedItems, seed: 19, scavengeElapsedSeconds: 0,
+      initialEventId: ITEM_ANIMATION_LAB_ID,
+    });
+    if (!this.disposed) await this.activePhase?.previewEventReaction?.(request);
   }
 
   private restartFrom(generation: number): void {

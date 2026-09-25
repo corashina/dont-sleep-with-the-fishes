@@ -17,7 +17,6 @@ export function swarmItemDuration(choiceId: string): number {
     : SWARM_ITEM_DURATION;
 }
 export const SWARM_SHARK_COUNT = 5;
-const ORBIT_SPEED_SCALE = 0.34;
 const ORBIT_RADIUS_X = 6.2;
 const ORBIT_RADIUS_Z = 8;
 const OUTER_ORBIT_SCALE = 1.32;
@@ -47,6 +46,7 @@ export interface SwarmVariant {
 
 export interface SwarmReactionState {
   readonly attacked: boolean;
+  readonly playerBitten: boolean;
   readonly foodDelta: number;
   readonly baitDelta: number;
   readonly brokenItem: boolean;
@@ -60,8 +60,8 @@ export interface SwarmSample extends MutableTransformPose {
   netSlap: number;
   opening: number;
   flashlightSweep: number;
-  baitDiversion: number;
   attack: number;
+  breachProgress: number;
   splash: number;
   catchStrength: number;
   foodDelta: number;
@@ -72,11 +72,17 @@ export interface SwarmSample extends MutableTransformPose {
 
 export interface SwarmSharkPose {
   x: number;
+  y: number;
   z: number;
   yaw: number;
   pitch: number;
   roll: number;
   scale: number;
+  breach: number;
+  biteProgress: number;
+  biteWeight: number;
+  impact: number;
+  splash: number;
 }
 
 const GROUP_SIZES = [2, 1, 1, 1] as const;
@@ -151,8 +157,8 @@ function resetSample(output: SwarmSample): void {
   output.netSlap = 0;
   output.opening = 0;
   output.flashlightSweep = 0;
-  output.baitDiversion = 0;
   output.attack = 0;
+  output.breachProgress = -1;
   output.splash = 0;
   output.catchStrength = 0;
   output.foodDelta = 0;
@@ -170,11 +176,17 @@ export function createSwarmSample(): SwarmSample {
 export function createSwarmSharkPose(): SwarmSharkPose {
   return {
     x: 0,
+    y: 0,
     z: 0,
     yaw: 0,
     pitch: 0,
     roll: 0,
     scale: 1,
+    breach: 0,
+    biteProgress: 0,
+    biteWeight: 0,
+    impact: 0,
+    splash: 0,
   };
 }
 
@@ -238,8 +250,6 @@ export function sampleSwarmItemUse(
     output.pitch = -0.34 * lift;
     output.effectKind = 'flashlight-sweep';
   } else {
-    // Wait for the thrown food or bait to land before following it.
-    output.baitDiversion = 0;
     output.x = 2.5 * action;
     output.y = (0.34 + Math.sin(Math.PI * t) * 0.72) * action;
     output.z = -1.35 * action;
@@ -252,6 +262,19 @@ export function sampleSwarmItemUse(
     output.effectKind = 'bait-diversion';
   }
   return true;
+}
+
+function sampleSwarmDamage(reaction: Readonly<SwarmReactionState>, t: number, output: SwarmSample): void {
+  output.attack = pulse(t, 0.04, 0.48, 0.96);
+  output.splash = pulse(t, 0.02, 0.34, 0.82);
+  output.hullRoll = output.attack === 0
+    ? 0
+    : Math.sin(Math.PI * t * 3) * output.attack * 0.055;
+  if (reaction.playerBitten) {
+    output.breachProgress = t;
+    output.attack = 0;
+    output.splash = 0;
+  }
 }
 
 export function sampleSwarmReaction(
@@ -269,19 +292,12 @@ export function sampleSwarmReaction(
     : 0;
 
   if (reaction.attacked) {
-    output.attack = pulse(t, 0.04, 0.48, 0.96);
-    output.splash = pulse(t, 0.02, 0.34, 0.82);
-    output.hullRoll = output.attack === 0
-      ? 0
-      : Math.sin(Math.PI * t * 3) * output.attack * 0.055;
+    sampleSwarmDamage(reaction, t, output);
   } else {
     output.opening = smoothstep((t - 0.06) / 0.72)
       * (output.foodDelta > 0 ? 0.92 : 0);
     output.catchStrength = output.foodDelta > 0
       ? smoothstep((t - 0.08) / 0.66)
-      : 0;
-    output.baitDiversion = output.baitDelta < 0 || reaction.foodDelta < 0
-      ? smoothstep((t - 0.04) / 0.72)
       : 0;
     output.splash = pulse(t, 0.04, 0.3, 0.76)
       * (output.foodDelta > 0 ? 0.74 : 0.36);
@@ -305,28 +321,21 @@ export function sampleSwarmSharkPose(
   swarm: Readonly<SwarmSample>,
   output: SwarmSharkPose,
 ): void {
+  output.y = 0;
+  output.breach = 0;
+  output.biteProgress = 0;
+  output.biteWeight = 0;
+  output.impact = 0;
+  output.splash = 0;
   const safeTime = Number.isFinite(time) ? time : 0;
-  const orbitAngle = variant.orbitAngle
-    + safeTime * ORBIT_SPEED_SCALE * variant.speed;
-  const localClose = smoothstep(
-    (swarm.revealProgress - variant.revealAt - 0.04)
-    / Math.max(0.18, 0.88 - variant.revealAt),
-  );
-  const close = swarm.revealProgress < 1 ? localClose : swarm.closure;
-  const outer = variant.approachDistance * (1 - close);
-  const cosine = Math.cos(orbitAngle);
-  const sine = Math.sin(orbitAngle);
-  const baseX = cosine * variant.radiusX;
-  const baseZ = sine * variant.radiusZ;
+  const baseX = output.x;
+  const baseZ = output.z;
   const distance = Math.hypot(baseX, baseZ) || 1;
   const radialX = baseX / distance;
   const radialZ = baseZ / distance;
   const openingWeight = Math.max(0, -radialZ);
   const opening = swarm.opening * openingWeight * 1.2;
 
-  const diversionSide = baseX >= 0 ? 1 : -1;
-  const diversionX = swarm.baitDiversion * (SWARM_DISTRACTION_TARGET.x + diversionSide * 0.48 - baseX);
-  const diversionZ = swarm.baitDiversion * (SWARM_DISTRACTION_TARGET.z + variant.group * 0.4 - baseZ);
   const lunge = swarm.attack * (0.72 + (variant.group % 2) * 0.18);
   const netSlap = swarm.netSlap * variant.netSlapWeight;
   const pulseOffset = Math.sin(
@@ -335,14 +344,9 @@ export function sampleSwarmSharkPose(
 
   const inward = lunge - netSlap * 0.95;
   output.x = baseX
-    + radialX * (outer - inward + opening)
-    + diversionX;
+    + radialX * (-inward + opening);
   output.z = baseZ
-    + radialZ * (outer - inward + opening * 0.2)
-    + diversionZ;
-  const travelX = -sine * variant.radiusX;
-  const travelZ = cosine * variant.radiusZ;
-  output.yaw = Math.atan2(travelX, travelZ);
+    + radialZ * (-inward + opening * 0.2);
   output.pitch = pulseOffset * 0.35;
   output.roll = variant.roll + pulseOffset + netSlap * 0.35;
   output.scale = variant.scale;

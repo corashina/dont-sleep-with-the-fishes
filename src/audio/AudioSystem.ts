@@ -29,7 +29,6 @@ class SilentAudioBackend implements AudioBackend {
     _options: Readonly<SpatialAudioOptions>,
   ): null { return null; }
   setListenerPose(_pose: Readonly<AudioListenerPose>): void {}
-  setBusGain(): void {}
   setMasterGain(): void {}
   dispose(): void {}
 }

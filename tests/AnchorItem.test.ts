@@ -146,7 +146,8 @@ it('supports the anchor on the floor and port hull beside the shotgun', async ()
     expect(supportGap).toBeLessThan(0.005);
     expect(contactHeight).toBeGreaterThan(bounds.max.y - 0.05);
     const shotgun = boatSupplyTransform('shotgun', 0);
-    expect(pose.position.distanceTo(shotgun.position)).toBeLessThan(0.4);
+    // The shotgun moved 0.12 m toward the bow; keep both items within 0.45 m.
+    expect(pose.position.distanceTo(shotgun.position)).toBeLessThan(0.45);
     const shotgunBounds = new Box3(new Vector3(...ITEM_MODEL_SPECS.shotgun.normalizedBounds.min),
       new Vector3(...ITEM_MODEL_SPECS.shotgun.normalizedBounds.max));
     const shotgunRoot = new Group();

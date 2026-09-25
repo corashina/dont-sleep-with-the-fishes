@@ -1,12 +1,14 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
 import { scaleEventItemDuration, scaleThrownItemDuration } from '../eventItemTiming';
 import { NET_ATTACK_BASE_DURATION, sampleNetAttackContact } from '../netAttackChoreography';
+import { eventItemUseDuration } from '../eventItemUseChoreography';
 
 export const DEATH_STARE_REVEAL_DURATION = 3.2;
 export const DEATH_STARE_ITEM_DURATION = scaleEventItemDuration(1.25);
 export const DEATH_STARE_REACTION_DURATION = 1.25;
 
 export function deathStareItemDuration(choiceId: string): number {
+  if (choiceId === 'flareGun') return eventItemUseDuration('flare-target');
   if (choiceId === 'fishingNet') return scaleEventItemDuration(NET_ATTACK_BASE_DURATION);
   return choiceId === 'food' || choiceId === 'cannedFood'
     ? scaleThrownItemDuration(1.25)
@@ -156,6 +158,7 @@ export function sampleDeathStareReveal(
 }
 
 const DEATH_STARE_ITEM_CHOICES = new Set([
+  'flareGun',
   'flashlight',
   'umbrella',
   'cannedFood',
@@ -181,6 +184,14 @@ export function sampleDeathStareItemUse(
   const action = pulse(t, 0.16, 0.56, 0.9);
 
   switch (choiceId) {
+    case 'flareGun': {
+      const burn = smoothstep((t - 0.54) / 0.2);
+      output.blink = burn;
+      output.eyeTarget = 1 - burn;
+      output.fishZ = -burn * 0.4;
+      output.fishPitch = burn * 0.15;
+      break;
+    }
     case 'flashlight':
       output.itemX = 0.42 * lift;
       output.itemY = 0.72 * lift;

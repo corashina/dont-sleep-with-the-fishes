@@ -10,7 +10,7 @@ const situations: Record<string, readonly [string, string, string]> = {
   'dangerous-waters': ['The current drew us towards jagged rocks.', 'Prąd znosił nas na ostre skały.', "La corriente nos llevaba hacia rocas filosas."],
   leak: ['Water was creeping through a split in the hull.', 'Woda wciskała się przez pęknięcie w kadłubie.', "El agua se metía por una grieta del casco."],
   'school-of-fish': ['A shoal churned the water beside us.', 'Ławica kotłowała wodę tuż obok łodzi.', "Un cardumen revolvía el agua junto al bote."],
-  snatcher: ['A tentacle curled over the side, reaching for my things.', 'Macka przewiesiła się przez burtę i sięgnęła po moje rzeczy.', "Un tentáculo pasó por la borda, buscando mis cosas."],
+  'tentacle-attack': ['A tentacle curled over the side, reaching for my things.', 'Macka przewiesiła się przez burtę i sięgnęła po moje rzeczy.', "Un tentáculo pasó por la borda, buscando mis cosas."],
   'death-stare': ['Something huge rose from the water and stared straight at me.', 'Coś ogromnego wynurzyło się z wody i spojrzało prosto na mnie.', "Algo enorme salió del agua y me miró fijo."],
   'swarm-of-sharks': ['Shark fins were closing around the boat.', 'Rekinie płetwy zaciskały krąg wokół łodzi.', "Las aletas de tiburón cerraban el círculo alrededor del bote."],
   tornado: ['A dark funnel was churning up the sea.', 'Ciemny lej mielił morze.', "Un embudo oscuro revolvía el mar."],

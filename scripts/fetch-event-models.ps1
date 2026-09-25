@@ -29,7 +29,6 @@ $modelIds = @(
   'anglerFish'
   'shark'
   'deathStareBlob'
-  'tornadoCore'
   'midnightGravestone'
   'midnightCoffin'
   'midnightShovel'

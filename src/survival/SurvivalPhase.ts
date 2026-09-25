@@ -1,4 +1,6 @@
 import { COMPLETE_HEART } from './heartOfTheSea';
+import type { EventReactionPreviewRequest } from './EventReactionPreview';
+import { playEventReactionPreview, type EventReactionPreviewPorts } from './EventReactionPreviewPlayer';
 import { PerspectiveCamera } from 'three';
 import type { SurvivalPhaseContext, GamePhase } from '../app/GamePhase';
 import { prepareScene } from '../rendering/prepareScene';
@@ -62,7 +64,7 @@ import {
 import { SurvivalSession } from './SurvivalSession';
 import { EventBundleLoader } from './EventBundle';
 import { EventBundleManager } from './EventBundleManager';
-import { isInspectableEventId } from './eventCatalog';
+import { isInspectableEventId, survivalEventById } from './eventCatalog';
 import {
   SurvivalEventFlow,
   type EventBundleManagerLike,
@@ -256,6 +258,8 @@ export class SurvivalPhase implements GamePhase {
   private eventBundles!: SurvivalPhaseBundleManager;
   private scenePreparations = 0;
   private itemAnimationLab = false;
+  private reactionPreviewPhase: 'day' | 'night' | null = null;
+  private reactionPreviewCovered = false;
   private itemAnimationLabCameraControls: ItemAnimationLabCameraControls | null = null;
   private rearCameraView = false;
   private readonly endingPreviewCue: 'death' | 'sinking' | null;
@@ -628,6 +632,45 @@ export class SurvivalPhase implements GamePhase {
     this.syncPresentationWeather();
   }
 
+  async previewEventReaction(request: EventReactionPreviewRequest): Promise<boolean> {
+    if (!this.itemAnimationLab || this.disposed) return false;
+    if (this.busy) throw new Error('The animation lab is busy.');
+    const generation = this.lifecycleGeneration;
+    const previousWeather = this.forcedWeather;
+    const previousPhase = this.forcedPresentationPhase;
+    this.setBusy(true);
+    this.ui.hideItemAnimationLabChoices?.();
+    this.world.setItemAnimationLabCameraLook?.(0, 0);
+    await playEventReactionPreview(request, {
+      world: this.world as EventReactionPreviewPorts['world'],
+      audio: this.audio,
+      bundles: this.eventBundles,
+      isCurrent: () => this.isContinuationActive(generation),
+      setEnvironment: eventId => {
+        this.reactionPreviewPhase = survivalEventById(eventId)!.phase;
+        this.setTimeOfDayOverride(this.reactionPreviewPhase);
+        this.setWeatherOverride(null);
+        this.setAutomaticWeather(presentationWeatherForEvent(eventId));
+        this.world.setPhase?.(this.reactionPreviewPhase);
+      },
+      restore: async () => {
+        this.reactionPreviewPhase = null;
+        this.setAutomaticWeather(null);
+        this.setWeatherOverride(previousWeather);
+        this.setTimeOfDayOverride(previousPhase);
+        this.world.syncInventory?.(this.session.snapshot());
+        if (this.reactionPreviewCovered) {
+          this.reactionPreviewCovered = false;
+          await this.ui.setSleepCovered?.(false);
+          if (!this.isContinuationActive(generation)) return;
+          await this.ui.setSleepCoverProfile?.('solid');
+        }
+        this.itemAnimationLabFlow.enter(this.renderSnapshot(false, false));
+      },
+    });
+    return true;
+  }
+
   setTimeOfDayOverride(phase: SkyPhase | null): void {
     this.forcedPresentationPhase = phase;
     this.world.setPresentationPhaseOverride?.(phase);
@@ -833,8 +876,15 @@ export class SurvivalPhase implements GamePhase {
     });
     this.world.setEventCueHandler?.(({ eventId, cue }) => {
       if (eventId === 'seagull-theft') this.eventFlow.seagullGrab();
+      else if (eventId === 'monster-in-the-fog') {
+        this.reactionPreviewCovered = this.itemAnimationLab;
+        this.audio.fogMonsterBite();
+        void this.ui.setSleepCoverProfile?.('midnight-attack');
+        void this.ui.setSleepCovered?.(true);
+      }
       else if (eventId === 'midnight-tour') this.audio.midnightTourCue(cue);
       else if (eventId === 'chest-attack') this.audio.chestAttackCue(cue);
+      else if (eventId === 'swarm-of-sharks') this.audio.sharkBite();
       else this.audio.checkBackCue(cue);
     });
     this.world.setThunderListener?.(() => this.audio.thunder());
@@ -990,8 +1040,8 @@ export class SurvivalPhase implements GamePhase {
 
   private syncVisualState(snapshot: Readonly<SurvivalSnapshot>): void {
     this.visualState.elapsedSeconds = this.elapsedSeconds;
-    this.visualState.phase = snapshot.state === 'nightEvent' || snapshot.ending?.id === 'kraken'
-      ? 'night' : 'day';
+    this.visualState.phase = this.reactionPreviewPhase ?? (
+      snapshot.state === 'nightEvent' || snapshot.ending?.id === 'kraken' ? 'night' : 'day');
     this.visualState.weather = snapshot.weather;
   }
 

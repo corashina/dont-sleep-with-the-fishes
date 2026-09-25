@@ -1,4 +1,6 @@
 import { LIFEBOAT_GUNWALE_SURFACE_Y } from '../src/world/Lifeboat';
+import { WIND_ITEM_FLIGHT_DURATION } from '../src/survival/eventItemUseChoreography';
+import { resourceSupplyActorId } from '../src/survival/resourceSupplyActors';
 // Importance: 8/10 (scaled from 4/5). Protects survival world integration and cleanup.
 import { describe,expect,it,vi } from 'vitest';
 import {
@@ -114,7 +116,9 @@ function createTestEventModels(): EventModelLibrary {
     create: vi.fn((id: string) => {
       if (['ghost', 'siren', 'sirenRock'].includes(id)) return new Group();
       const root = id === 'snatcher' ? createTestSnatcherModel() : new Group();
-      if (id === 'shark') root.animations = [new AnimationClip('Shark|Swim', 1, [])];
+      if (id === 'shark') root.animations = [
+        new AnimationClip('Shark|Swim', 1, []), new AnimationClip('Shark|Swim_Bite', 1, []),
+      ];
       return {
         root,
         dispose: vi.fn(),
@@ -178,7 +182,7 @@ function expectEventEffectRootsCleared(scene: Object3D, eventId: SurvivalEventId
     });
   }
   const dedicatedRoots: Partial<Record<SurvivalEventId, string>> = {
-    leak: 'leak', 'school-of-fish': 'school-of-fish', snatcher: 'tentacle-attack',
+    leak: 'leak', 'school-of-fish': 'school-of-fish', 'tentacle-attack': 'tentacle-attack',
     'death-stare': 'death-stare', 'swarm-of-sharks': 'shark-swarm', tornado: 'tornado',
     'starry-night': 'starry-night', 'ocean-of-blood': 'ocean-of-blood',
     'something-under-us': 'something-under-us', 'shadow-figure': 'shadow-figure', 'guarded-sleep': 'guarded-sleep',
@@ -319,6 +323,91 @@ function focusedPresenterTestDouble(eventId: string): FocusedPresenterTestDouble
 }
 
 describe('BoatWorld helpers', () => {
+  // Importance: 98/100. Item recovery must not delay the bite blackout or start a bite after cancellation.
+  it.each([false, true])('finishes item recovery before the shark bite, cancelled=%s', async (cancelled) => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(new PerspectiveCamera(), propModels, ...createTestSkyTextures(), [],
+      undefined, undefined, 'low', createTestEventModels());
+    const adapter = eventAdapterTestDouble('swarm-of-sharks');
+    const registry = vi.spyOn(EventPresentationRegistry.prototype, 'create').mockReturnValue(adapter);
+    let finishRecovery!: () => void;
+    const recovery = vi.spyOn(EventItemUseController.prototype, 'react').mockImplementation(
+      () => new Promise<void>((resolve) => { finishRecovery = resolve; }),
+    );
+    try {
+      world.stageEvent('swarm-of-sharks');
+      const outcome = { accepted: true, code: 'event-resolved', message: '', deltas: { health: -20 }, cue: 'none' as const };
+      const result = world.reactToEventOutcome('swarm-of-sharks', outcome, undefined, {
+        outcome, resourceDeltas: { health: -20 }, gainedInstanceIds: [], brokenInstanceIds: [], lostInstanceIds: [],
+        consumedInstanceIds: [], selectedInstanceId: null, selectedCondition: null, targetInstanceId: null,
+      });
+      expect(recovery).toHaveBeenCalledOnce();
+      expect(adapter.react).not.toHaveBeenCalled();
+      if (cancelled) world.clearEvent();
+      finishRecovery();
+      await result;
+      expect(adapter.react).toHaveBeenCalledTimes(cancelled ? 0 : 1);
+    } finally {
+      world.dispose();
+      recovery.mockRestore();
+      registry.mockRestore();
+      propModels.dispose();
+    }
+  });
+
+  // Importance: 95/100. Reward choices share resource IDs but must never throw stored supplies.
+  it('does not treat a Starry Night Food wish as a resource payment', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(new PerspectiveCamera(), propModels, ...createTestSkyTextures(), [],
+      undefined, undefined, 'low', createTestEventModels());
+    try {
+      world.syncInventory(snapshot([], { food: 2 }));
+      const use = vi.spyOn(world, 'playEventItemUse');
+      await world.playEventChoice('starry-night', 'cannedFood');
+      expect(use).not.toHaveBeenCalled();
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
+  // Importance: 95/100. Resource-only choices must borrow visible props and release them on cancellation.
+  it.each([
+    ['swarm-of-sharks', 'cannedFood', 'food', 'boat-food-supply'],
+    ['tentacle-attack', 'cannedFood', 'food', 'boat-food-supply'],
+    ['school-of-fish', 'baitTin', 'bait', 'boat-bait-supply'],
+  ] as const)('animates %s / %s without a container in inventory', async (eventId, choiceId, resource, actorId) => {
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera(63, 1.6, 0.1, 100);
+    const world = new BoatWorld(camera, propModels, ...createTestSkyTextures(), [],
+      undefined, undefined, 'low', createTestEventModels());
+    const borrow = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
+    try {
+      world.syncInventory(snapshot([], { state: 'nightEvent', [resource]: 1 }));
+      world.stageEvent({ eventId, targetInstanceId: null, variantSeed: 11 });
+      const instanceId = resourceSupplyActorId(choiceId)!;
+      world.setEventEligibleItems(new Set([instanceId]));
+      const anchor = world.projectInteractionAnchors(1280, 720).find(({ id }) => id === `supply:${choiceId}`);
+      expect(anchor?.backingInstanceId).toBe(actorId);
+      expect(anchor?.quantity).toBe(1);
+      const use = world.playEventItemUse(eventId, choiceId, instanceId);
+      expect(borrow).toHaveBeenCalledExactlyOnceWith(actorId);
+      const actor = borrow.mock.results[0]!.value as BorrowedSupplyActor;
+      expect(actor).not.toBeNull();
+      const release = vi.spyOn(actor, 'release');
+      world.update(1, 1);
+      expect(actor.root.visible).toBe(true);
+      world.clearEvent();
+      await use;
+      expect(release).toHaveBeenCalledOnce();
+      expect(camera.fov).toBe(63);
+    } finally {
+      world.dispose();
+      borrow.mockRestore();
+      propModels.dispose();
+    }
+  });
+
   // Importance: 95/100. Restored ownership must drive the boat models and ending cleanup.
   it('shows collected heart pieces on the boat and removes them after return', () => {
     const world = new BoatWorld(new PerspectiveCamera(), createTestPropModels(), ...createTestSkyTextures());
@@ -796,12 +885,21 @@ describe('BoatWorld helpers', () => {
       ['tape-stretch', 'flowers', 'ductTape', 'ductTape', eventItemUseDuration('tape-stretch')],
       ['compass-search', 'flowers', 'compass', 'compass', eventItemUseDuration('compass-search')],
       ['map-read', 'flowers', 'map', 'map', eventItemUseDuration('map-read')],
+      ['map-cover', 'shower-night', 'map', 'map', eventItemUseDuration('map-cover')],
+      ['map-wind', 'windy-night', 'map', 'map', eventItemUseDuration('map-wind')],
+      ['net-secure', 'windy-night', 'fishingNet', 'fishingNet', eventItemUseDuration('net-secure')],
+      ['bucket-bail', 'shower-night', 'bucket', 'bucket', eventItemUseDuration('bucket-bail')],
+      ['bucket-bail', 'thunderstorm', 'bucket', 'bucket', eventItemUseDuration('bucket-bail')],
       ['binocular-look', 'flowers', 'spyglass', 'spyglass', eventItemUseDuration('binocular-look')],
       ['net-scoop', 'flowers', 'fishingNet', 'fishingNet', eventItemUseDuration('net-scoop')],
+      ['bucket-scoop', 'flowers', 'bucket', 'bucket', eventItemUseDuration('bucket-scoop')],
       ['bucket-scoop', 'leak', 'bucket', 'bucket', LEAK_ITEM_DURATION],
       ['bucket-helmet', 'eerie-melody', 'bucket', 'bucket', supernaturalItemUseDuration('eerie-melody', 'bucket')!],
       ['bucket-helmet', 'face-on-the-moon', 'bucket', 'bucket', eventItemUseDuration('bucket-helmet')],
       ['flare-target', 'ghosts', 'flareGun', 'flareGun', supernaturalItemUseDuration('ghosts', 'flareGun')!],
+      ['flare-target', 'death-stare', 'flareGun', 'flareGun', eventItemUseDuration('flare-target')],
+      ['radio-signal-receive', 'eerie-melody', 'radio', 'radio', eventItemUseDuration('radio-signal-receive')],
+      ['tape-secure', 'restless-waves', 'ductTape', 'ductTape', eventItemUseDuration('tape-secure')],
       ['flare-sky', 'other-people', 'flareGun', 'flareGun', eventItemUseDuration('flare-sky')],
       ['anchor-drop', 'tornado', 'anchor', 'anchor', TORNADO_ITEM_DURATION],
       ['umbrella-overhead', 'shower-night', 'umbrella', 'umbrella', weatherItemUseDuration('shower-night', 'umbrella')!],
@@ -1034,8 +1132,9 @@ describe('BoatWorld helpers', () => {
     }
   });
 
-  it('carries only the brain inside the net from water contact through the return', async () => {
-    const item = savedItem('fishingNet');
+  // Importance: 95/100. Both collection tools must carry and release the reward without duplicate models.
+  it.each(['fishingNet', 'bucket'] as const)('carries only the brain inside %s from water contact through the return', async (itemId) => {
+    const item = savedItem(itemId);
     const propModels = createTestPropModels();
     const borrow = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
     const world = new BoatWorld(new PerspectiveCamera(), propModels, ...createTestSkyTextures(), [item]);
@@ -1044,24 +1143,24 @@ describe('BoatWorld helpers', () => {
       world.stageEvent('flowers');
       const flower = world.scene.getObjectByName('flowers:pad:0')!;
       const brain = flower.parent!.getObjectByName('flowers-heart-piece')!;
-      const use = world.playEventItemUse('flowers', 'fishingNet', item.instanceId);
+      const use = world.playEventItemUse('flowers', itemId, item.instanceId);
       const net = borrow.mock.results.at(-1)!.value.root as Group;
-      const duration = eventItemUseDuration('net-scoop');
+      const duration = eventItemUseDuration(itemId === 'fishingNet' ? 'net-scoop' : 'bucket-scoop');
       world.update(duration * 0.68, duration * 0.68);
       expect(flower.parent).not.toBe(net);
       world.update(duration * 0.74, duration * 0.06);
-      const basket = net.localToWorld(new Vector3(0, 0, -0.56));
+      const basket = net.localToWorld(new Vector3(0, 0, itemId === 'fishingNet' ? -0.56 : 0));
       expect(basket.distanceTo(flower.getWorldPosition(new Vector3()))).toBeLessThan(0.01);
       world.update(duration * 0.76, duration * 0.02);
       expect(flower.parent).not.toBe(net);
       expect(brain.parent).toBe(net);
       expect(brain.visible).toBe(true);
-      expect(brain.position.toArray()).toEqual([0, 0.055, -0.56]);
+      expect(brain.position.toArray()).toEqual([0, 0.055, itemId === 'fishingNet' ? -0.56 : 0]);
       world.update(duration, duration * 0.24);
       await use;
       expect(brain.parent).toBe(net);
       const returning = world.returnEventItemUse();
-      const recovery = eventItemOutcomeDuration('fishingNet', 'recover');
+      const recovery = eventItemOutcomeDuration(itemId, 'recover');
       world.update(duration + recovery / 2, recovery / 2);
       expect(brain.parent).toBe(net);
       world.update(duration + recovery, recovery / 2);
@@ -1240,7 +1339,45 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps a selected lost duplicate still through its camera-only reaction', async () => {
+  // Importance: 94/100. Cargo tools must contact the supplies, remain deployed, and release on scene cleanup.
+  it.each([
+    ['shower-night', 'map'], ['windy-night', 'fishingNet'],
+  ] as const)('places %s cargo cover on the supplies', async (eventId, itemId) => {
+    const item = savedItem(itemId);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(new PerspectiveCamera(), propModels, ...createTestSkyTextures(), [item]);
+    try {
+      world.syncInventory(snapshot([item]));
+      world.stageEvent(eventId);
+      const use = world.playEventItemUse(eventId, itemId, item.instanceId);
+      world.update(10, 10);
+      await use;
+      const actor = world.scene.getObjectByName(`boat-supply-event:${item.instanceId}`)!;
+      const target = world.scene.getObjectByName('event-cargo-target')!;
+      const contact = actor.localToWorld(new Vector3(0, 0, itemId === 'fishingNet' ? -0.56 : 0));
+      expect(contact.distanceTo(target.getWorldPosition(new Vector3()))).toBeLessThan(0.01);
+      const normal = new Vector3(0, 1, 0).applyQuaternion(actor.getWorldQuaternion(new Quaternion()));
+      const targetNormal = new Vector3(0, 0, 1).applyQuaternion(target.getWorldQuaternion(new Quaternion()));
+      expect(normal.dot(targetNormal)).toBeGreaterThan(0.999);
+      const outcome = { accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'none' as const };
+      const reaction = world.reactToEventOutcome(eventId, outcome, undefined, {
+        outcome, resourceDeltas: {}, gainedInstanceIds: [], brokenInstanceIds: [], lostInstanceIds: [],
+        consumedInstanceIds: [], selectedInstanceId: item.instanceId, selectedCondition: 'usable', targetInstanceId: null,
+      });
+      world.update(20, 10);
+      await reaction;
+      expect(actor.parent).not.toBeNull();
+      expect(actor.visible).toBe(true);
+      world.clearEvent();
+      expect(actor.parent).toBeNull();
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
+  // Importance: 92/100. The selected lost map must depart while the spare remains in inventory.
+  it('blows the selected map away without losing the other copy', async () => {
     const maps = [savedItem('map', 1), savedItem('map', 2)] as const;
     const inventory = new SurvivalInventoryState(maps);
     const propModels = createTestPropModels();
@@ -1261,7 +1398,7 @@ describe('BoatWorld helpers', () => {
     );
     const mapUseDuration = Math.max(
       weatherItemUseDuration('windy-night', 'map')!,
-      eventItemUseDuration('map-read'),
+      eventItemUseDuration('map-wind'),
     );
     world.update(mapUseDuration, mapUseDuration);
     await use;
@@ -1272,6 +1409,7 @@ describe('BoatWorld helpers', () => {
     world.syncInventory(snapshot(maps, { inventory: inventory.snapshot() }));
     expect(mapRoot.visible).toBe(false);
     expect(mapActor.visible).toBe(true);
+    const heldPosition = mapActor.getWorldPosition(new Vector3());
 
     const reaction = world.reactToEventOutcome(
       'windy-night',
@@ -1301,9 +1439,10 @@ describe('BoatWorld helpers', () => {
         targetInstanceId: null,
       },
     );
-    const lossDuration = eventItemOutcomeDuration('map', 'depart');
+    const lossDuration = WIND_ITEM_FLIGHT_DURATION;
     const lossMidpoint = lossDuration * 0.5;
     world.update(lossMidpoint, lossMidpoint);
+    expect(mapActor.getWorldPosition(new Vector3()).distanceTo(heldPosition)).toBeGreaterThan(1);
     world.update(lossDuration, lossDuration - lossMidpoint);
     await reaction;
     expect(mapActor.parent).toBeNull();

@@ -18,6 +18,7 @@ import {
   type WebGLRenderer,
 } from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { sceneRefractionBackgrounds } from './refractionBackground';
 
 const MAX_CAPTURE_SIZE = 1024;
 
@@ -97,11 +98,18 @@ export class OceanCapture {
     const originalOverrideMaterial = scene.overrideMaterial;
     const originalWaterVisible = water.visible;
     const originalReflectorVisible = this.reflector.visible;
+    const originalSceneAutoUpdate = scene.matrixWorldAutoUpdate;
+    const originalCameraAutoUpdate = camera.matrixWorldAutoUpdate;
+    const background = sceneRefractionBackgrounds.get(scene);
+    const originalBackgroundVisible = background?.visible ?? false;
     renderer.getCurrentViewport(this.viewport);
 
     try {
       this.resize(originalTarget);
       camera.updateMatrixWorld();
+      // The outer render updated the scene before calling the water's onBeforeRender.
+      scene.matrixWorldAutoUpdate = false;
+      camera.matrixWorldAutoUpdate = false;
       this.inverseProjection.copy(camera.projectionMatrixInverse);
       this.cameraWorld.copy(camera.matrixWorld);
       this.viewMatrix.copy(camera.matrixWorldInverse);
@@ -114,7 +122,9 @@ export class OceanCapture {
       renderer.setRenderTarget(this.colorTarget);
       renderer.state.buffers.depth.setMask(true);
       renderer.clear(true, true, true);
+      if (background !== undefined) background.visible = false;
       renderer.render(scene, camera);
+      if (background !== undefined) background.visible = originalBackgroundVisible;
 
       this.reflector.camera.layers.mask = camera.layers.mask;
       this.reflector.camera.layers.disable(WEATHER_PARTICLE_LAYER);
@@ -133,6 +143,9 @@ export class OceanCapture {
       this.reflectionMatrix.copy(this.reflectorTextureMatrix)
         .multiply(this.reflectorWorldInverse);
     } finally {
+      scene.matrixWorldAutoUpdate = originalSceneAutoUpdate;
+      camera.matrixWorldAutoUpdate = originalCameraAutoUpdate;
+      if (background !== undefined) background.visible = originalBackgroundVisible;
       water.visible = originalWaterVisible;
       scene.overrideMaterial = originalOverrideMaterial;
       this.reflector.visible = originalReflectorVisible;

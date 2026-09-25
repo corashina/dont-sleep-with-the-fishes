@@ -203,7 +203,8 @@ const carlitosAnchor = (x = 720, y = 360) => ({
 });
 
 describe('SurvivalUI', () => {
-  it.each(['tired'] as const)('keeps disabled Carlitos retrieval and its hint visible while %s', (rest) => {
+  // Importance: 90/100. Removing button copy must preserve blocked choices and accessible reasons.
+  it.each(['tired'] as const)('keeps disabled Carlitos retrieval accessible without button descriptions while %s', (rest) => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -235,12 +236,13 @@ describe('SurvivalUI', () => {
     expect(focusedView.dataset.anchorState).toBe('centered');
     const button = mount.querySelector<HTMLButtonElement>('[data-focused-event-view] [data-event-choice="delegate-carlitos"]')!;
     expect(button.getAttribute('aria-disabled')).toBe('true');
-    expect(button.querySelector('.event-choice__reason')!.textContent).toBe(reason);
+    expect(button.getAttribute('aria-description')).toBe(reason);
+    expect(button.textContent).not.toContain(reason);
     expect(button.querySelector('.focused-event-view__cost')).toBeNull();
     button.click();
     expect(select).not.toHaveBeenCalled();
     setLanguage('pl');
-    expect(button.querySelector('.event-choice__reason')!.textContent).toContain(
+    expect(button.getAttribute('aria-description')).toContain(
       rest === 'tired' ? 'jednej spokojnej nocy' : 'dwóch spokojnych nocy',
     );
   });
@@ -728,6 +730,39 @@ describe('SurvivalUI', () => {
     },
   );
 
+  // Importance: 98/100. Resource-only stock must activate from the item with both mouse and keyboard.
+  it.each([
+    ['cannedFood', 'boat-food-supply', 'tentacle-attack', 'click'],
+    ['cannedFood', 'boat-food-supply', 'tentacle-attack', 'Enter'],
+    ['baitTin', 'boat-bait-supply', 'school-of-fish', 'click'],
+    ['baitTin', 'boat-bait-supply', 'school-of-fish', 'Enter'],
+  ] as const)('uses %s stock through the item anchor with %s / %s / %s', (itemType, actorId, eventId, input) => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onEventItem = vi.fn();
+    ui.onEventItem = onEventItem;
+    const instanceId = actorId as ItemInstanceId;
+    ui.render(new SurvivalSession([], {
+      seed: 3, initialEventId: eventId, initial: { food: 1, bait: 1 },
+    }).snapshot(), () => null);
+    ui.setAnchors([{
+      id: `supply:${itemType}`, itemType, supplyGroupId: itemType,
+      toolId: null, action: null, remainingUses: null,
+      quantity: 1, usableQuantity: 1, brokenQuantity: 0,
+      backingInstanceId: instanceId, x: 240, y: 180, visible: true, depleted: false,
+    }]);
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map([[instanceId, itemType]]), []);
+    const selector = `[data-anchor-id="supply:${itemType}"]`;
+    const button = mount.querySelector<HTMLButtonElement>(selector)!;
+    expect(button.getAttribute('aria-disabled')).toBe('false');
+    expect(mount.querySelector('[data-event-choice]')).toBeNull();
+    if (input === 'click') button.click();
+    else press(selector, input);
+    expect(onEventItem).toHaveBeenCalledExactlyOnceWith(itemType, instanceId);
+  });
+
   it('guards aggregate item keyboard activation when ineligible, busy, or selected', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -808,7 +843,8 @@ describe('SurvivalUI', () => {
     ui.dispose();
   });
 
-  it('keeps unavailable contextual choices focusable while explaining and suppressing them', () => {
+  // Importance: 90/100. Disabled event choices must remain blocked and accessible without visible reasons.
+  it('keeps unavailable contextual choices focusable and blocked without button descriptions', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -824,7 +860,7 @@ describe('SurvivalUI', () => {
     expect(choice.disabled).toBe(false);
     expect(choice.getAttribute('aria-disabled')).toBe('true');
     expect(choice.getAttribute('aria-description')).toBe('The crate is out of reach.');
-    expect(choice.textContent).toContain('The crate is out of reach.');
+    expect(choice.textContent).toBe('RETRIEVE');
     choice.focus();
     expect(document.activeElement).toBe(choice);
     choice.click();
@@ -1409,7 +1445,8 @@ describe('SurvivalUI', () => {
       biteTarget: { x: 160, y: 90, width: 60, height: 44, depth: 1, visible: true },
     });
     expect(mount.querySelector('[data-boat-anchors]')?.hasAttribute('inert')).toBe(true);
-    expect(mount.querySelector('[data-survival-top]')?.hasAttribute('inert')).toBe(true);
+    expect(mount.querySelector('[data-journal-open]')?.closest('[inert]')).toBeNull();
+    expect(mount.querySelector('[data-camera-turn]')?.hasAttribute('inert')).toBe(true);
     expect(fishing.hasAttribute('inert')).toBe(false);
     mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!.click();
     expect(action).not.toHaveBeenCalled();
@@ -1499,6 +1536,13 @@ describe('SurvivalUI', () => {
     const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
     back.dispatchEvent(tab);
     expect(tab.defaultPrevented).toBe(true);
+    const journal = mount.querySelector<HTMLButtonElement>('[data-journal-open]')!;
+    expect(document.activeElement).toBe(journal);
+    journal.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(back);
+    back.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(journal);
+    journal.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
     expect(document.activeElement).toBe(back);
     expect(cast).not.toHaveBeenCalled();
     back.click();
@@ -1529,13 +1573,56 @@ describe('SurvivalUI', () => {
     const rod = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
     const back = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
     expect(rod.closest('[inert]')).not.toBeNull();
-    expect(mount.querySelector('[data-survival-top]')!.hasAttribute('inert')).toBe(true);
+    expect(mount.querySelector('[data-journal-open]')!.closest('[inert]')).toBeNull();
+    expect(mount.querySelector('[data-camera-turn]')!.hasAttribute('inert')).toBe(true);
     rod.click();
     expect(action).not.toHaveBeenCalled();
     mount.querySelector<HTMLElement>('[data-fishing]')!.click();
     expect(cast).toHaveBeenCalledOnce();
     back.click();
     expect(exit).toHaveBeenCalledOnce();
+  });
+
+  // Importance: 95/100. Journal access must not cast, reel, or unlock boat actions.
+  it.each(['aiming', 'waiting', 'bite'] as const)('opens the journal during %s and returns to fishing', (mode) => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const cast = vi.fn(() => true);
+    const reel = vi.fn(() => true);
+    ui.onFishingCast = cast;
+    ui.onFishingReel = reel;
+    ui.onJournalOpen = vi.fn(() => ui.showJournal(journalEntries));
+    ui.onJournalClose = () => ui.hideJournal();
+    ui.render(snapshot(), () => null);
+    ui.setBusy(true);
+    ui.setFishingState({ mode, message: '', biteTarget: null });
+    const marker = mount.querySelector<HTMLButtonElement>('[data-journal-open]')!;
+    const fishing = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    expect(marker.closest('[inert]')).toBeNull();
+    marker.focus();
+    for (const key of ['Enter', ' ']) {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      marker.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    marker.click();
+    expect(ui.onJournalOpen).toHaveBeenCalledOnce();
+    expect(mount.querySelector('[data-journal]')!.getAttribute('aria-hidden')).toBe('false');
+    expect(fishing.hasAttribute('inert')).toBe(true);
+    fishing.click();
+    expect(cast).not.toHaveBeenCalled();
+    expect(reel).not.toHaveBeenCalled();
+    mount.querySelector<HTMLButtonElement>('[data-journal-close]')!.click();
+    expect(fishing.hasAttribute('inert')).toBe(false);
+    expect(fishing.dataset.mode).toBe(mode);
+    expect(document.activeElement).toBe(fishing);
+    expect(marker.closest('[inert]')).toBeNull();
+    expect(mount.querySelector('[data-boat-anchors]')!.hasAttribute('inert')).toBe(true);
+    ui.setPaused(true);
+    expect(marker.closest('[inert]')).not.toBeNull();
+    marker.click();
+    expect(ui.onJournalOpen).toHaveBeenCalledOnce();
   });
 
   it('blocks aiming controls under the Journal and pause, then restores access', () => {

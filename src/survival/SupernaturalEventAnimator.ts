@@ -558,6 +558,9 @@ export class SupernaturalEventAnimator {
       this.hideGhosts();
       return;
     }
+    if (active.eventId === 'eerie-melody' && active.choiceId === 'radio') {
+      this.siren.rotation.z = this.sirenBaseRotation.z - this.itemSample.effect * 0.12;
+    }
   }
 
   private updateReaction(

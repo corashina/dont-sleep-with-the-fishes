@@ -6,9 +6,14 @@ import {
   ConeGeometry,
   DoubleSide,
   Group,
+  LoopOnce,
+  Matrix4,
   Material,
   Mesh,
   MeshStandardMaterial,
+  Quaternion,
+  Vector3,
+  type AnimationAction,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
 import { createWaveSample as waveSample, type WaveSample } from '../../ocean/WaveField';
@@ -25,6 +30,7 @@ import type {
 } from '../eventPresentationTypes';
 import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import { ItemAimTarget } from '../ItemAimTarget';
+import { smoothstep } from '../animationMath';
 import {
   createSwarmSharkPose,
   createSwarmSample,
@@ -43,15 +49,20 @@ import {
   type SwarmSample,
   type SwarmVariant,
 } from './sharkSwarmChoreography';
+import { sampleSwarmBreach, SWARM_BREACH_DURATION, SWARM_BITE_CLIP_PROGRESS } from './sharkSwarmAttack';
+import { SwarmSwimPath } from './SwarmSwimPath';
 
 interface SharkActor {
   readonly root: Group;
   readonly modelInstance: EventModelInstance;
   readonly mixer: AnimationMixer;
+  readonly swimAction: AnimationAction;
+  readonly biteAction: AnimationAction;
   readonly swimDuration: number;
   readonly waterlineLocalY: number;
   readonly wave: WaveSample;
   readonly pose: SwarmSharkPose;
+  readonly swimPath: SwarmSwimPath;
   previousX: number;
   previousZ: number;
   headingYaw: number;
@@ -62,7 +73,7 @@ interface SharkActor {
 const WATERLINE = 0.02;
 const BODY_WATERLINE_FRACTION = 0.55;
 const SWARM_BODY_TINT = new Color(0x31535b);
-const SPLASH_COUNT = 2;
+const SPLASH_COUNT = SWARM_SHARK_COUNT;
 const DEFAULT_VARIANT: SwarmVariant = {
   scale: 0.54,
   orbitAngle: 0,
@@ -138,13 +149,28 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
     side: DoubleSide,
   });
   private readonly sample: SwarmSample = createSwarmSample();
+  private readonly playerPosition = new Vector3();
+  private readonly playerDirection = new Vector3();
+  private readonly mouthAnchor = new Vector3();
+  private readonly mouthOffset = new Vector3();
+  private readonly biteForward = new Vector3();
+  private readonly biteAlignment = new Quaternion();
+  private readonly contactRotation = new Quaternion();
+  private readonly worldRotation = new Quaternion();
+  private readonly modelInverse = new Matrix4();
+  private readonly breachStart = new Vector3();
+  private readonly breachLaunch = new Vector3();
+  private attackingShark: SharkActor | null = null;
+  private biteSoundPlayed = false;
   private readonly reactionState: {
     attacked: boolean;
+    playerBitten: boolean;
     foodDelta: number;
     baitDelta: number;
     brokenItem: boolean;
   } = {
     attacked: false,
+    playerBitten: false,
     foodDelta: 0,
     baitDelta: 0,
     brokenItem: false,
@@ -158,6 +184,7 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
     },
   );
   private activeChoiceId: string | null = null;
+  private sceneTime = 0;
   private staged = false;
   private disposed = false;
 
@@ -169,9 +196,15 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
       const modelInstance = environment.eventModels.create('shark');
       const root = modelInstance.root;
       const swim = root.animations.find((clip) => clip.name.endsWith('|Swim'));
+      const bite = root.animations.find((clip) => clip.name.endsWith('|Swim_Bite'));
       if (swim === undefined) throw new Error('Shark model is missing its swim animation');
+      if (bite === undefined) throw new Error('Shark model is missing its bite animation');
       const mixer = new AnimationMixer(root);
-      mixer.clipAction(swim).play();
+      const swimAction = mixer.clipAction(swim).play();
+      const biteAction = mixer.clipAction(bite).setLoop(LoopOnce, 1).play();
+      biteAction.paused = true;
+      biteAction.clampWhenFinished = true;
+      biteAction.setEffectiveWeight(0);
       styleShark(root);
       root.updateMatrixWorld(true);
       const bodyBounds = new Box3().setFromObject(root);
@@ -185,10 +218,13 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
         root,
         modelInstance,
         mixer,
+        swimAction,
+        biteAction,
         swimDuration: swim.duration,
         waterlineLocalY,
         wave: waveSample(),
         pose: createSwarmSharkPose(),
+        swimPath: new SwarmSwimPath(),
         previousX: 0,
         previousZ: 0,
         headingYaw: 0,
@@ -218,6 +254,7 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== this.eventId) return;
     this.clear();
+    this.sceneTime = 0;
     this.sharks[0]!.root.add(this.itemAimTarget);
     this.itemAimTarget.position.set(0, 0.08, 0.22);
     const variants = createSwarmVariants(SWARM_SHARK_COUNT, context.variantSeed);
@@ -226,6 +263,10 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
       this.variants[index] = variant;
       const shark = this.sharks[index]!;
       shark.variant = variant;
+      shark.swimPath.reset(variant);
+      shark.swimAction.setEffectiveWeight(1);
+      shark.biteAction.setEffectiveWeight(0);
+      shark.biteAction.time = 0;
       shark.mixer.setTime(variant.motionPhase / (Math.PI * 2) * shark.swimDuration);
       this.sharks[index]!.root.userData.orbitRadiusX = variant.radiusX;
       this.sharks[index]!.root.userData.orbitRadiusZ = variant.radiusZ;
@@ -257,7 +298,7 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
       this.itemAimTarget.position.set(SWARM_DISTRACTION_TARGET.x, WATERLINE, SWARM_DISTRACTION_TARGET.z);
     }
     sampleSwarmItemUse(sceneChoiceId(choiceId), 0, this.sample);
-    this.applySample(0);
+    this.applySample(this.sceneTime);
     return this.animation.start(
       'item',
       swarmItemDuration(sceneChoiceId(choiceId)),
@@ -274,6 +315,10 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
     this.activeChoiceId = null;
     this.reactionState.attacked = (result.resourceDeltas.hull ?? 0) < 0
       || (result.resourceDeltas.health ?? 0) < 0;
+    this.reactionState.playerBitten = (result.resourceDeltas.health ?? 0) < 0;
+    this.attackingShark = null;
+    this.biteSoundPlayed = false;
+    if (this.reactionState.playerBitten) this.prepareBreach();
     this.reactionState.foodDelta = result.resourceDeltas.food ?? 0;
     this.reactionState.baitDelta = result.resourceDeltas.bait ?? 0;
     this.reactionState.brokenItem = result.selectedInstanceId !== null
@@ -281,25 +326,28 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
     this.worldRoot.userData.foodDelta = this.reactionState.foodDelta;
     this.worldRoot.userData.baitDelta = this.reactionState.baitDelta;
     sampleSwarmReaction(this.reactionState, 0, this.sample);
-    this.applySample(0);
-    const diverted = this.reactionState.foodDelta < 0 || this.reactionState.baitDelta < 0;
-    return this.animation.start('reaction', diverted ? SWARM_DIVERSION_DURATION : SWARM_REACTION_DURATION);
+    this.applySample(this.sceneTime);
+    return this.animation.start('reaction', this.prepareReactionDuration());
   }
 
   update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
     const safeDelta = Number.isFinite(delta) ? Math.max(0, delta) : 0;
-    this.animation.update(time, safeDelta);
-    this.applySample(time);
-    for (let index = 0; index < this.sharks.length; index += 1) {
-      this.sharks[index]!.mixer.update(safeDelta);
+    this.sceneTime = Number.isFinite(time) ? time : this.sceneTime;
+    this.animation.update(this.sceneTime, safeDelta);
+    this.applySample(this.sceneTime, safeDelta);
+    if (!this.biteSoundPlayed && this.attackingShark !== null && this.sample.breachProgress >= 0.97) {
+      this.biteSoundPlayed = true;
+      this.environment.emitCue({ eventId: this.eventId, cue: 'bite' });
     }
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
+    this.biteSoundPlayed = true;
     this.animation.settle();
-    this.applySample(0);
+    for (const shark of this.sharks) shark.swimPath.settle(this.sceneTime);
+    this.applySample(this.sceneTime);
   }
 
   skip(): void {
@@ -311,6 +359,7 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
     this.animation.cancel();
     this.activeChoiceId = null;
     this.staged = false;
+    this.attackingShark = null;
     this.hideScene();
   }
 
@@ -359,22 +408,109 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
     }
   }
 
-  private applySample(time: number): void {
+  private prepareReactionDuration(): number {
+    if (this.reactionState.playerBitten) return SWARM_BREACH_DURATION;
+    if (this.reactionState.foodDelta >= 0 && this.reactionState.baitDelta >= 0) return SWARM_REACTION_DURATION;
+    let duration = SWARM_DIVERSION_DURATION;
+    for (const shark of this.sharks) {
+      duration = Math.max(duration, shark.swimPath.divert(this.sceneTime) + SWARM_DIVERSION_DURATION);
+    }
+    return duration;
+  }
+
+  private prepareBreach(): void {
+    const camera = this.environment.camera;
+    if (camera !== undefined) {
+      camera.getWorldPosition(this.playerPosition);
+      camera.getWorldDirection(this.playerDirection);
+      this.playerPosition.addScaledVector(this.playerDirection, 0.18);
+      camera.getWorldQuaternion(this.contactRotation);
+      this.worldRoot.getWorldQuaternion(this.worldRotation).invert();
+      this.contactRotation.premultiply(this.worldRotation);
+      this.worldRoot.worldToLocal(this.playerPosition);
+    } else {
+      this.playerPosition.set(0, 0.88, 0.96);
+      this.contactRotation.identity();
+    }
+    // The bow is boat-local -Z, independent of the player's look direction.
+    this.breachLaunch.set(0, WATERLINE, -6);
+    this.boatRoot.localToWorld(this.breachLaunch);
+    this.worldRoot.worldToLocal(this.breachLaunch);
+    let nearestDistance = Infinity;
+    for (const shark of this.sharks) {
+      const distance = shark.root.position.distanceToSquared(this.breachLaunch);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        this.attackingShark = shark;
+      }
+    }
+    const shark = this.attackingShark!;
+    this.prepareBiteAlignment(shark);
+    this.breachStart.copy(this.mouthAnchor);
+    shark.root.localToWorld(this.breachStart);
+    this.worldRoot.worldToLocal(this.breachStart);
+    this.breachLaunch.y = WATERLINE + shark.wave.height;
+  }
+
+  private prepareBiteAlignment(shark: SharkActor): void {
+    const head = shark.root.getObjectByName('Head');
+    const nose = shark.root.getObjectByName('Head_end');
+    const jaw = shark.root.getObjectByName('LowerJaw_end');
+    if (head === undefined || nose === undefined || jaw === undefined) {
+      throw new Error('Shark model is missing its mouth bones');
+    }
+    shark.swimAction.setEffectiveWeight(0);
+    shark.biteAction.setEffectiveWeight(1);
+    shark.biteAction.time = SWARM_BITE_CLIP_PROGRESS * shark.biteAction.getClip().duration;
+    shark.mixer.update(0);
+    shark.root.updateWorldMatrix(true, true);
+    this.modelInverse.copy(shark.root.matrixWorld).invert();
+    this.mouthAnchor.setFromMatrixPosition(nose.matrixWorld).applyMatrix4(this.modelInverse);
+    this.mouthOffset.setFromMatrixPosition(jaw.matrixWorld).applyMatrix4(this.modelInverse);
+    this.biteForward.setFromMatrixPosition(head.matrixWorld).applyMatrix4(this.modelInverse);
+    this.biteForward.subVectors(this.mouthAnchor, this.biteForward).normalize();
+    this.biteAlignment.setFromUnitVectors(this.biteForward, this.mouthOffset.set(0, 0, 1));
+    this.mouthOffset.setFromMatrixPosition(jaw.matrixWorld).applyMatrix4(this.modelInverse);
+    this.mouthAnchor.add(this.mouthOffset).multiplyScalar(0.5);
+  }
+
+  private alignBite(shark: SharkActor): void {
+    if (shark.pose.breach === 0) return;
+    shark.root.quaternion.slerp(this.contactRotation, smoothstep((this.sample.breachProgress - 0.82) / 0.18));
+    shark.root.quaternion.multiply(this.biteAlignment);
+    this.mouthOffset.copy(this.mouthAnchor).multiplyScalar(shark.pose.scale)
+      .applyQuaternion(shark.root.quaternion);
+    shark.root.position.sub(this.mouthOffset);
+  }
+
+  private sampleShark(shark: SharkActor, time: number, waveAmplitudeScale: number): void {
+    shark.swimPath.sample(time, shark.pose);
+    sampleSwarmSharkPose(shark.variant, time, this.sample, shark.pose);
+    this.environment.sampleWorldWaveInto(
+      shark.wave, time, shark.pose.x, shark.pose.z, waveAmplitudeScale,
+    );
+    shark.pose.y = WATERLINE + shark.wave.height
+      - shark.waterlineLocalY * shark.pose.scale
+      - shark.variant.depth * 0.08;
+    if (shark === this.attackingShark && this.sample.breachProgress >= 0) {
+      sampleSwarmBreach(this.sample.breachProgress, this.breachStart, this.breachLaunch, this.playerPosition, shark.pose);
+    }
+  }
+
+  private applySample(time: number, delta = 0): void {
     const waveAmplitudeScale = this.environment.readWorldWaveAmplitudeScale();
+    let impact = 0;
+    let splashStrength = this.sample.splash;
     for (let index = 0; index < this.sharks.length; index += 1) {
       const shark = this.sharks[index]!;
-      sampleSwarmSharkPose(shark.variant, time, this.sample, shark.pose);
-      this.environment.sampleWorldWaveInto(
-        shark.wave,
-        time,
-        shark.pose.x,
-        shark.pose.z,
-        waveAmplitudeScale,
-      );
+      this.sampleShark(shark, time, waveAmplitudeScale);
       const presentationScale = shark.pose.scale;
       const surfaceY = WATERLINE + shark.wave.height;
-      const positionX = shark.pose.x + shark.wave.displacementX;
-      const positionZ = shark.pose.z + shark.wave.displacementZ;
+      impact = Math.max(impact, shark.pose.impact);
+      splashStrength = Math.max(splashStrength, shark.pose.splash);
+      const waveInfluence = 1 - shark.pose.breach;
+      const positionX = shark.pose.x + shark.wave.displacementX * waveInfluence;
+      const positionZ = shark.pose.z + shark.wave.displacementZ * waveInfluence;
       if (shark.hasPreviousPosition) {
         const travelX = positionX - shark.previousX;
         const travelZ = positionZ - shark.previousZ;
@@ -387,42 +523,53 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
       }
       shark.previousX = positionX;
       shark.previousZ = positionZ;
+      if (shark.pose.breach > 0) shark.headingYaw = shark.pose.yaw;
       shark.root.scale.setScalar(presentationScale);
       shark.root.position.set(
         positionX,
-        surfaceY
-          - shark.waterlineLocalY * presentationScale
-          - shark.variant.depth * 0.08,
+        shark.pose.y,
         positionZ,
       );
       shark.root.userData.surfaceY = surfaceY;
       shark.root.userData.submersionOffset = shark.variant.depth * 0.08;
       shark.root.rotation.set(
-        shark.pose.pitch + shark.wave.normal.z * 0.1,
+        shark.pose.pitch + shark.wave.normal.z * 0.1 * waveInfluence,
         shark.headingYaw,
-        shark.pose.roll - shark.wave.normal.x * 0.08,
+        shark.pose.roll - shark.wave.normal.x * 0.08 * waveInfluence,
+        'YXZ',
       );
+      shark.swimAction.setEffectiveWeight(1 - shark.pose.biteWeight);
+      shark.biteAction.setEffectiveWeight(shark.pose.biteWeight);
+      shark.biteAction.time = shark.pose.biteProgress * shark.biteAction.getClip().duration;
+      shark.mixer.update(delta);
+      this.alignBite(shark);
       const caught = index < this.sample.foodDelta
         && this.sample.catchStrength > 0.008;
       shark.root.visible = !caught;
     }
 
-    this.splashMaterial.opacity = Math.min(0.72, this.sample.splash * 0.76);
+    this.splashMaterial.opacity = Math.min(0.72, splashStrength * 0.76);
     for (let index = 0; index < this.splashes.length; index += 1) {
       const splash = this.splashes[index]!;
-      const shark = this.sharks[(index * 5 + 1) % SWARM_SHARK_COUNT]!;
-      splash.visible = this.sample.splash > index * 0.075
+      const shark = this.sharks[index]!;
+      const strength = Math.max(this.sample.splash, shark.pose.splash);
+      splash.visible = strength > 0.01
         && shark.root.visible;
       splash.position.set(
         shark.root.position.x,
         WATERLINE + shark.wave.height + 0.12,
         shark.root.position.z,
       );
-      const scale = 0.3 + this.sample.splash * (0.74 + index * 0.045);
+      const scale = 0.3 + strength * (1.6 + index * 0.045);
       splash.scale.set(scale, scale, scale);
     }
 
     this.boatRoot.rotation.z = this.sample.hullRoll;
+    this.environment.cameraEffectsRoot?.rotation.set(
+      impact * 0.035,
+      0,
+      impact === 0 ? 0 : Math.sin(this.sample.breachProgress * 70) * impact * 0.025,
+    );
   }
 
   private hideScene(): void {
@@ -432,6 +579,7 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
     this.worldRoot.userData.baitDelta = 0;
     this.splashMaterial.opacity = 0;
     this.boatRoot.rotation.set(0, 0, 0);
+    this.environment.cameraEffectsRoot?.rotation.set(0, 0, 0);
     for (let index = 0; index < this.sharks.length; index += 1) {
       const shark = this.sharks[index]!;
       shark.root.visible = false;
@@ -442,6 +590,9 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
       shark.previousZ = 0;
       shark.headingYaw = 0;
       shark.hasPreviousPosition = false;
+      shark.swimAction.setEffectiveWeight(1);
+      shark.biteAction.setEffectiveWeight(0);
+      shark.biteAction.time = 0;
     }
     for (let index = 0; index < this.splashes.length; index += 1) {
       this.splashes[index]!.visible = false;

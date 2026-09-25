@@ -20,6 +20,7 @@ import type {
   EventSceneContext,
 } from '../eventPresentationTypes';
 import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
+import { eventSideFromSeed } from '../eventVariant';
 import {
   identitySnatcherSample,
   sampleSnatcherItemUse,
@@ -31,9 +32,9 @@ import {
   type SnatcherSample,
 } from './snatcherChoreography';
 
-const TENTACLE_X = 2.05;
+const TENTACLE_X = 1.2;
 const TENTACLE_Y = -0.62;
-const TENTACLE_Z = -0.66;
+const TENTACLE_Z = -2.2;
 const TENTACLE_SCALE = 0.94;
 const TENTACLE_HIT_Y = 1.25;
 const TENTACLE_HIT_Z = 0.44;
@@ -63,7 +64,7 @@ function setTentacleMaterial(root: Group): void {
 }
 
 export class SnatcherPresentation implements DedicatedEventPresentation {
-  readonly eventId = 'snatcher' as const;
+  readonly eventId = 'tentacle-attack' as const;
   readonly worldRoot = new Group();
   readonly boatRoot = new Group();
   readonly itemAimTarget = new Group();
@@ -84,6 +85,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     () => { this.activeChoiceId = null; },
   );
   private activeChoiceId: string | null = null;
+  private foodOffered = false;
   private staged = false;
   private disposed = false;
 
@@ -116,8 +118,10 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   }
 
   stage(context: EventSceneContext): void {
-    if (this.disposed || context.eventId !== 'snatcher') return;
+    if (this.disposed || context.eventId !== 'tentacle-attack') return;
     this.clear();
+    // Mirror the rig, choreography, and item targets together for left attacks.
+    this.boatRoot.scale.x = eventSideFromSeed(context.variantSeed);
     this.staged = true;
     this.boatRoot.visible = true;
     this.tentacle.visible = false;
@@ -137,12 +141,17 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     if (
       this.disposed
       || !this.staged
-      || (choiceId !== 'shotgun' && choiceId !== 'knife' && choiceId !== 'fishingNet')
+      || (choiceId !== 'shotgun' && choiceId !== 'knife' && choiceId !== 'fishingNet' && choiceId !== 'cannedFood')
     ) {
       return Promise.resolve(false);
     }
     this.animation.cancel();
     this.activeChoiceId = choiceId;
+    this.foodOffered = choiceId === 'cannedFood';
+    if (this.foodOffered) {
+      this.boatRoot.add(this.itemAimTarget);
+      this.itemAimTarget.position.set(TENTACLE_X + 2.45, 0, TENTACLE_Z);
+    }
     sampleSnatcherItemUse(choiceId, 0, this.sample);
     this.applySample();
     return this.animation.start('item', snatcherItemDuration(choiceId), {
@@ -155,7 +164,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     if (this.disposed || !this.staged) return Promise.resolve();
     this.animation.cancel();
     this.activeChoiceId = null;
-    sampleSnatcherReaction(0, this.sample);
+    sampleSnatcherReaction(0, this.sample, this.foodOffered);
     this.applySample();
     return this.animation.start('reaction', SNATCHER_REACTION_DURATION);
   }
@@ -181,6 +190,8 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     if (this.disposed) return;
     this.animation.cancel();
     this.activeChoiceId = null;
+    this.foodOffered = false;
+    this.tentacle.add(this.itemAimTarget);
     this.staged = false;
     this.idleAction?.stop();
     this.hideScene();
@@ -214,7 +225,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
       if (this.activeChoiceId === null) return;
       sampleSnatcherItemUse(this.activeChoiceId, progress, this.sample);
     } else {
-      sampleSnatcherReaction(progress, this.sample);
+      sampleSnatcherReaction(progress, this.sample, this.foodOffered);
     }
     this.applySample();
   }
@@ -256,6 +267,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   }
 
   private updateItemAimTarget(): void {
+    if (this.foodOffered) return;
     this.tentacle.updateWorldMatrix(true, true);
     this.hitTargetWorldPosition
       .set(0, TENTACLE_HIT_Y, TENTACLE_HIT_Z)

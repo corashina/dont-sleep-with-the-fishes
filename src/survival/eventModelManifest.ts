@@ -76,7 +76,7 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
   }),
   checkBackAnglerfish: Object.freeze({
     url: new URL('../assets/models/events/anglerFish.glb', import.meta.url).href,
-    targetLongestDimension: 0.7,
+    targetLongestDimension: 0.525,
     rotation: [0, -Math.PI / 2, 0] as const,
     maxTriangles: generatedMetadataJson.anglerFish.triangles,
   }),
@@ -140,7 +140,6 @@ export const EVENT_MODEL_IDS = Object.freeze([
   'fogMonster', 'ghost', 'siren', 'sirenRock',
   'leakPlanks', 'schoolFish', 'cod', 'bass', 'redSnapper',
   'snatcher', 'anglerFish', 'shark', 'deathStareBlob',
-  'tornadoCore',
 ] as const);
 
 export type EventModelId = typeof EVENT_MODEL_IDS[number];
@@ -246,12 +245,6 @@ const PRESENTATION = {
     offset: [0, 0, 0],
     maxTriangles: 5_000,
   },
-  tornadoCore: {
-    targetLongestDimension: 10.5,
-    rotation: [0, 0, 0],
-    offset: [0, 0, 0],
-    maxTriangles: 3_000,
-  },
 } as const satisfies Readonly<Record<
   EventModelId,
   Pick<
@@ -310,7 +303,6 @@ const generatedMetadata = {
   anglerFish: checkedMetadata('anglerFish', generatedMetadataJson.anglerFish),
   shark: checkedMetadata('shark', generatedMetadataJson.shark),
   deathStareBlob: checkedMetadata('deathStareBlob', generatedMetadataJson.deathStareBlob),
-  tornadoCore: checkedMetadata('tornadoCore', generatedMetadataJson.tornadoCore),
 } satisfies Readonly<Record<EventModelId, EventModelMetadata>>;
 
 function modelUrl(id: EventModelId): string {

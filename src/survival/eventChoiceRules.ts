@@ -3,6 +3,7 @@ import { carlitosHelpUnavailableMessage } from './CarlitosState';
 import { driftingSupplyChoiceForVariant } from './driftingSupplies';
 import { deriveEventVariantSeed } from './eventPresentationOutcome';
 import { ownsNightTraderReward } from './nightTraderTrades';
+import { resourceSupplyActorId } from './resourceSupplyActors';
 import { eligibleHandymanRewards } from './tradeRules';
 import type { SurvivalSnapshot } from './survivalSnapshot';
 import type { EventChoiceDefinition, EventChoiceRequirement, SurvivalEventDefinition } from './survivalTypes';
@@ -19,6 +20,11 @@ export interface EventChoiceDecision {
   readonly visible: boolean;
   readonly instanceId: ItemInstanceId | null;
   readonly failures: readonly EventChoiceFailure[];
+}
+
+export function eventChoiceResource(event: SurvivalEventDefinition, choice: EventChoiceDefinition): 'food' | 'bait' | null {
+  if (event.id === 'handyman') return null;
+  return choice.itemId === 'cannedFood' ? 'food' : choice.itemId === 'baitTin' ? 'bait' : null;
 }
 
 function defaultInstance(choice: EventChoiceDefinition, snapshot: SurvivalSnapshot): ItemInstanceId | null {
@@ -40,10 +46,8 @@ function tradeUnavailable(event: SurvivalEventDefinition, choice: EventChoiceDef
 function itemFailures(event: SurvivalEventDefinition, choice: EventChoiceDefinition, snapshot: SurvivalSnapshot,
   instanceId: ItemInstanceId | null): EventChoiceFailure[] {
   if (choice.itemId === undefined) return [];
-  if (event.id === 'night-trader') {
-    const resource = choice.itemId === 'cannedFood' ? 'food' : choice.itemId === 'baitTin' ? 'bait' : null;
-    if (resource !== null) return snapshot[resource] < 1 ? [{ kind: 'resource', resource, minimum: 1 }] : [];
-  }
+  const resource = eventChoiceResource(event, choice);
+  if (resource !== null) return snapshot[resource] < 1 ? [{ kind: 'resource', resource, minimum: 1 }] : [];
   return instanceId === null ? [{ kind: 'item', itemId: choice.itemId }] : [];
 }
 
@@ -52,7 +56,8 @@ export function eventChoiceDecision(event: SurvivalEventDefinition, catalogChoic
   const choice = event.id === 'drifting-supplies'
     ? driftingSupplyChoiceForVariant(catalogChoice, deriveEventVariantSeed(snapshot.seed, snapshot.day, event.id))
     : catalogChoice;
-  const instanceId = defaultInstance(choice, snapshot);
+  const instanceId = defaultInstance(choice, snapshot)
+    ?? (eventChoiceResource(event, choice) === null ? null : resourceSupplyActorId(choice.itemId));
   const failures: EventChoiceFailure[] = (choice.requirements ?? [])
     .filter(({ resource, minimum }) => snapshot[resource] < minimum)
     .map(({ resource, minimum }) => ({ kind: 'resource', resource, minimum }));

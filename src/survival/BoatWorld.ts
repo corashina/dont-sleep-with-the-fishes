@@ -93,6 +93,7 @@ import {
 } from './EventItemUseController';
 import {
   resolveEventItemUseContext,
+  type EventItemUseContext,
 } from './eventItemUseChoreography';
 import type { EventModelLibrary } from './EventModelLibrary';
 import {
@@ -283,12 +284,9 @@ function resolveFallbackFeaturedEventModels(
 
 function blocksEventItemUse(
   eventId: string,
-  choiceId: string,
   itemId: ItemId | null,
 ): boolean {
-  if (eventId === 'something-under-us' && itemId === 'flashlight') return true;
-  if (eventId === 'windy-night' && choiceId === 'fishingNet' && itemId === 'fishingNet') return true;
-  return eventId === 'flowers' && choiceId === 'bucket' && itemId === 'bucket';
+  return eventId === 'something-under-us' && itemId === 'flashlight';
 }
 
 function focusedChoiceFromResponse(
@@ -478,7 +476,8 @@ export class BoatWorld {
   private readonly boatTargetPose: BoatPose = { ...INITIAL_BOAT_POSE };
   private readonly worldCameraPosition = new Vector3();
   private readonly moonItemAimTarget = new Object3D();
-  private readonly supplyTapeAimTarget = new Object3D();
+  private readonly supplyCargoAimTarget = new Object3D();
+  private readonly bucketBailAimTarget = new Object3D();
   private readonly skyState: SkyState = {
     weather: 'calm',
     phase: 'day',
@@ -560,9 +559,13 @@ export class BoatWorld {
       const resolvedLifeboatAssets = this.resolveLifeboatAssets(lifeboatAssets);
       const build = createLifeboat(resolvedLifeboatAssets);
       this.boat = build.root;
-      this.supplyTapeAimTarget.name = 'windy-night-tape-supply-target';
-      this.supplyTapeAimTarget.position.set(-0.3, LIFEBOAT_DISPLAY_SHELF_SURFACE_Y + 0.14, -1.65);
-      this.boat.add(this.supplyTapeAimTarget);
+      this.supplyCargoAimTarget.name = 'event-cargo-target';
+      this.supplyCargoAimTarget.position.set(-0.3, LIFEBOAT_DISPLAY_SHELF_SURFACE_Y + 0.14, -1.65);
+      this.boat.add(this.supplyCargoAimTarget);
+      this.supplyCargoAimTarget.rotation.x = -Math.PI / 2;
+      this.bucketBailAimTarget.name = 'bucket-bail-target';
+      this.bucketBailAimTarget.position.set(0.4, LIFEBOAT_FLOOR_SURFACE_Y + 0.34, -0.75);
+      this.boat.add(this.bucketBailAimTarget);
       this.oceanExclusion = createWaterExclusion(
         this.boat,
         build.waterExclusion.halfWidth,
@@ -814,6 +817,7 @@ export class BoatWorld {
       worldParent: this.scene,
       boatParent: this.boat,
       dedicatedEnvironment: {
+        emitCue: (cue) => this.eventCueHandler(cue),
         heartDisplay: this.heartDisplay,
         setBloodOceanIntensity: (intensity) => {
           this.sky.setBloodOceanIntensity(intensity);
@@ -1122,16 +1126,13 @@ export class BoatWorld {
     const itemId = this.supplyDisplay.itemType(instanceId);
     if (blocksEventItemUse(
       eventId,
-      choiceId,
       itemId,
     )) return;
     const context = itemId === null
       ? null
       : resolveEventItemUseContext(eventId, choiceId, itemId);
     if (itemId !== null && context !== null) {
-      const aimTarget = context === 'tape-secure'
-        ? this.supplyTapeAimTarget
-        : this.eventItemAimTarget(eventId);
+      const aimTarget = this.itemUseAimTarget(context, eventId);
       const request: EventItemUseRequest = {
         eventId,
         choiceId,
@@ -1139,7 +1140,8 @@ export class BoatWorld {
         itemId,
         context,
         aimTarget,
-        netCatch: context === 'net-scoop' ? this.eventPresentationHost.netCatch() : null,
+        itemCatch: context === 'net-scoop' || context === 'bucket-scoop'
+          ? this.eventPresentationHost.itemCatch() : null,
         onAction,
       };
       const [played] = await Promise.all([
@@ -1159,6 +1161,14 @@ export class BoatWorld {
 
   private eventOperationIsStale(operation: number): boolean {
     return this.disposed || operation !== this.weatherEventOperation;
+  }
+
+  private itemUseAimTarget(context: EventItemUseContext, eventId: string): Object3D | null {
+    if (context === 'bucket-bail') return this.bucketBailAimTarget;
+    if (context === 'tape-secure' || context === 'map-cover' || context === 'net-secure') {
+      return this.supplyCargoAimTarget;
+    }
+    return this.eventItemAimTarget(eventId);
   }
 
 
@@ -1414,17 +1424,27 @@ export class BoatWorld {
     if (isEventPresentationRoute(eventId, 'focused') && presentation === undefined) {
       this.supplyDisplay.clearEventMotion();
     }
-    await Promise.all([
-      presentation === undefined
-        ? Promise.resolve()
-        : this.itemUseController.react(presentation),
-      this.eventPresentationHost.react({
-        outcome,
-        physicalResponse,
-        result: presentation ?? null,
-        choice: focusedChoice,
-      }),
-    ]);
+    await this.playOutcomeReaction(eventId, {
+      outcome,
+      physicalResponse,
+      result: presentation ?? null,
+      choice: focusedChoice,
+    });
+  }
+
+  private async playOutcomeReaction(
+    eventId: string,
+    reaction: Parameters<EventPresentationHost['react']>[0],
+  ): Promise<void> {
+    const operation = this.weatherEventOperation;
+    const itemReaction = reaction.result === null
+      ? Promise.resolve()
+      : this.itemUseController.react(reaction.result);
+    if (eventId === 'swarm-of-sharks' && (reaction.result?.resourceDeltas.health ?? 0) < 0) {
+      await itemReaction;
+      if (this.disposed || operation !== this.weatherEventOperation) return;
+    }
+    await Promise.all([itemReaction, this.eventPresentationHost.react(reaction)]);
   }
 
   clearEvent(): void {

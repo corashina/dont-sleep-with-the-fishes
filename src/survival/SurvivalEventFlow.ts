@@ -521,6 +521,8 @@ export class SurvivalEventFlow {
       await this.playFocusedChoiceAnimation(resolution.context);
       if (!await this.resumeFocus(eventId, 'resolving', generation, operation)) return;
       this.dependencies.audio.finishEventReaction();
+      this.flushDeferredPresentationSync(this.dependencies.session.snapshot(), generation);
+      if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
       await this.afterFocusedChoiceAnimation(resolution.context);
       if (!await this.resumeFocus(eventId, 'resolving', generation, operation)) return;
       this.focusState = 'returning';
@@ -948,7 +950,7 @@ export class SurvivalEventFlow {
     const pending = this.dependencies.session.snapshot();
     const eventId = pending.pendingEventId;
     if (eventId === null || !this.isCurrent(generation, operation)) return;
-    const itemType = pending.inventory[instanceId]?.type;
+    const itemType = pendingEventDefinition(pending)!.choices.find((choice) => choice.id === choiceId)?.itemId;
     if (!await this.prepareItemChoice(
       eventId,
       choiceId,
@@ -1937,6 +1939,7 @@ export class SurvivalEventFlow {
     }
     await this.playEventResolutionReaction(context);
     if (!this.isCurrent(generation, operation)) return;
+    if (!await this.coverImpactBite(context)) return;
     this.dependencies.audio.finishEventReaction();
     if (!await this.resumeAfterVisibility(generation, operation)) return;
     await this.showHeartReward(context);
@@ -1973,6 +1976,21 @@ export class SurvivalEventFlow {
     this.setBusy(false);
     this.dependencies.presentTerminal(snapshot);
     this.dependencies.ui.restoreCommandFocus?.();
+  }
+
+  private isImpactBite(context: EventResolutionContext): boolean {
+    return (context.eventId === 'swarm-of-sharks'
+      && (context.presentation.resourceDeltas.health ?? 0) < 0)
+      || (context.eventId === 'monster-in-the-fog'
+        && (context.presentation.resourceDeltas.hull ?? 0) < 0);
+  }
+
+  private async coverImpactBite(context: EventResolutionContext): Promise<boolean> {
+    if (!this.isImpactBite(context)) return true;
+    await (this.dependencies.ui.setSleepCoverProfile?.('midnight-attack') ?? Promise.resolve());
+    if (!this.isCurrent(context.generation, context.operation)) return false;
+    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    return this.isCurrent(context.generation, context.operation);
   }
 
   private async showHeartReward(context: EventResolutionContext): Promise<void> {
@@ -2039,6 +2057,7 @@ export class SurvivalEventFlow {
   }
 
   private eventResolutionCue(context: EventResolutionContext): Promise<void> {
+    if (context.eventId === 'monster-in-the-fog' && this.isImpactBite(context)) return Promise.resolve();
     const stationaryHandymanTouch = context.eventId === 'handyman'
       && context.choice.choiceId === 'touch';
     if (stationaryHandymanTouch) return Promise.resolve();
@@ -2075,7 +2094,7 @@ export class SurvivalEventFlow {
   private async resetResolutionCoverProfile(
     context: EventResolutionContext,
   ): Promise<boolean> {
-    if (!context.revealFromCover) return true;
+    if (!context.revealFromCover && !this.isImpactBite(context)) return true;
     await (this.dependencies.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
     return this.isCurrent(context.generation, context.operation);
   }
@@ -2084,7 +2103,7 @@ export class SurvivalEventFlow {
     context: EventResolutionContext,
     snapshot: SurvivalSnapshot,
   ): void {
-    if (context.revealFromCover) {
+    if (context.revealFromCover || this.isImpactBite(context)) {
       this.dependencies.presentTerminal(snapshot, true);
       this.setBusy(false);
       return;
@@ -2408,7 +2427,9 @@ export class SurvivalEventFlow {
         operation,
       );
     }
-    if (itemType === 'umbrella') this.dependencies.audio.eventItem(itemType);
+    if (itemType === 'umbrella' || itemType === 'cannedFood' || itemType === 'baitTin') {
+      this.dependencies.audio.eventItem(itemType);
+    }
     return this.playEventItemUse(eventId, choiceId, instanceId);
   }
 
@@ -2480,6 +2501,12 @@ export class SurvivalEventFlow {
       const choiceId = choiceByItem.get(item.type);
       if (choiceId !== undefined) eligibility.set(item.instanceId, choiceId);
     });
+    for (const choice of event.choices) {
+      const decision = eventChoiceDecision(event, choice, snapshot);
+      if (decision.instanceId !== null && decision.failures.length === 0) {
+        eligibility.set(decision.instanceId, choice.id);
+      }
+    }
     return eligibility;
   }
 

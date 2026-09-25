@@ -8,7 +8,7 @@ import {
   type FeaturedEventId,
 } from './eventPresentationRoutes';
 import { FlowersPresentation } from './FlowersPresentation';
-import type { EventNetCatch } from './EventItemUseController';
+import type { EventItemCatch } from './EventItemUseController';
 import type { SurvivalEventModels } from './SurvivalEventModelLibrary';
 import {
   isDriftingItemEventId,
@@ -168,10 +168,10 @@ export class FeaturedEventPresentations {
       : this.presentations.get(eventId)?.interactionRoot() ?? null;
   }
 
-  netCatch(): EventNetCatch | null {
+  itemCatch(): EventItemCatch | null {
     if (this.disposed || this.activeEventId !== 'flowers') return null;
     const flowers = this.presentations.get('flowers');
-    return flowers instanceof FlowersPresentation ? flowers.netCatch : null;
+    return flowers instanceof FlowersPresentation ? flowers.itemCatch : null;
   }
 
   itemAimTarget(eventId: string): Object3D | null {

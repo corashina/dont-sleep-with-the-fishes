@@ -25,6 +25,7 @@ import { lunarFaceShader } from './lunarFaceShader';
 import { seaFogShader } from './seaFogShader';
 import { sceneSeaFogUniforms } from './SeaFogMaterial';
 import { applyBloodOceanPalette } from './bloodOceanPalette';
+import { sceneRefractionBackgrounds } from '../ocean/refractionBackground';
 
 const TRANSITION_SECONDS = 1.5;
 const MOON_DIRECTION: CelestialDirection = [0.46, 0.52, -0.72];
@@ -469,6 +470,7 @@ export class Skybox {
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = -1000;
     scene.add(this.mesh);
+    sceneRefractionBackgrounds.set(scene, this.mesh);
   }
 
   update(delta: number, state: SkyState, cameraPosition: Vector3): Readonly<SkyPalette> {
@@ -543,6 +545,7 @@ export class Skybox {
     this.resetTransient();
     this.disposed = true;
     if (sceneSeaFogUniforms.get(this.scene) === this.material.uniforms) sceneSeaFogUniforms.delete(this.scene);
+    if (sceneRefractionBackgrounds.get(this.scene) === this.mesh) sceneRefractionBackgrounds.delete(this.scene);
     this.scene.remove(this.mesh);
     this.mesh.geometry.dispose();
     this.material.dispose();

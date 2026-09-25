@@ -93,9 +93,9 @@ describe('survival events', () => {
       appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueLead: 0,
     });
 
-    expect(eligible(new Set()).map(({ id }) => id)).not.toContain('snatcher');
-    expect(eligible(new Set(['baitTin', 'fishingNet'])).map(({ id }) => id)).not.toContain('snatcher');
-    expect(eligible(new Set(['cannedFood'])).map(({ id }) => id)).toContain('snatcher');
+    expect(eligible(new Set()).map(({ id }) => id)).not.toContain('tentacle-attack');
+    expect(eligible(new Set(['baitTin', 'fishingNet'])).map(({ id }) => id)).not.toContain('tentacle-attack');
+    expect(eligible(new Set(['cannedFood'])).map(({ id }) => id)).toContain('tentacle-attack');
   });
 
   it('draws by stable weighted boundaries and rejects an empty night pool', () => {

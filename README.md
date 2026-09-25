@@ -55,10 +55,14 @@ Flowers accepts Fishing Net or Bucket. It records the choice without a large rew
 
 Additional event responses use recovered equipment:
 
-- **Snatcher:** Strike with the Fishing Net to save the targeted supply without injury. The net has a 20% tear chance.
+- **Tentacle Attack:** Save the targeted supply without injury using the Knife or Fishing Net. The knife has a 30% break chance; the net has a 35% tear chance.
 - **Swarm of Sharks:** Throw two Food away from the boat to divert the sharks. This requires two Food.
 - **Windy Night:** Spend Duct Tape to secure supplies against loss and breakage. Wind still removes 10–20 Hull.
-- **Dangerous Waters:** Drop the Anchor in the shallows. It holds safely 80% of the time. Otherwise, it breaks and removes 5–10 Hull.
+- **Dangerous Waters:** Drop the Anchor in the shallows. It holds safely 65% of the time. Otherwise, it breaks and removes 10–20 Hull.
+- **Tornado:** The Anchor has a 35% break chance. A broken anchor also costs 10–20 Hull.
+- **Restless Waves:** The Anchor protects the hull but has a 30% break chance.
+- **Leak:** The Bucket has a 35% break chance. A broken bucket also costs 5–10 Hull.
+- **Windy Night:** The Fishing Net protects supplies but has a 35% tear chance.
 - **Dangerous Waters:** Find a gap with Binoculars. Lose one Energy from the normal dawn amount. Passage is safe 60% of the time; otherwise, rocks remove 5–10 Hull. Keep the Binoculars.
 - **Other People:** Call the crew on the Radio. Keep the Radio and gain hidden rescue progress. Lose one Energy from the normal dawn amount. The call does not end the run.
 
@@ -217,7 +221,7 @@ Event Test includes the Kraken encounter and its ending preview. Saves use versi
 
 Health, Food, Energy, and Hull remain visible as condition meters. Food is the inverse of internal hunger, so it drains toward zero as the survivor becomes hungry. Food and bait remain separate stores used by actions and outcomes, but they are not persistently tallied in the HUD.
 
-The sea wears three Hull from the lifeboat on four of every five nights. Available Energy always keeps the fixed toolbox useful.
+The sea removes a random 8–13 Hull from the lifeboat on four of every five nights. Every fifth night has no hull wear. The roll depends on the run seed and completed day, so loading a save preserves it. Available Energy always keeps the fixed toolbox useful.
 
 Day and night events fade to black before each reveal.
 

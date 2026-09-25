@@ -264,7 +264,7 @@ describe('EventItemUseController', () => {
 
     controller.play({
       ...request(actor.instanceId, target),
-      eventId: 'snatcher',
+      eventId: 'tentacle-attack',
       choiceId: 'knife',
       itemId: 'knife',
       context: 'knife-stab',
@@ -331,7 +331,7 @@ describe('EventItemUseController', () => {
 
     controller.play({
       ...request(actor.instanceId, target),
-      eventId: 'snatcher',
+      eventId: 'tentacle-attack',
       choiceId: 'knife',
       itemId: 'knife',
       context: 'knife-stab',

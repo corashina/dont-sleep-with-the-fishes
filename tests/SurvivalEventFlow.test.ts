@@ -280,6 +280,97 @@ function createSessionRig(
 }
 
 describe('event selection contracts', () => {
+  // Importance: 95/100. Boat bites must stay black through cleanup, including a fatal hull result.
+  it.each([100, 10])('keeps the fog bite covered through resolution at %s hull', async hull => {
+    const rig = createSessionRig(new SurvivalSession([{ type: 'flashlight', instanceId: 'flashlight-1' }], {
+      seed: 19, initialEventId: 'monster-in-the-fog', initial: { hull }, random: { next: () => 0.99 },
+    }));
+    try {
+      await rig.flow.revealPending(rig.realSession.snapshot());
+      rig.ui.setSleepCovered.mockClear();
+      rig.ui.setSleepCoverProfile.mockClear();
+      rig.flow.resolveItem('flashlight', 'flashlight-1');
+      await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+      expect(rig.world.reactToEventOutcome).toHaveBeenCalledWith('monster-in-the-fog',
+        expect.objectContaining({ deltas: expect.objectContaining({ hull: -Math.min(hull, 20) }) }), expect.anything(), expect.anything());
+      expect(rig.ui.setSleepCoverProfile).toHaveBeenCalledWith('midnight-attack');
+      expect(rig.ui.setSleepCovered).toHaveBeenCalledWith(true);
+      expect(rig.ui.setSleepCoverProfile).toHaveBeenLastCalledWith('solid');
+      if (hull === 10) expect(rig.presentTerminal).toHaveBeenCalledWith(expect.objectContaining({ state: 'sunk' }), true);
+      expect(rig.onFatalError).not.toHaveBeenCalled();
+    } finally { rig.flow.dispose(); }
+  });
+  // Importance: 98/100. Food and Bait must remain ordinary inventory choices in every supported event.
+  it.each([
+    ['swarm-of-sharks', 'cannedFood', { food: 1 }],
+    ['swarm-of-sharks', 'baitTin', { bait: 2 }],
+    ['tentacle-attack', 'cannedFood', { food: 1 }],
+    ['school-of-fish', 'baitTin', { bait: 1 }],
+    ['death-stare', 'cannedFood', { food: 1 }],
+    ['something-under-us', 'cannedFood', { food: 1 }],
+  ] as const)('selects the inventory item for %s / %s without a popup', async (eventId, choiceId, resources) => {
+    const instanceId = `${choiceId}-1` as ItemInstanceId;
+    const rig = createSessionRig(new SurvivalSession([{ type: choiceId, instanceId }], {
+      seed: 41, initial: { day: 20, ...resources }, initialEventId: eventId,
+      random: sequenceRandom([0]),
+    }));
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    expect(rig.ui.setEventSelection.mock.lastCall?.[0].get(instanceId)).toBe(choiceId);
+    expect(rig.ui.setEventSelection.mock.lastCall?.[1]).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: choiceId }),
+    ]));
+    rig.flow.resolveItem(choiceId, instanceId);
+    await vi.waitFor(() => expect(rig.realSession.snapshot().day).toBe(21));
+    expect(rig.world.playEventItemUse).toHaveBeenCalledExactlyOnceWith(eventId, choiceId, instanceId);
+    expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'item', choiceId, instanceId });
+    expect(rig.session.resolveEvent.mock.results[0]!.value.accepted).toBe(true);
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
+  // Importance: 95/100. A remaining container must not allow spending supplies below the required cost.
+  it.each([
+    ['tentacle-attack', 'cannedFood', { food: 0 }],
+    ['school-of-fish', 'baitTin', { bait: 0 }],
+    ['swarm-of-sharks', 'baitTin', { bait: 1 }],
+  ] as const)('disables %s / %s when supplies are insufficient', async (eventId, choiceId, resources) => {
+    const instanceId = `${choiceId}-1` as ItemInstanceId;
+    const rig = createSessionRig(new SurvivalSession([{ type: choiceId, instanceId }], {
+      seed: 41, initial: { day: 20, ...resources }, initialEventId: eventId,
+    }));
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    expect(rig.ui.setEventSelection.mock.lastCall?.[0].has(instanceId)).toBe(false);
+    expect(rig.ui.setEventSelection.mock.lastCall?.[1]).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: choiceId }),
+    ]));
+    rig.flow.resolveItem(choiceId, instanceId);
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+  });
+
+  // Importance: 98/100. Stored supplies must use item selection without a popup or duplicate payment.
+  it.each([
+    ['swarm-of-sharks', 'cannedFood', { food: 1 }],
+    ['tentacle-attack', 'cannedFood', { food: 1 }],
+    ['school-of-fish', 'baitTin', { bait: 1 }],
+  ] as const)('offers and animates %s / %s without a container item', async (eventId, choiceId, resources) => {
+    const rig = createSessionRig(new SurvivalSession([{ type: 'bucket', instanceId: 'bucket-1' }], {
+      seed: 41, initial: { day: 20, ...resources }, initialEventId: eventId,
+      random: sequenceRandom([0]),
+    }));
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    const actorId = (choiceId === 'cannedFood' ? 'boat-food-supply' : 'boat-bait-supply') as ItemInstanceId;
+    expect(rig.ui.setEventSelection.mock.lastCall?.[0].get(actorId)).toBe(choiceId);
+    expect(rig.ui.setEventSelection.mock.lastCall?.[1]).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: choiceId }),
+    ]));
+    rig.flow.resolveItem(choiceId, actorId);
+    await vi.waitFor(() => expect(rig.realSession.snapshot().day).toBe(21));
+    expect(rig.world.playEventItemUse).toHaveBeenCalledExactlyOnceWith(eventId, choiceId, actorId);
+    expect(rig.audio.eventItem).toHaveBeenCalledWith(choiceId);
+    expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'item', choiceId, instanceId: actorId });
+    expect(rig.session.resolveEvent.mock.results[0]!.value.accepted).toBe(true);
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
   // Importance: 99/100. The ending must wait for handover before showing its panel.
   it('waits for Kraken release and retains its scene for the ending', async () => {
     const rig = createSessionRig(new SurvivalSession([], {
@@ -689,6 +780,45 @@ describe('event selection contracts', () => {
     });
     expect(rig.onInvariantError).not.toHaveBeenCalled();
     expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
+  // Importance: 99/100. A shark bite must cut to black before the result hold, including fatal bites.
+  it.each([100, 30])('cuts immediately to black after a shark bite at %s health', async (health) => {
+    const rig = createSessionRig(new SurvivalSession([
+      { instanceId: 'flashlight-1', type: 'flashlight' },
+    ], { seed: 42, initial: { day: 15, health }, initialEventId: 'swarm-of-sharks' }));
+    const reaction = deferred();
+    const hold = deferred();
+    rig.world.reactToEventOutcome.mockImplementation(() => reaction.promise);
+    try {
+      await rig.flow.revealPending(rig.realSession.snapshot());
+      rig.calls.length = 0;
+      rig.ui.setSleepCovered.mockClear();
+      rig.ui.holdEventOutcome.mockImplementation(() => hold.promise);
+      rig.flow.resolveItem('flashlight', 'flashlight-1');
+      await vi.waitFor(() => expect(rig.world.reactToEventOutcome).toHaveBeenCalledOnce());
+      expect(rig.ui.setSleepCovered).not.toHaveBeenCalled();
+      reaction.resolve();
+      await vi.waitFor(() => expect(rig.ui.holdEventOutcome).toHaveBeenCalledOnce());
+      expect(rig.ui.setSleepCoverProfile).toHaveBeenCalledWith('midnight-attack');
+      expect(rig.ui.setSleepCovered).toHaveBeenCalledWith(true);
+      expect(rig.ui.setSleepCoverProfile.mock.invocationCallOrder[0]).toBeLessThan(
+        rig.ui.setSleepCovered.mock.invocationCallOrder[0]!,
+      );
+      expect(rig.ui.setSleepCovered.mock.invocationCallOrder[0]).toBeLessThan(
+        rig.ui.holdEventOutcome.mock.invocationCallOrder[0]!,
+      );
+      expect(rig.calls).not.toContain('clear-world');
+      hold.resolve();
+      await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+      expect(rig.ui.setSleepCoverProfile).toHaveBeenLastCalledWith('solid');
+      if (health === 30) expect(rig.presentTerminal).toHaveBeenCalledWith(expect.objectContaining({ state: 'dead' }), true);
+      expect(rig.onFatalError).not.toHaveBeenCalled();
+    } finally {
+      reaction.resolve();
+      hold.resolve();
+      rig.flow.dispose();
+    }
   });
 
   // Importance: 95/100. Spent guns must remain until the fade fully covers their return.
@@ -1279,6 +1409,55 @@ describe('SurvivalEventFlow', () => {
       rig.flow.dispose();
     },
   );
+
+  // Importance: 95/100. Loot must be on the boat before the return camera can reveal it.
+  it.each([
+    ['drifting-supplies', 'retrieve'],
+    ['drifting-supplies', 'delegate-carlitos'],
+    ['drifting-chest', 'retrieve'],
+    ['drifting-chest', 'delegate-carlitos'],
+  ] as const)('updates the boat before returning from %s / %s', async (eventId, choiceId) => {
+    const pending = snapshot({
+      state: 'dayEvent', pendingEventId: eventId,
+      carlitos: { rest: 'rested', hunger: 0, unhappiness: 0, pettedToday: false },
+    });
+    const resolved = snapshot({
+      food: 2, bait: 1,
+      inventory: inventory({ 'knife-1': { instanceId: 'knife-1', type: 'knife', condition: 'usable' } }),
+      chest: eventId === 'drifting-chest' ? { state: 'closed', acquiredDay: 4 } : pending.chest,
+      carlitos: pending.carlitos,
+    });
+    const rig = createRig(pending);
+    const retrieval = deferred<undefined>();
+    rig.world.retrieveDriftingItem.mockReturnValue(retrieval.promise);
+    rig.world.delegateDriftingItem.mockReturnValue(retrieval.promise);
+    rig.setResolveEvent(() => {
+      rig.setSnapshot(resolved);
+      return accepted({ rewardSummary: { kind: 'item', id: 'knife', quantity: 1 } });
+    });
+    const cameraReturn = deferred();
+    rig.world.exitFocusedEventView.mockReturnValue(cameraReturn.promise);
+    await rig.flow.revealPending(pending);
+    await rig.flow.focusEvent(eventId);
+    const choosing = rig.flow.chooseFocused({ id: choiceId, instanceId: null });
+    await vi.waitFor(() => expect(rig.session.resolveEvent).toHaveBeenCalledOnce());
+    expect(rig.flow.presentationSnapshot(resolved)).toBe(pending);
+    expect(rig.world.exitFocusedEventView).not.toHaveBeenCalled();
+
+    retrieval.resolve(undefined);
+    await vi.waitFor(() => expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce());
+    expect(rig.flow.hasDeferredSync()).toBe(false);
+    expect(rig.flow.presentationSnapshot(resolved)).toBe(resolved);
+    expect(rig.world.syncInventory).toHaveBeenLastCalledWith(resolved);
+    expect(rig.world.syncInventory.mock.invocationCallOrder.at(-1))
+      .toBeLessThan(rig.world.exitFocusedEventView.mock.invocationCallOrder[0]!);
+    expect(rig.world.clearEvent).not.toHaveBeenCalled();
+
+    cameraReturn.resolve();
+    await choosing;
+    expect(rig.session.resolveEvent).toHaveBeenCalledOnce();
+    rig.flow.dispose();
+  });
 
   // Importance: 98/100. Reopened loot must still grant its reward exactly once.
   it.each(['drifting-supplies', 'drifting-chest'] as const)(

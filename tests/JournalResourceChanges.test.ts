@@ -17,7 +17,7 @@ describe('journal resource changes', () => {
 
   it('keeps night resource losses on the night page and counts inventory losses once', () => {
     const entry = createJournalEntry(2, 'calm', [], null, { kind: 'event', event: {
-      phase: 'night', eventId: 'snatcher', attemptedChoiceId: 'sleep', attemptedItemId: null,
+      phase: 'night', eventId: 'tentacle-attack', attemptedChoiceId: 'sleep', attemptedItemId: null,
       outcomeCode: 'event-resolved', text: { kind: 'domain', id: 'fallbackFood' }, deltas: { food: -2, bait: -1 },
       inventoryMutations: [{ kind: 'lose', instanceIds: ['cannedFood-1'] }],
     } });

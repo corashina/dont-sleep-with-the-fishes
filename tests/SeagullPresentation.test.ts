@@ -34,11 +34,11 @@ describe('seagull animation', () => {
     const r = rig(0, 1);
     try {
       const reveal = r.birds.reveal();
-      r.birds.update(3.9, 3.9);
+      r.birds.update(4.6, 4.6);
       expect(r.session.snapshot().food).toBe(0);
       const actor = r.supplies.borrowEventActor(r.supplies.foodSupplyActorId)!;
       expect(actor.root.visible).toBe(true);
-      r.birds.update(4.5, 0.6);
+      r.birds.update(5.4 + 1 / 60, 0.8 + 1 / 60);
       await reveal;
       expect(r.supplies.recordFor('cannedFood')!.visibleCopies).toBe(0);
     } finally { r.dispose(); }
@@ -48,14 +48,14 @@ describe('seagull animation', () => {
     const r = rig();
     try {
       const reveal = r.birds.reveal();
-      r.birds.update(3.3, 3.3);
+      r.birds.update(3.6, 3.6);
       r.boat.position.y = 0.13;
       r.boat.rotation.z = 0.09;
       r.supplies.applyEventAmbientPose(0.03, 0.06);
       r.supplies.update(0.4);
-      r.birds.update(3.7, 0.4);
+      r.birds.update(4.4, 0.8);
       r.boat.rotation.z = -0.07;
-      r.birds.update(4, 0.3);
+      r.birds.update(5, 0.6);
       const actor = r.supplies.borrowEventActor(r.supplies.foodSupplyActorId)!;
       actor.root.updateWorldMatrix(true, true);
       const bounds = new Box3().setFromObject(actor.root.children[0]!);
@@ -63,7 +63,7 @@ describe('seagull animation', () => {
       grip.y = bounds.max.y;
       const beak = r.birds.root.getObjectByName('seagull-thief')!.position;
       expect(grip.distanceTo(beak)).toBeLessThan(0.0001);
-      r.birds.update(4.5, 0.5);
+      r.birds.update(5.4 + 1 / 60, 0.4 + 1 / 60);
       await reveal;
     } finally { r.dispose(); }
   });

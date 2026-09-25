@@ -36,6 +36,7 @@ import {
   schoolItemDuration,
   SCHOOL_REACTION_DURATION,
   SCHOOL_REVEAL_DURATION,
+  SCHOOL_BAIT_X,
   type SchoolFishPose,
   type SchoolSample,
   type SchoolVariant,
@@ -52,7 +53,7 @@ interface FishActor {
 const MAX_FISH = 24;
 const MIN_FISH = 18;
 const WATERLINE = 0.08;
-const BINOCULAR_WATER_X = 4.65;
+const BINOCULAR_WATER_X = SCHOOL_BAIT_X;
 const BODY_SURFACE_OFFSET = -0.14;
 const SURFACE_EFFECT_LIFT = 0.02;
 const SCHOOL_BODY_TINT = new Color(0xc4d9dc);
@@ -173,6 +174,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   );
   private activeFish = MAX_FISH;
   private activeChoiceId: string | null = null;
+  private baitThrown = false;
   private staged = false;
   private disposed = false;
 
@@ -286,13 +288,15 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
         choiceId !== 'fishingNet'
         && choiceId !== 'bucket'
         && choiceId !== 'spyglass'
+        && choiceId !== 'baitTin'
       )
     ) {
       return Promise.resolve(false);
     }
     this.animation.cancel();
     this.activeChoiceId = choiceId;
-    if (choiceId === 'spyglass') {
+    this.baitThrown = choiceId === 'baitTin';
+    if (choiceId === 'spyglass' || this.baitThrown) {
       // Nearby fish can pass behind the hull. Look across the outer school instead.
       this.worldRoot.add(this.itemAimTarget);
     }
@@ -315,6 +319,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     this.reactionState.brokenItem = selectedBroken;
     this.worldRoot.userData.foodDelta = this.reactionState.foodDelta;
     sampleSchoolReaction(this.reactionState, 0, this.sample);
+    if (this.baitThrown) this.sample.baitAttraction = 1;
     this.applySample(this.sampleTime);
     return this.animation.start('reaction', SCHOOL_REACTION_DURATION);
   }
@@ -340,6 +345,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     if (this.disposed) return;
     this.animation.cancel();
     this.activeChoiceId = null;
+    this.baitThrown = false;
     this.staged = false;
     this.fishActors[0]!.root.add(this.itemAimTarget);
     this.itemAimTarget.position.set(0, 0, 0);
@@ -374,6 +380,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       sampleSchoolItemUse(this.activeChoiceId, progress, this.sample);
     } else {
       sampleSchoolReaction(this.reactionState, progress, this.sample);
+      if (this.baitThrown) this.sample.baitAttraction = 1 - progress;
     }
   }
 

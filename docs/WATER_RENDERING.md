@@ -37,6 +37,14 @@ Scene capture hides the water and renders color and depth.
 Three.js Reflector supplies the clipped reflected view.
 Each capture uses half resolution, capped at 1024 pixels per axis.
 Capture restores render targets, viewports, scissor state, XR, and shadow update state.
+Captures reuse world transforms from the outer render instead of updating the full scene twice more.
+Refraction skips the procedural sky. Far-depth water uses authored radiance, so that sky draw cannot affect its color.
+Reflections retain the sky. Capture restores background visibility and automatic matrix updates even after a render error.
+
+The horizon uses eight separate panels with frustum culling and bounds expanded for waves and vortices.
+The nearby surface keeps its original subdivisions. Shared panel edges use matching vertices.
+High has 259,200 ocean triangles, down from 373,248. Low has 115,200, down from 165,888.
+Both totals fall by 30.6 percent before culling. This is a geometry reduction, not a measured frame-rate gain.
 
 Refraction rejects foreground depth samples. Underwater distance controls RGB absorption.
 Fresnel controls reflection strength. GGX controls sun highlights.

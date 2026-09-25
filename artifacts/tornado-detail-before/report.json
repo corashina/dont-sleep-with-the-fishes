@@ -1,0 +1,11 @@
+{
+  "shaderErrors": [],
+  "coveredHullPixels": 0,
+  "width": 1440,
+  "height": 1000,
+  "renderCalls": 11,
+  "triangles": 212572,
+  "medianFrameMs": 1.5999999940395355,
+  "p95FrameMs": 2.5,
+  "note": "Actual TornadoPresentation and ocean. Full-height preview camera and boat-height camera. Headless GPU timings include ocean rendering and forced synchronization."
+}

@@ -69,11 +69,11 @@ Readonly<Partial<Record<ItemId, readonly ItemAnimationLabUse[]>>> = Object.freez
   fishingNet: uses(
     use('net-fishing', 'fishWithNet', ITEM_ANIMATION_LAB_ID, 'netFish'),
     use('net-scoop', 'scoopWater', 'school-of-fish', 'fishingNet'),
-    use('net-attack', 'attack', 'snatcher', 'fishingNet'),
+    use('net-attack', 'attack', 'tentacle-attack', 'fishingNet'),
     use('trade-handover', 'tradeHandover', 'handyman', 'fishingNet'),
   ),
   knife: uses(
-    use('knife-stab', 'stabKnife', 'snatcher', 'knife'),
+    use('knife-stab', 'stabKnife', 'tentacle-attack', 'knife'),
     use('trade-handover', 'tradeHandover', 'handyman', 'knife'),
   ),
   scubaSet: uses(
@@ -113,7 +113,7 @@ Readonly<Partial<Record<ItemId, readonly ItemAnimationLabUse[]>>> = Object.freez
     use('trade-handover', 'tradeHandover', 'handyman', 'flashlight'),
   ),
   shotgun: uses(
-    use('shotgun-fire', 'fireShotgun', 'snatcher', 'shotgun'),
+    use('shotgun-fire', 'fireShotgun', 'tentacle-attack', 'shotgun'),
     use('trade-handover', 'tradeHandover', 'handyman', 'shotgun'),
   ),
   energyBar: uses(

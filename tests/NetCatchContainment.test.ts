@@ -77,7 +77,9 @@ it('contains every production catch throughout the haul without resizing or inte
           ITEM_MODEL_SPECS[definition.presentation.itemId].targetLongestDimension,
         );
       }
-      expect(Math.max(size.x, size.y, size.z), definition.id).toBeCloseTo(expected, 6);
+      // Importance: 95. Check exact intact sizes; damage can change the shape without changing scale.
+      const damaged = definition.presentation.kind === 'item' && definition.presentation.condition === 'broken';
+      if (!damaged) expect(Math.max(size.x, size.y, size.z), definition.id).toBeCloseTo(expected, 6);
       const scale = caught.scale.clone();
       mock.mockResolvedValue(caught);
       net.show();

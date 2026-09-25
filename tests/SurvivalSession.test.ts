@@ -50,6 +50,8 @@ it('keeps future random outcomes after restore', () => {
 
   expect(restored.resolveEvent({ kind: 'endure' }))
     .toEqual(source.resolveEvent({ kind: 'endure' }));
+  expect(restored.beginDawn()).toEqual(source.beginDawn());
+  expect(restored.snapshot()).toEqual(source.snapshot());
 });
 
 it('refuses a checkpoint during fishing', () => {
@@ -84,9 +86,11 @@ it.each([
     .toThrow('Cannot checkpoint terminal state.');
 });
 
-it('applies six hull wear after four of every five nights', () => {
-  expect(Array.from({ length: 10 }, (_, index) => nightlyHullWearDamage(index + 1)))
-    .toEqual([6, 6, 6, 6, 0, 6, 6, 6, 6, 0]);
+// Importance: 95/100. Hull wear can end a run and must respect its bounds and respite.
+it('applies variable hull wear after four of every five nights', () => {
+  const random = sequenceRandom([0, 0.2, 0.4, 0.6, 0.8, 0.999]);
+  expect(Array.from({ length: 10 }, (_, index) => nightlyHullWearDamage(index + 1, random)))
+    .toEqual([8, 9, 10, 11, 0, 12, 13, 8, 9, 0]);
 
   const worn = new SurvivalSession(saved(), {
     seed: 1,
@@ -94,10 +98,10 @@ it('applies six hull wear after four of every five nights', () => {
     initialEventId: 'quiet-night',
   });
   worn.resolveEvent(choiceResponse('sleep'));
-  expect(worn.beginDawn()).toMatchObject({
-    accepted: true,
-    deltas: { hull: -6 },
-  });
+  const dawn = worn.beginDawn();
+  expect(dawn.accepted).toBe(true);
+  expect(dawn.deltas.hull).toBeGreaterThanOrEqual(-13);
+  expect(dawn.deltas.hull).toBeLessThanOrEqual(-8);
 
   const respite = new SurvivalSession(saved(), {
     seed: 1,
@@ -1074,7 +1078,7 @@ describe('SurvivalSession daytime actions', () => {
     const session = new SurvivalSession(saved('anchor', 'fishingNet'), {
       seed: 18, random: sequenceRandom([0, 0]),
       initial: { health: 80 },
-      initialEventId: 'snatcher',
+      initialEventId: 'tentacle-attack',
     });
     expect(session.snapshot().pendingEventTargetId).toBe('anchor-1');
     const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
@@ -1100,7 +1104,7 @@ describe('SurvivalSession daytime actions', () => {
 
   it('keeps the Snatcher target pending after rejected choices and clears it after endurance', () => {
     const session = new SurvivalSession(saved('anchor'), {
-      seed: 20, random: sequenceRandom([0, 0]), initialEventId: 'snatcher',
+      seed: 20, random: sequenceRandom([0, 0]), initialEventId: 'tentacle-attack',
     });
     const pending = session.snapshot().pendingEventTargetId;
     expect(session.resolveEvent(itemResponse('fishingNet'))).toMatchObject({
@@ -1161,7 +1165,7 @@ describe('SurvivalSession daytime actions', () => {
 
   it('reports Food and Health lost through a concrete Snatcher target', () => {
     const session = new SurvivalSession(saved('cannedFood', 'fishingNet'), {
-      seed: 26, random: sequenceRandom([0, 0]), initialEventId: 'snatcher',
+      seed: 26, random: sequenceRandom([0, 0]), initialEventId: 'tentacle-attack',
     });
     expect(session.snapshot()).toMatchObject({ food: 1, pendingEventTargetId: 'cannedFood-1' });
 
@@ -1174,7 +1178,7 @@ describe('SurvivalSession daytime actions', () => {
 
   it('reports one net Food delta when an authored loss and target loss both change the aggregate', () => {
     const session = new SurvivalSession(saved('cannedFood', 'cannedFood'), {
-      seed: 28, random: sequenceRandom([0.99, 0]), initialEventId: 'snatcher',
+      seed: 28, random: sequenceRandom([0.99, 0]), initialEventId: 'tentacle-attack',
     });
     expect(session.snapshot().pendingEventTargetId).toBe('cannedFood-2');
     const combinedEvent: SurvivalEventDefinition = {

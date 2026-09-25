@@ -12,8 +12,8 @@ import { createTestPropModels } from './helpers/propModels';
 const RETURN_CASES = [
   ['swarm-of-sharks', 'fishingNet', 'usable'],
   ['swarm-of-sharks', 'fishingNet', 'broken'],
-  ['snatcher', 'fishingNet', 'usable'],
-  ['snatcher', 'fishingNet', 'broken'],
+  ['tentacle-attack', 'fishingNet', 'usable'],
+  ['tentacle-attack', 'fishingNet', 'broken'],
   ['death-stare', 'fishingNet', 'broken'],
   ['dangerous-waters', 'spyglass', 'usable'],
   ['school-of-fish', 'spyglass', 'usable'],

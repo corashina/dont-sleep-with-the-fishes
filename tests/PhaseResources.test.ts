@@ -25,7 +25,6 @@ function audioBackend() {
     play: vi.fn(() => null),
     playSpatialLoop: vi.fn(() => null),
     setListenerPose: vi.fn(),
-    setBusGain: vi.fn(),
     setMasterGain: vi.fn(),
     dispose: vi.fn(),
   } satisfies AudioBackend;

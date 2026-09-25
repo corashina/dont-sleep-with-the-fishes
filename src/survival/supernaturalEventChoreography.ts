@@ -55,6 +55,7 @@ const REVEAL_DURATIONS: Readonly<Record<SupernaturalAnimationEventId, number>> =
 const ITEM_DURATIONS = Object.freeze({
   ghosts: Object.freeze({ flareGun: 1.2, flashlight: 1.35 }),
   'eerie-melody': Object.freeze({
+    radio: 1.65,
     bucket: 1.35,
     spyglass: 1.45,
     umbrella: 1.5,
@@ -285,6 +286,9 @@ export function sampleSupernaturalItemUse(
     }
   } else {
     switch (choiceId) {
+      case 'radio':
+        output.effect = pulse(t, 0.52, 0.72, 0.98);
+        break;
       case 'bucket':
         output.y = 0.42 * hold;
         output.pitch = -0.56 * impact;

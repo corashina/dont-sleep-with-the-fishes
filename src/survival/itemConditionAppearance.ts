@@ -1,4 +1,4 @@
-import { Box3, BufferGeometry, DoubleSide, Material, Matrix4, Mesh, Object3D, Vector3 } from 'three';
+import { BackSide, Box3, BufferGeometry, DoubleSide, Material, Matrix4, Mesh, MeshStandardMaterial, Object3D, Vector3 } from 'three';
 import { ITEM_DEFINITIONS, type ItemId } from '../game/ItemState';
 import { createBrokenGeometry } from './brokenItemGeometry';
 
@@ -41,7 +41,8 @@ export function prepareItemCondition(
     const cached = materials.get(source);
     if (cached !== undefined) return cached;
     const clone = source.clone();
-    clone.side = DoubleSide;
+    // Open tank walls must show their holes, not bright inward-facing surfaces.
+    clone.side = itemId === 'scubaSet' ? source.side : DoubleSide;
     materials.set(source, clone);
     ownedMaterials.add(clone);
     return clone;
@@ -51,6 +52,15 @@ export function prepareItemCondition(
     const toUnit = normalize.clone().multiply(toRoot).multiply(mesh.matrixWorld);
     const baseMaterials = Array.isArray(mesh.material) ? mesh.material.map(damagedMaterial) : [damagedMaterial(mesh.material)];
     const brokenGeometry = createBrokenGeometry(mesh.geometry, toUnit, itemId);
+    const rim = brokenGeometry.groups.at(-1);
+    if (itemId === 'scubaSet' && rim?.materialIndex === baseMaterials.length) {
+      const edge = new MeshStandardMaterial({ color: 0x62605a, roughness: 0.82, metalness: 0.35, side: DoubleSide });
+      const inside = new MeshStandardMaterial({ color: 0x151c20, roughness: 1, side: BackSide });
+      brokenGeometry.addGroup(0, rim.start, baseMaterials.length + 1);
+      baseMaterials.push(edge, inside);
+      ownedMaterials.add(edge);
+      ownedMaterials.add(inside);
+    }
     ownedGeometries.add(brokenGeometry);
     bindings.push({
       mesh,

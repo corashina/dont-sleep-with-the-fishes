@@ -5,12 +5,16 @@ import type { ItemConditionBinding } from './itemConditionAppearance';
 /** Bake storage clearance once; condition changes still only swap resources. */
 export function fitBrokenItemToStorage(root: Object3D, bindings: readonly ItemConditionBinding[], itemId: ItemId): void {
   if (bindings.length === 0) return;
-  if (itemId === 'fishingNet') {
-    seatNetFragments(root, bindings);
-    return;
-  }
+  // Punctures remove only wall material; the intact storage pose still fits exactly.
+  if (itemId === 'bucket') return;
   root.updateWorldMatrix(true, true);
   const toStorage = root.parent?.matrixWorld.clone().invert() ?? new Matrix4();
+  if (itemId === 'fishingNet') {
+    // Lower the connected net to a 2 mm clearance over the gunwale.
+    const transforms = bindings.map(({ mesh }) => toStorage.clone().multiply(mesh.matrixWorld));
+    translateFragments(bindings, transforms, [-0.00435]);
+    return;
+  }
   const usable = new Box3();
   const broken = new Box3();
   const point = new Vector3();
@@ -24,23 +28,22 @@ export function fitBrokenItemToStorage(root: Object3D, bindings: readonly ItemCo
     }
     return matrix;
   });
-  const originalSize = usable.getSize(new Vector3());
-  const damagedSize = broken.getSize(new Vector3());
-  const scale = Math.min(1,
-    originalSize.x / Math.max(damagedSize.x, 0.0001),
-    originalSize.z / Math.max(damagedSize.z, 0.0001),
-    Math.max(originalSize.y, 0.06) / Math.max(damagedSize.y, 0.0001));
-  const offset = usable.getCenter(new Vector3()).sub(broken.getCenter(new Vector3()).multiplyScalar(scale));
-  offset.y = usable.min.y + 0.002 - broken.min.y * scale;
-  const fit = new Matrix4().makeTranslation(offset.x, offset.y, offset.z)
-    .multiply(new Matrix4().makeScale(scale, scale, scale));
+  // A wider damage pose needs more space, not smaller fragments.
+  const offset = usable.getCenter(new Vector3()).sub(broken.getCenter(new Vector3()));
+  offset.y = usable.min.y + 0.002 - broken.min.y;
+  if (itemId === 'anchor') {
+    // Full-size fragments sit inward of the hull and ahead of the floor rib.
+    offset.x += 0.10;
+    offset.z -= 0.08;
+  }
+  const fit = new Matrix4().makeTranslation(offset.x, offset.y, offset.z);
   bindings.forEach(({ brokenGeometry }, index) => {
     const matrix = transforms[index]!;
     brokenGeometry.applyMatrix4(matrix.clone().invert().multiply(fit).multiply(matrix));
     brokenGeometry.computeBoundingBox();
     brokenGeometry.computeBoundingSphere();
   });
-  if (itemId === 'map' || itemId === 'spyglass' || itemId === 'anchor' || itemId === 'umbrella' || itemId === 'flashlight') {
+  if (['map', 'spyglass', 'anchor', 'flashlight'].includes(itemId)) {
     seatFragments(bindings, transforms, usable.min.y + 0.002);
   }
 }
@@ -77,13 +80,4 @@ function translateFragments(bindings: readonly ItemConditionBinding[], transform
     brokenGeometry.computeBoundingBox();
     brokenGeometry.computeBoundingSphere();
   });
-}
-
-function seatNetFragments(root: Object3D, bindings: readonly ItemConditionBinding[]): void {
-  root.updateWorldMatrix(true, true);
-  const toStorage = root.parent?.matrixWorld.clone().invert() ?? new Matrix4();
-  const transforms = bindings.map(({ mesh }) => toStorage.clone().multiply(mesh.matrixWorld));
-  // Measured against the gunwale and floor rib in the authored net storage pose.
-  // Real-mesh clearance and contact tests protect these contact offsets.
-  translateFragments(bindings, transforms, [-0.00435351, 0.00723172]);
 }

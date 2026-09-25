@@ -619,7 +619,7 @@ export class ItemAnimationLabFlow {
     if (labOnlyUse) return undefined;
     this.dependencies.world.stageEvent?.(eventId);
     const reveal = eventId === 'handyman'
-      || (eventId === 'snatcher' && choiceId === 'attack');
+      || (eventId === 'tentacle-attack' && choiceId === 'attack');
     if (!reveal) return undefined;
     return this.dependencies.world.revealEvent?.(eventId) ?? Promise.resolve();
   }

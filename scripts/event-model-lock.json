@@ -146,24 +146,6 @@
       "sourceAnimationCount": 9,
       "downloadedOn": "2026-08-26"
     },
-    "tornadoCore": {
-      "id": "tornadoCore",
-      "pageUrl": "https://poly.pizza/m/2TBzV_5N0ci",
-      "publicId": "2TBzV_5N0ci",
-      "resourceId": "b48384ed-dc47-4bce-8c0b-c60bb3369ee2",
-      "downloadUrl": "https://static.poly.pizza/b48384ed-dc47-4bce-8c0b-c60bb3369ee2.glb",
-      "sourceAssetId": "poly-pizza:b48384ed-dc47-4bce-8c0b-c60bb3369ee2",
-      "modelName": "Tornado",
-      "author": "Poly by Google",
-      "license": "CC-BY 3.0",
-      "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-      "pageAnimated": false,
-      "sha256": "A3199265639E07658F4D30AB1384CF9CE33832D0CDAFBCAB6CD268357A91AF4F",
-      "sourceTriangles": 324,
-      "sourceHasSkins": false,
-      "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-26"
-    },
     "midnightShovel": {
       "id": "midnightShovel",
       "pageUrl": "https://poly.pizza/m/oNBQSf87ZJ",

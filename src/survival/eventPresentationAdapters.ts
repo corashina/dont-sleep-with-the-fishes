@@ -90,7 +90,7 @@ interface AdapterOperations {
   ): Promise<boolean>;
   itemAimTarget(): Object3D | null;
   hasPassed?(): boolean;
-  netCatch?: EventPresentationAdapter['netCatch'];
+  itemCatch?: EventPresentationAdapter['itemCatch'];
   interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;
   resultRoot(id: string): Object3D | null;
@@ -127,8 +127,8 @@ function createAdapter(
         ? operations.playItemUse(choiceId, instanceId)
         : operations.playItemUse(choiceId, instanceId, onAction);
     },
-    netCatch() {
-      return disposed ? null : operations.netCatch?.() ?? null;
+    itemCatch() {
+      return disposed ? null : operations.itemCatch?.() ?? null;
     },
     itemAimTarget(): Object3D | null {
       return disposed ? null : operations.itemAimTarget();
@@ -210,7 +210,7 @@ function createDedicatedPresentation(
     case 'ocean-of-blood': return new OceanOfBloodPresentation(environment);
     case 'leak': return new LeakPresentation(environment);
     case 'school-of-fish': return new SchoolOfFishPresentation(environment);
-    case 'snatcher': return new SnatcherPresentation(environment);
+    case 'tentacle-attack': return new SnatcherPresentation(environment);
     case 'death-stare': return new DeathStarePresentation(environment);
     case 'swarm-of-sharks': return new SharkSwarmPresentation(environment);
     case 'something-under-us': return new SomethingUnderUsPresentation(environment);
@@ -307,7 +307,7 @@ export const createDedicatedAdapter: EventPresentationAdapterFactory = (
         : onAction === undefined ? presentation.playItemUse(choiceId, instanceId)
           : presentation.playItemUse(choiceId, instanceId, onAction),
       itemAimTarget: () => active ? presentation.itemAimTarget : null,
-      netCatch: () => active ? presentation.netCatch?.() ?? null : null,
+      itemCatch: () => active ? presentation.itemCatch?.() ?? null : null,
       interactionTargets: () => active ? presentation.interactionTargets?.() ?? EMPTY_INTERACTION_TARGETS : EMPTY_INTERACTION_TARGETS,
       interactionRoot: (id) => active ? presentation.interactionRoot?.(id) ?? null : null,
       resultRoot: noRoot,
@@ -411,7 +411,7 @@ export const createFeaturedAdapter: EventPresentationAdapterFactory = (
     playChoice: noChoice,
     playItemUse: noItemUse,
     itemAimTarget: () => featured.itemAimTarget(eventId),
-    netCatch: () => featured.netCatch(),
+    itemCatch: () => featured.itemCatch(),
     interactionTargets: noInteractionTargets,
     interactionRoot: (id) => featured.interactionRoot(id),
     resultRoot: (id) => featured.resultRoot(id),
@@ -433,6 +433,8 @@ export const createWeatherAdapter: EventPresentationAdapterFactory = (eventId, d
     dependencies.focusedDependencies.camera,
     eventId,
     dependencies.dedicatedEnvironment,
+    dependencies.focusedDependencies.emitCue,
+    dependencies.boatParent,
   );
   try {
     return createAdapter(eventId, [

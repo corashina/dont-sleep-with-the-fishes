@@ -46,7 +46,7 @@ function setup(itemId: ItemId, context: EventItemUseContext) {
   return {
     root, supplies, adapter, controller, actor, position, rotation, scale, consumed, result, snapshot,
     play: () => controller.play({
-      eventId: context === 'tape-secure' ? 'windy-night' : 'snatcher',
+      eventId: context === 'tape-secure' ? 'windy-night' : 'tentacle-attack',
       choiceId: itemId, instanceId, itemId, context, aimTarget: target,
     }),
     dispose: () => {

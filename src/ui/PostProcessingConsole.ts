@@ -1,4 +1,6 @@
 import { onLanguageChange } from '../i18n/language';
+import { EventReactionControls } from './EventReactionControls';
+import type { EventReactionPreviewRequest } from '../survival/EventReactionPreview';
 import { settingsText, refreshSettingsText } from '../i18n/settingsMessages';
 import type { EventTestOption } from '../app/EventTest';
 import type { ItemAmbientOcclusionMode } from '../rendering/ItemAmbientOcclusion';
@@ -104,7 +106,6 @@ function buildEventTestControlHost(controls?: EventTestControls): string {
 
 function buildToolsCategory(options: ConsoleMarkupOptions): string {
   const controls = [
-    buildDiagnosticPhysicsControl(options.physicsControls),
     buildEventTestControlHost(options.eventTestControls),
   ].join('');
   if (controls.length === 0) return '';
@@ -150,7 +151,23 @@ function buildConsoleMarkup(options: ConsoleMarkupOptions): string {
         <button type="button" data-post-processing-close data-settings-aria="closeDeveloper" aria-label="${settingsText('closeDeveloper')}">×</button>
       </header>
       <div class="post-processing-console__sections">
+        <div class="post-processing-console__column" data-console-tests>
           ${buildToolsCategory(options)}
+        </div>
+        <div class="post-processing-console__column">
+          <section class="post-processing-console__category">
+            <h2 data-settings-copy="gameplay">${settingsText('gameplay')}</h2>
+            ${buildGameplayPhysicsControl(options.physicsControls)}
+            ${buildTimeOfDayControl(options.timeOfDayControls)}
+            <div class="post-processing-console__group">
+              <strong data-settings-copy="weather">${settingsText('weather')}</strong>
+              <label class="post-processing-console__select">
+                <span><span data-settings-copy="presentation">${settingsText('presentation')}</span>
+                <output data-weather-source>${settingsText(options.weatherControls.source)}</output></span>
+                <select data-presentation-weather>${weatherOptions}</select>
+              </label>
+            </div>
+          </section>
           <section class="post-processing-console__category post-processing-console__category--graphics">
             <h2 data-settings-copy="graphicsUpper">${settingsText('graphicsUpper')}</h2>
             <div class="post-processing-console__group post-processing-console__group--ao">
@@ -166,23 +183,8 @@ function buildConsoleMarkup(options: ConsoleMarkupOptions): string {
               <div class="post-processing-console__sliders" data-post-processing-sliders></div>
             </div>
           </section>
-          <section class="post-processing-console__category">
-            <h2 data-settings-copy="gameplay">${settingsText('gameplay')}</h2>
-            ${buildGameplayPhysicsControl(options.physicsControls)}
-            ${buildTimeOfDayControl(options.timeOfDayControls)}
-            <div class="post-processing-console__group">
-              <strong data-settings-copy="weather">${settingsText('weather')}</strong>
-              <label class="post-processing-console__select">
-                <span>
-                  <span data-settings-copy="presentation">${settingsText('presentation')}</span>
-                  <output data-weather-source>${settingsText(options.weatherControls.source)}</output>
-                </span>
-                <select data-presentation-weather>
-                  ${weatherOptions}
-                </select>
-              </label>
-            </div>
-          </section>
+          ${options.physicsControls === undefined ? '' : `<section class="post-processing-console__category">${buildDiagnosticPhysicsControl(options.physicsControls)}</section>`}
+        </div>
       </div>
     </section>
   `;
@@ -196,6 +198,7 @@ export class PostProcessingConsole {
   private weatherId: PresentationWeatherId;
   private weatherControlSource: WeatherControlSource;
   private disposed = false;
+  private readonly reactionControls: EventReactionControls | null;
   private readonly unsubscribeLanguage: () => void;
 
   constructor(
@@ -206,6 +209,7 @@ export class PostProcessingConsole {
     private readonly weatherControls: WeatherControls = DEFAULT_WEATHER_CONTROLS,
     private readonly timeOfDayControls?: TimeOfDayControls,
     private readonly eventTestControls?: EventTestControls,
+    previewReaction?: (request: EventReactionPreviewRequest) => Promise<void>,
   ) {
     const state = controls.getState();
     this.weatherId = weatherControls.selected;
@@ -219,6 +223,12 @@ export class PostProcessingConsole {
       weatherControls,
     });
     this.panel = this.requireElement('[data-post-processing-panel]');
+    this.reactionControls = previewReaction === undefined ? null : new EventReactionControls(async request => {
+      this.setOpen(false);
+      try { await previewReaction(request); }
+      finally { if (!this.disposed) this.setOpen(true); }
+    });
+    if (this.reactionControls !== null) this.requireElement('[data-console-tests]').append(this.reactionControls.element);
     if (eventTestControls !== undefined) this.buildEventTestControl(eventTestControls);
     this.weatherSelect = this.requireElement('[data-presentation-weather]');
     this.weatherSource = this.requireElement('[data-weather-source]');
@@ -266,6 +276,7 @@ export class PostProcessingConsole {
     if (!this.panel.hidden) this.onOpenChange(false);
     this.disposed = true;
     this.unsubscribeLanguage();
+    this.reactionControls?.dispose();
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('click', this.handleOutsideClick, true);
     this.element.removeEventListener('click', this.handleClick);
@@ -287,6 +298,7 @@ export class PostProcessingConsole {
       if (span) span.textContent = definition.label;
     }
     this.refreshEventTestLanguage();
+    this.reactionControls?.refreshLanguage();
   };
 
   private refreshEventTestLanguage(): void {

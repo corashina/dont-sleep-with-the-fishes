@@ -18,7 +18,6 @@ import {
   MENU_SOUND_IDS,
   SHIP_SOUND_IDS,
   SURVIVAL_SOUND_IDS,
-  type AudioBusId,
   type SoundId,
 } from '../src/audio/audioManifest';
 
@@ -43,7 +42,6 @@ class FakeVoice implements AudioVoice {
 
 class FakeAudioBackend implements AudioBackend {
   readonly voices: FakeVoice[] = [];
-  readonly busGains: [AudioBusId, number, number | undefined][] = [];
   readonly masterGains: number[] = [];
   readonly dispose = vi.fn();
   readonly spatial: Array<{
@@ -77,16 +75,56 @@ class FakeAudioBackend implements AudioBackend {
     this.listenerPoses.push(pose);
   }
 
-  setBusGain(bus: AudioBusId, gain: number, rampSeconds?: number): void {
-    this.busGains.push([bus, gain, rampSeconds]);
-  }
-
   setMasterGain(gain: number): void {
     this.masterGains.push(gain);
   }
 }
 
 describe('AudioSystem', () => {
+  // Importance: 98/100. Phase loading must not leave survival audio muted until a tab switch.
+  it('keeps survival output audible after disposing paused scavenging audio', async () => {
+    const gains: { value: number }[] = [];
+    const context = {
+      createGain: () => {
+        const gain = {
+          value: 1,
+          cancelScheduledValues: vi.fn(),
+          setValueAtTime(value: number) { this.value = value; },
+          linearRampToValueAtTime(value: number) { this.value = value; },
+        };
+        gains.push(gain);
+        return { connect: vi.fn(), disconnect: vi.fn(), gain };
+      },
+      createBufferSource: () => ({
+        connect: vi.fn(), disconnect: vi.fn(), start: vi.fn(), stop: vi.fn(),
+      }),
+      destination: {}, currentTime: 0, state: 'running', close: async () => undefined,
+      decodeAudioData: async () => ({ duration: 1 }),
+    };
+    const backend = new WebAudioBackend(
+      context as unknown as AudioContext,
+      async () => new Response(new Uint8Array([1, 2, 3])),
+    );
+    const system = AudioSystem.forTest(backend);
+    const outputs = [...gains];
+    try {
+      const shipLease = await system.acquirePhaseAudio(SHIP_SOUND_IDS);
+      const ship = new ScavengeAudio(system.createScope(), []);
+      ship.start();
+      // Game.acquirePhase opens the loading overlay before replacing the phase.
+      ship.setPaused(true);
+      await system.acquirePhaseAudio(SURVIVAL_SOUND_IDS);
+      ship.dispose();
+      shipLease.dispose();
+      const survival = new SurvivalAudio(system.createScope());
+      survival.start();
+
+      for (const output of outputs) expect(output.value).toBeGreaterThan(0);
+    } finally {
+      system.dispose();
+    }
+  });
+
   // Importance: 98/100. All ending popups must ring and leave gameplay sounds stopped.
   it.each(['rescue', 'kraken', 'death', 'sinking'] as const)('rings at the %s popup and stays quiet afterward', (id) => {
     const backend = new FakeAudioBackend();
@@ -370,6 +408,23 @@ describe('AudioSystem', () => {
     expect(backend.voices[0]!.stop).toHaveBeenCalled();
   });
 
+  // Importance: 95/100. The bite sound must survive the instant blackout and obey pause/disposal.
+  it('plays the shark bite through blackout and owns its voice', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.sharkBite();
+    expect(backend.voices.map(({ id }) => id)).toEqual(['midnightMonsterAttack']);
+    const voice = backend.voices[0]!;
+    audio.finishEventReaction();
+    expect(voice.stop).not.toHaveBeenCalled();
+    audio.setPaused(true);
+    expect(voice.setPaused).toHaveBeenLastCalledWith(true);
+    audio.dispose();
+    expect(voice.stop).toHaveBeenCalled();
+    audio.sharkBite();
+    expect(backend.voices.filter(({ id }) => id === 'midnightMonsterAttack')).toHaveLength(1);
+  });
+
   it('owns Midnight Tour sounds and stops each active voice', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
@@ -510,14 +565,6 @@ describe('AudioSystem', () => {
     const music = scope.play('scavengeChase') as FakeVoice;
     scope.setPaused(true);
     scope.setPaused(false);
-    expect(backend.busGains).toEqual([
-      ['music', 0, 0.05],
-      ['ambience', 0, 0.05],
-      ['effects', 0, 0.05],
-      ['music', 1, 0.05],
-      ['ambience', 1, 0.05],
-      ['effects', 1, 0.05],
-    ]);
     expect(music.setPaused.mock.calls).toEqual([[true], [false]]);
     expect(backend.voices.map(({ id }) => id)).toEqual([
       'scavengeChase',

@@ -15,7 +15,7 @@ Lost or consumed items still depart.
 | Item | Event | Details |
 | --- | --- | --- |
 | Fishing net | Swarm of Sharks | Both usable and broken outcomes. |
-| Fishing net | Tentacle Attack (`snatcher`) | Both usable and broken outcomes. |
+| Fishing net | Tentacle Attack (`tentacle-attack`) | Both usable and broken outcomes. |
 | Fishing net | Death Stare | The net breaks but remains in inventory. |
 | Binoculars (`spyglass`) | Dangerous Waters | Both outcomes. |
 | Binoculars (`spyglass`) | School of Fish | Observation use. |
