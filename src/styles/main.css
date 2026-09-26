@@ -1665,17 +1665,11 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   overflow-wrap: anywhere;
   text-align: center;
 }
-.routine-dialog--repair .repair-target__discard {
-  min-width: 0;
-  width: 100%;
-  margin: 0;
-}
 .repair-target:not(:disabled):hover { transform: translateY(-2px); filter: brightness(1.15); }
 .repair-target:focus-visible { outline: 3px solid #75543b; outline-offset: 3px; }
 .repair-target:not(:disabled):active { transform: translateY(1px) scale(.97); }
 .repair-target:disabled { cursor: not-allowed; opacity: .46; }
 .repair-target[aria-disabled="true"] { cursor: not-allowed; opacity: .46; }
-.repair-target__discard:focus-visible { outline: 3px solid #75543b; outline-offset: 3px; filter: brightness(1.18); }
 .routine-dialog--repair [data-repair-cancel]:focus-visible { outline: 3px solid #75543b; outline-offset: 3px; filter: brightness(1.18); }
 .survival-ui .primary-action { min-width: 180px; }
 .survival-ui .primary-action:not(.salvage-action) { transition: transform 160ms ease, opacity 160ms ease; }

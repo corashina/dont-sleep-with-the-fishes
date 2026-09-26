@@ -19,5 +19,5 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# Generated ocean foam verification captures
-/artifacts/ocean-foam/
+# Generated review and verification files
+/artifacts/

@@ -212,7 +212,7 @@ export class SurvivalFishingView {
       const name = condition === 'broken' ? uiDynamic('brokenItem', ITEM_LABELS[itemId]) : ITEM_LABELS[itemId];
       const amount = `${quantity > 0 ? '+' : '−'}${Math.abs(quantity)}`;
       entry.setAttribute('role', 'img');
-      entry.setAttribute('aria-label', `${name}: ${amount}`);
+      entry.setAttribute('aria-label', quantity === 1 ? name : `${name}: ${amount}`);
       entry.title = name;
       const art = document.createElement('span');
       art.className = 'weight-circle is-filled dive-result__reward';
@@ -225,17 +225,20 @@ export class SurvivalFishingView {
       thumbnail.decoding = 'async';
       thumbnail.draggable = false;
       art.append(thumbnail);
-      const count = document.createElement('span');
-      count.className = 'dive-result__reward-quantity ui-role-numeral';
-      count.textContent = amount;
-      count.setAttribute('aria-hidden', 'true');
       const copy = document.createElement('span');
       copy.className = 'dive-result__reward-copy';
       const label = document.createElement('strong');
       label.className = 'dive-result__reward-name ui-role-context';
       label.textContent = name;
       label.setAttribute('aria-hidden', 'true');
-      copy.append(label, count);
+      copy.append(label);
+      if (quantity !== 1) {
+        const count = document.createElement('span');
+        count.className = 'dive-result__reward-quantity ui-role-numeral';
+        count.textContent = amount;
+        count.setAttribute('aria-hidden', 'true');
+        copy.append(count);
+      }
       entry.append(art, copy);
       return entry;
     }));

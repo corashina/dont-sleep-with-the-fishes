@@ -615,8 +615,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-repair-options]')).toBe(dialog);
     const targets = [...mount.querySelectorAll<HTMLButtonElement>('[data-repair-target]')];
     expect(targets.map(({ dataset }) => dataset.repairTarget)).toEqual(['bucket-2', 'compass-4']);
-    expect([...mount.querySelectorAll<HTMLButtonElement>('[data-discard-target]')]
-      .map(({ dataset }) => dataset.discardTarget)).toEqual(['bucket-2', 'compass-4']);
+    expect(mount.querySelector('[data-discard-target]')).toBeNull();
     const thumbnail = targets[0]!.querySelector<HTMLImageElement>('img')!;
     expect(thumbnail.src).toContain('/bucket.png');
     expect(targets[0]!.getAttribute('aria-label')).toBe('BUCKET — BROKEN');
@@ -635,43 +634,39 @@ describe('SurvivalUI', () => {
     expect(action).not.toHaveBeenCalled();
   });
 
-  it('opens broken item actions without tape and dispatches discard for that instance', () => {
+  // Importance: 95. Broken item input must not open repair options or use the item.
+  it.each([
+    ['bucket', false], ['bucket', true], ['scubaSet', false], ['scubaSet', true],
+  ] as const)('ignores broken %s activation with tape: %s', (itemType, hasTape) => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = new SurvivalUI(mount);
     activeUIs.push(ui);
-    const instanceId = 'bucket-1' as ItemInstanceId;
-    const state = new SurvivalSession(saved('bucket'), {
+    const instanceId = `${itemType}-1` as ItemInstanceId;
+    const state = new SurvivalSession(saved(itemType, ...(hasTape ? ['ductTape' as const] : [])), {
       seed: 1,
       initialConditions: { [instanceId]: 'broken' as const },
     }).snapshot();
     const action = vi.fn();
     ui.onAction = action;
-    ui.render(state, (id) => id === 'repairItem' ? 'No Duct Tape remains.' : null);
+    ui.render(state, (id) => id === 'repairItem' && !hasTape ? 'No Duct Tape remains.' : null);
     ui.setAnchors([{
-      id: instanceId, itemType: 'bucket', toolId: null, action: null, remainingUses: 0,
+      id: instanceId, itemType, toolId: null, action: itemType === 'scubaSet' ? 'dive' : null, remainingUses: 0,
       quantity: 1, usableQuantity: 0, brokenQuantity: 1,
       x: 320, y: 240, visible: true, depleted: false,
     }]);
 
     const anchor = mount.querySelector<HTMLButtonElement>(`[data-anchor-id="${instanceId}"]`)!;
     expect(anchor.getAttribute('aria-disabled')).toBe('false');
-    expect(anchor.getAttribute('aria-description')).toContain('Choose Repair or Discard.');
-    anchor.click();
-
     const dialog = mount.querySelector<HTMLElement>('[data-repair-options]')!;
-    expect(dialog.classList).toContain('is-visible');
-    const repair = dialog.querySelector<HTMLButtonElement>('[data-repair-target]')!;
-    expect(repair.getAttribute('aria-disabled')).toBe('true');
-    expect(repair.disabled).toBe(false);
-    expect(dialog.querySelector('[data-repair-unavailable]')?.textContent)
-      .toBe('Repair unavailable: No Duct Tape remains.');
-    repair.click();
-    expect(action).not.toHaveBeenCalled();
-
-    dialog.querySelector<HTMLButtonElement>('[data-discard-target]')!.click();
-    expect(action).toHaveBeenCalledWith('discardItem', { kind: 'itemDiscard', target: instanceId });
+    anchor.click();
     expect(dialog.classList).not.toContain('is-visible');
+    press(`[data-anchor-id="${instanceId}"]`, 'Enter');
+    expect(dialog.classList).not.toContain('is-visible');
+    press(`[data-anchor-id="${instanceId}"]`, ' ');
+    expect(dialog.classList).not.toContain('is-visible');
+    expect(action).not.toHaveBeenCalled();
+    expect(anchor.getAttribute('aria-description')).not.toContain('Choose Repair or Discard.');
   });
 
   it('shows event feedback and routes only eligible physical anchors', async () => {

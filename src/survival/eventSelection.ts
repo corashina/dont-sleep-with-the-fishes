@@ -132,6 +132,16 @@ export function survivalEventFallbackById(
   return Object.values(FALLBACKS).find((event) => event.id === id);
 }
 
+function eventDrawWeight(
+  event: SurvivalEventDefinition,
+  eligibility: EventEligibility,
+): number {
+  const appearances = eligibility.appearanceCounts.get(event.id) ?? 0;
+  // Keep repeats possible, but favor variety across a 30–35 day run.
+  // First appearance: full weight; one prior appearance: 1/8; two: 1/27.
+  return weightedEventDrawWeight(event, eligibility.pressure ?? 0) / (appearances + 1) ** 3;
+}
+
 export function drawWeightedEvent(
   random: RandomSource,
   events: readonly SurvivalEventDefinition[],
@@ -142,15 +152,14 @@ export function drawWeightedEvent(
     if (eligibility.phase === 'day') return FALLBACKS.day;
     throw new Error(`No eligible night event on day ${eligibility.day}.`);
   }
-  const pressure = eligibility.pressure ?? 0;
   const totalWeight = pool.reduce(
-    (sum, eventEntry) => sum + weightedEventDrawWeight(eventEntry, pressure),
+    (sum, eventEntry) => sum + eventDrawWeight(eventEntry, eligibility),
     0,
   );
   const roll = random.next() * totalWeight;
   let boundary = 0;
   for (const eventEntry of pool) {
-    boundary += weightedEventDrawWeight(eventEntry, pressure);
+    boundary += eventDrawWeight(eventEntry, eligibility);
     if (roll < boundary) return eventEntry;
   }
   return pool[pool.length - 1]!;

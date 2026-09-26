@@ -35,7 +35,6 @@ export class SurvivalModalViews {
   onReturnToMenu: () => void = () => undefined;
   onEndingReady: (id: Exclude<EndingRecord, { id: 'dorothy' }>['id']) => void = () => undefined;
   onRepairTarget: (instanceId: ItemInstanceId) => void = () => undefined;
-  onDiscardTarget: (instanceId: ItemInstanceId) => void = () => undefined;
   onRepairCancel: () => void = () => undefined;
 
   private readonly repairTargets: HTMLElement;
@@ -57,10 +56,8 @@ export class SurvivalModalViews {
     refreshUiText(this.repairRoot, this.pauseRoot, this.endingRoot);
     for (const item of this.currentRepairItems) {
       const repair = this.repairTargets.querySelector<HTMLButtonElement>(`[data-repair-target="${item.instanceId}"]`);
-      const discard = this.repairTargets.querySelector<HTMLButtonElement>(`[data-discard-target="${item.instanceId}"]`);
       const name = this.repairTargets.querySelector<HTMLElement>(`[data-repair-item-name="${item.instanceId}"]`);
       if (repair) this.labelRepairTarget(repair, item);
-      if (discard) this.labelDiscardTarget(discard, item);
       if (name) name.textContent = ITEM_LABELS[item.type];
     }
     this.labelRepairAvailability();
@@ -142,7 +139,6 @@ export class SurvivalModalViews {
   showRepairOptions(
     items: readonly Readonly<SurvivalItemState>[],
     repairReason: () => string | null = () => null,
-    showDiscard = true,
   ): void {
     if (this.disposed) return;
     this.currentRepairItems = items;
@@ -170,17 +166,6 @@ export class SurvivalModalViews {
       name.dataset.repairItemName = item.instanceId;
       name.textContent = ITEM_LABELS[item.type];
       row.append(button, name);
-      if (showDiscard) {
-        const discard = document.createElement('button');
-        discard.type = 'button';
-        discard.className = 'primary-action salvage-action repair-target__discard ui-role-context';
-        discard.dataset.discardTarget = item.instanceId;
-        discard.dataset.itemType = item.type;
-        discard.textContent = uiText('discardItem');
-        this.labelDiscardTarget(discard, item);
-        discard.disabled = this.repairBusy;
-        row.append(discard);
-      }
       return row;
     });
     this.repairTargets.replaceChildren(...targets);
@@ -193,12 +178,6 @@ export class SurvivalModalViews {
     const reason = this.currentRepairReason();
     button.setAttribute('aria-disabled', String(reason !== null));
     button.setAttribute('aria-description', reason ?? uiDynamic('repairItemHelp', ITEM_LABELS[item.type]));
-  }
-
-  private labelDiscardTarget(button: HTMLButtonElement, item: Readonly<SurvivalItemState>): void {
-    button.textContent = uiText('discardItem');
-    button.setAttribute('aria-label', `${uiText('discardItem')} — ${ITEM_LABELS[item.type]}`);
-    button.setAttribute('aria-description', uiDynamic('discardItemHelp', ITEM_LABELS[item.type]));
   }
 
   private labelRepairAvailability(): void {
@@ -291,7 +270,6 @@ export class SurvivalModalViews {
       () => { this.onReturnToMenu = () => undefined; },
       () => { this.onEndingReady = () => undefined; },
       () => { this.onRepairTarget = () => undefined; },
-      () => { this.onDiscardTarget = () => undefined; },
       () => { this.onRepairCancel = () => undefined; },
     ]));
   }
@@ -321,8 +299,6 @@ export class SurvivalModalViews {
     if (instanceId !== undefined && this.repairTargets.contains(button)) {
       if (button.getAttribute('aria-disabled') === 'true') return;
       this.onRepairTarget(instanceId);
-    } else if (button.dataset.discardTarget !== undefined && this.repairTargets.contains(button)) {
-      this.onDiscardTarget(button.dataset.discardTarget as ItemInstanceId);
     } else if (button.hasAttribute('data-repair-cancel')) {
       this.onRepairCancel();
     }

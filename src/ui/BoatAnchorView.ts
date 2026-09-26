@@ -166,7 +166,6 @@ export class BoatAnchorView {
   readonly roots: readonly [HTMLElement, HTMLElement];
 
   onAction: (action: DayActionId, origin: HTMLButtonElement) => void = () => undefined;
-  onBrokenItem: (instanceId: ItemInstanceId, origin: HTMLButtonElement) => void = () => undefined;
   onUnavailableAction: (action: DayActionId, reason: string) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
   onEventChoice: (choiceId: EventResponseId) => void = () => undefined;
@@ -666,7 +665,6 @@ export class BoatAnchorView {
     clean(() => document.removeEventListener('click', this.handleDocumentClick));
     clean(() => window.removeEventListener('resize', this.handleWindowResize));
     clean(() => { this.onAction = () => undefined; });
-    clean(() => { this.onBrokenItem = () => undefined; });
     clean(() => { this.onUnavailableAction = () => undefined; });
     clean(() => { this.onEventItem = () => undefined; });
     clean(() => { this.onEventChoice = () => undefined; });
@@ -1389,7 +1387,7 @@ export class BoatAnchorView {
     if (this.handleCarlitosAnchorClick(button)) return;
     if (this.handleEventFocusClick(button)) return;
     if (this.handleEventItemClick(button)) return;
-    if (this.handleBrokenItemClick(button)) return;
+    if (button.dataset.condition === 'broken') return;
     const action = ACTIONS.find(({ id }) => id === button.dataset.action);
     if (this.handleUnavailableAnchorClick(button, action)) return;
     if (button.hasAttribute('data-event-choice')) return this.activateEventChoice(button);
@@ -1422,14 +1420,6 @@ export class BoatAnchorView {
     if (choiceId !== undefined && !this.busy && this.eventSelectedInstanceId === null) {
       this.onEventItem(choiceId, instanceId);
     }
-    return true;
-  }
-
-  private handleBrokenItemClick(button: HTMLButtonElement): boolean {
-    if (!this.allowsDayActions() || button.dataset.condition !== 'broken') return false;
-    const instanceId = this.instanceIdForButton(button);
-    if (instanceId === undefined || this.busy) return false;
-    this.onBrokenItem(instanceId, button);
     return true;
   }
 

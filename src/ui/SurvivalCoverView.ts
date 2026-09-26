@@ -453,7 +453,7 @@ export class SurvivalCoverView {
       ? presentationUiText(({ flowers: 'brain', blood: 'heart', chest: 'kidneys' } as const)[reward.id])
       : diveRewardName(reward);
     copy.append(name);
-    if (reward.kind !== 'heartPiece') {
+    if (reward.kind !== 'heartPiece' && reward.quantity !== 1) {
       const quantity = document.createElement('span');
       quantity.className = 'dive-result__reward-quantity ui-role-numeral';
       quantity.dataset.diveResultRewardQuantity = '';

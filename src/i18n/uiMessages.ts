@@ -553,9 +553,9 @@ export const uiCatalog = {
     "es-AR": "DESCARTAR"
   },
   "brokenItemHelp": {
-    "en": "Choose Repair or Discard.",
-    "pl": "Wybierz naprawę lub wyrzucenie.",
-    "es-AR": "Elegí Reparar o Descartar."
+    "en": "Use Duct Tape to repair this item.",
+    "pl": "Użyj taśmy klejącej, aby naprawić ten przedmiot.",
+    "es-AR": "Usá cinta adhesiva para reparar este objeto."
   },
   "answerRadio": {
     "en": "ANSWER RADIO",
