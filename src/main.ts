@@ -3,8 +3,10 @@ import './styles/main.css';
 import './styles/settings.css';
 import { launchGame } from './app/launchGame';
 import { initializeLanguage } from './i18n/language';
+import { initializeAnalytics } from './browser/GoogleAnalytics';
 
 initializeLanguage();
+initializeAnalytics();
 
 const mount = document.querySelector<HTMLElement>('#app');
 if (!mount) throw new Error('Missing #app mount element');

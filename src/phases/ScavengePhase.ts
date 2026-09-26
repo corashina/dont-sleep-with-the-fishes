@@ -1,4 +1,5 @@
 import { onLanguageChange } from '../i18n/language';
+import { trackGameEnding, trackGameStart } from '../browser/GoogleAnalytics';
 import { prepareScene } from '../rendering/prepareScene';
 import { reportLoadingStage, type ReportLoadingProgress } from '../app/LoadingProgress';
 import {
@@ -265,6 +266,7 @@ export class ScavengePhase implements GamePhase {
       this.startEndingPreview();
       return;
     }
+    trackGameStart();
     if (this.input.pointerLocked) {
       this.beginIntro();
     } else {
@@ -439,6 +441,7 @@ export class ScavengePhase implements GamePhase {
     this.dorothyEnding = Object.freeze({
       id: 'dorothy', day: 0, savedPickupCount: snapshot.savedCount,
     });
+    if (this.phaseStart !== 'ending-preview') trackGameEnding(this.dorothyEnding);
   }
 
   private startSinking(): void {

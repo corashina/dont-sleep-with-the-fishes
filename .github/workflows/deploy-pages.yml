@@ -32,6 +32,8 @@ jobs:
 
       - name: Build
         run: bun run build
+        env:
+          VITE_GA_MEASUREMENT_ID: ${{ vars.VITE_GA_MEASUREMENT_ID }}
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

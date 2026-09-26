@@ -3,6 +3,7 @@ import { createTestGame,flushPhases } from './helpers/game';
 // Importance: 10/10 (scaled from 5/5). Protects full game lifecycle integration.
 
 import { describe,expect,it,vi } from 'vitest';
+import * as analytics from '../src/browser/GoogleAnalytics';
 import {
   Box3,
   Group,
@@ -1564,7 +1565,9 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(pausedDanger.alarmPulse).toBe(firstDanger.alarmPulse);
   });
 
+  // Importance: 95/100. A fatal deadline must emit one ending across repeated updates.
   it('sinks at the deadline outside the lifeboat bounds and keeps the cinematic active', () => {
+    const trackEnding = vi.spyOn(analytics, 'trackGameEnding');
     const session = new ScavengeSession();
     session.start();
     const { phase, updateWorld } = createUpdateHarness(session);
@@ -1591,6 +1594,7 @@ describe('ScavengePhase lifecycle integration', () => {
 
       const firstRecord = internals.ui.renderEnding.mock.calls.at(-1)![2];
       phase.update(1, 1);
+      expect(trackEnding).toHaveBeenCalledExactlyOnceWith(firstRecord);
       expect(internals.ui.renderEnding.mock.calls.at(-1)![2]).toBe(firstRecord);
       expect(Object.isFrozen(firstRecord)).toBe(true);
 
@@ -1602,6 +1606,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(cameraPosition.y).toBeCloseTo(15, 3);
       expect(cameraPosition.z).toBeCloseTo(34, 3);
     } finally {
+      trackEnding.mockRestore();
       if (originalExitPointerLock) {
         Object.defineProperty(document, 'exitPointerLock', originalExitPointerLock);
       } else {
@@ -1610,7 +1615,9 @@ describe('ScavengePhase lifecycle integration', () => {
     }
   });
 
+  // Importance: 95/100. Each real run must count once, including a restart.
   it('runs the complete failure timeline and restarts scavenging once', async () => {
+    const trackStart = vi.spyOn(analytics, 'trackGameStart');
     const mount = document.createElement('main');
     document.body.append(mount);
 
@@ -1659,6 +1666,11 @@ describe('ScavengePhase lifecycle integration', () => {
       const pointerLocked = vi.spyOn(firstInternals.input, 'pointerLocked', 'get')
         .mockReturnValue(true);
 
+      first.start();
+      first.start();
+      firstInternals.presentation = 'playing';
+      expect(trackStart).toHaveBeenCalledOnce();
+
       first.update(0, SCAVENGE_DURATION_SECONDS);
       await flushPhases();
       expect(firstInternals.ending).toEqual({ stage: 'sinking', elapsedSeconds: 0 });
@@ -1684,9 +1696,13 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(createScavenge).toHaveBeenCalledTimes(2);
       expect(createMenu).toHaveBeenCalledOnce();
       expect(phases[1]).toBeDefined();
+      phases[1]!.start();
+      phases[1]!.start();
+      expect(trackStart).toHaveBeenCalledTimes(2);
       expect(mount.querySelector('[data-start]')).toBeNull();
       expect(mount.querySelector('[data-hud]')).not.toBeNull();
     } finally {
+      trackStart.mockRestore();
       game.dispose();
       await flushPhases();
       mount.remove();

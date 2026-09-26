@@ -1,4 +1,5 @@
 import { COMPLETE_HEART } from './heartOfTheSea';
+import { trackGameEnding } from '../browser/GoogleAnalytics';
 import type { EventReactionPreviewRequest } from './EventReactionPreview';
 import { playEventReactionPreview, type EventReactionPreviewPorts } from './EventReactionPreviewPlayer';
 import { PerspectiveCamera } from 'three';
@@ -263,6 +264,7 @@ export class SurvivalPhase implements GamePhase {
   private itemAnimationLabCameraControls: ItemAnimationLabCameraControls | null = null;
   private rearCameraView = false;
   private readonly endingPreviewCue: 'death' | 'sinking' | null;
+  private readonly recordEnding: typeof trackGameEnding;
 
   constructor(
     context: SurvivalPhaseContext,
@@ -279,6 +281,9 @@ export class SurvivalPhase implements GamePhase {
     onReturnToMenu: () => void,
     testDependencies?: SurvivalPhaseTestDependencies,
   ) {
+    this.recordEnding = start.kind === 'restored'
+      || (start.kind === 'fresh' && start.initialEventId === undefined)
+      ? trackGameEnding : () => undefined;
     this.endingPreviewCue = start.kind === 'ending-preview'
       && (start.endingId === 'death' || start.endingId === 'sinking')
       ? start.endingId
@@ -1096,6 +1101,7 @@ export class SurvivalPhase implements GamePhase {
     this.presentedTerminalState = snapshot.state;
     this.clearTerminalCheckpoint();
     if (snapshot.ending !== null && snapshot.ending.id !== 'dorothy') {
+      this.recordEnding(snapshot.ending);
       if (snapshot.ending.id === 'rescue') {
         this.reportFocusedError(this.presentRescueEnding(snapshot.ending));
         return;

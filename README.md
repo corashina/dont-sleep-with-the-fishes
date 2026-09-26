@@ -90,6 +90,39 @@ bun run dev
 
 Open the local URL printed by Vite.
 
+## Google Analytics
+
+Production builds use the Google tag for GA4 traffic and engagement reports.
+Set the public measurement ID before building:
+
+1. Create a GA4 web data stream for the deployed site. Copy its `G-...` measurement ID.
+2. In GitHub, open **Settings → Secrets and variables → Actions → Variables**.
+3. Add the repository variable `VITE_GA_MEASUREMENT_ID` with that ID.
+4. Run the **Deploy to GitHub Pages** workflow again.
+
+For other hosts, copy `.env.example` to `.env.production` and set the same variable before building.
+The measurement ID is public. It is included in the browser bundle.
+Missing or invalid IDs disable analytics. Development, test, and playtest builds also disable analytics.
+Localhost, loopback previews, and URLs with a `playtest` parameter send no analytics.
+
+| Event | Trigger | Parameters |
+|---|---|---|
+| `game_start` | Scavenging starts, including a restart | None |
+| `game_death` | Dorothy sinks with the player, health reaches zero, or the lifeboat sinks | `ending_type`, `survival_day` |
+| `game_win` | Rescue or the Kraken ending | `ending_type`, `survival_day` |
+
+Each ending is sent once per phase. Loading a save does not send another `game_start`.
+Ending previews, event tests, and the animation lab send no gameplay events.
+`ending_type` is `dorothy`, `death`, `sinking`, `rescue`, or `kraken`.
+`survival_day` is zero for Dorothy and the current day for survival endings.
+The tag loads asynchronously. An unavailable tag does not block the game.
+
+In GA4, register `ending_type` as an event-scoped custom dimension.
+Register `survival_day` as an event-scoped custom metric with the standard unit.
+Use Realtime reports or [Tag Assistant](https://tagassistant.google.com/) to verify the deployed site.
+See Google's [tag setup](https://developers.google.com/tag-platform/gtagjs)
+and [event setup](https://developers.google.com/analytics/devguides/collection/ga4/events) guides.
+
 ## Audio source policy
 
 Source all new music and sound assets only from [Freesound](https://freesound.org/).
