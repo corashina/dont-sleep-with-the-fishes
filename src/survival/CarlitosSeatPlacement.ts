@@ -30,7 +30,6 @@ const SEATS: readonly Seat[] = [
     { id: `stern-${side}`, x: side * 0.65, z: 0.88, surfaceY: LIFEBOAT_DISPLAY_SHELF_SURFACE_Y, yaw: 0 },
     { id: `stern-rib-${side}`, x: side * 0.3, z: 1.7, surfaceY: -0.2625, yaw: 0 },
   ]),
-  { id: 'bow', x: 0, z: -3, surfaceY: LIFEBOAT_GUNWALE_SURFACE_Y, yaw: Math.PI },
   { id: 'stern', x: 0, z: 2.4, surfaceY: LIFEBOAT_GUNWALE_SURFACE_Y, yaw: 0 },
   { id: 'stern-rib-center', x: 0, z: 1.7, surfaceY: -0.2625, yaw: 0 },
   { id: 'stern-floor-center', x: 0, z: 2.1, surfaceY: LIFEBOAT_FLOOR_SURFACE_Y, yaw: 0 },
