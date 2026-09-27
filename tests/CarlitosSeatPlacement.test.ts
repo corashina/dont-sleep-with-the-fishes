@@ -1,6 +1,6 @@
 // Importance: 95/100. Prevents companion clipping and inaccessible off-screen seats.
 import { readFile } from 'node:fs/promises';
-import { AnimationClip, Box3, BoxGeometry, Group, InstancedMesh, Matrix4, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, Scene, Texture, Vector3 } from 'three';
+import { AnimationClip, Box3, BoxGeometry, Group, InstancedMesh, Matrix4, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, Raycaster, Scene, Texture, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { describe, expect, it, vi } from 'vitest';
 import { BoatWorld } from '../src/survival/BoatWorld';
@@ -15,6 +15,9 @@ import { CarlitosSeatPlacement } from '../src/survival/CarlitosSeatPlacement';
 import { boatSupplyTransform } from '../src/world/BoatStorage';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { EVENT_MODEL_SPECS } from '../src/world/eventModelManifest';
+import { LIFEBOAT_EQUIPMENT_IDS, LIFEBOAT_EQUIPMENT_MODEL_SPECS } from '../src/world/lifeboatEquipmentManifest';
+import { PRACTICAL_LIGHT_MODEL_IDS, PRACTICAL_LIGHT_MODEL_SPECS } from '../src/world/practicalLightModelManifest';
+import type { RuntimeModelSpec } from '../src/world/itemModelManifest';
 import { normalizeLongestDimensionTemplate } from '../src/world/modelValidation';
 import { PropModelLibrary } from '../src/world/PropModelLibrary';
 import { createLifeboat } from '../src/world/Lifeboat';
@@ -128,7 +131,7 @@ it('keeps the production cat visible and seated while the feeding can moves thro
     await feed;
     expect(seats.size).toBe(1);
   } finally { world.dispose(); models.dispose(); production.dispose(); }
-});
+}, 30_000);
 
 async function productionModels(): Promise<PropModelLibrary> {
   const templates = new Map<ItemId, Group>();
@@ -144,8 +147,51 @@ async function productionModels(): Promise<PropModelLibrary> {
     templates.set(id, new Group().add(gltf.scene));
     animations.set(id, gltf.animations);
   }));
-  return PropModelLibrary.fromTemplatesForTest(templates, new Map(), new Map(), animations);
+  const equipment = new Map(await Promise.all(LIFEBOAT_EQUIPMENT_IDS.map(async id => [
+    id, await productionTemplate(`items/${id}`, LIFEBOAT_EQUIPMENT_MODEL_SPECS[id]),
+  ] as const)));
+  const lights = new Map(await Promise.all(PRACTICAL_LIGHT_MODEL_IDS.map(async id => [
+    id, await productionTemplate(`items/${id}`, PRACTICAL_LIGHT_MODEL_SPECS[id]),
+  ] as const)));
+  const chest = await productionTemplate('events/mysteryChest', EVENT_MODEL_SPECS.chestClosed);
+  return PropModelLibrary.fromTemplatesForTest(templates, equipment, lights, animations, new Map([['chestClosed', chest]]));
 }
+
+async function productionTemplate(path: string, spec: RuntimeModelSpec): Promise<Group> {
+  const bytes = await readFile(`src/assets/models/${path}.glb`);
+  const data = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(data).set(bytes);
+  const gltf = await new GLTFLoader().register(() => ({
+    name: 'test-materials', loadMaterial: async () => new MeshStandardMaterial(),
+  })).parseAsync(data, '');
+  normalizeLongestDimensionTemplate(gltf.scene, spec, message => new Error(message));
+  return new Group().add(gltf.scene);
+}
+
+it.each([16 / 9, 9 / 16])('keeps Carlitos visible after turning to the acquired chest at aspect %s', async aspect => {
+  const models = await productionModels();
+  const items = ITEM_IDS.map(type => ({ type, instanceId: `${type}-1` as const }));
+  const session = new SurvivalSession(items, { seed: 2967098762, initial: { food: 3 }, initialCarlitos: { hunger: 3 } });
+  const camera = new PerspectiveCamera(80, aspect, 0.05, 100);
+  const world = new BoatWorld(camera, models, ...createTestSkyTextures(), items);
+  try {
+    world.syncInventory({ ...session.snapshot(), chest: { state: 'closed', acquiredDay: 11 } });
+    world.setRearCameraView(true, true);
+    for (let frame = 0; frame < 48; frame++) {
+      world.update(frame / 15, 1 / 15);
+      const cat = world.scene.getObjectByName('carlitos-companion')!;
+      expect(cat.visible, `rear frame ${frame}, seat ${cat.userData.seatId}`).toBe(true);
+      expectInView(world.scene.getObjectByName('carlitos-model')!, camera);
+      const bounds = new Box3().setFromObject(world.scene.getObjectByName('carlitos-model')!, true);
+      const head = bounds.getCenter(new Vector3());
+      head.y = bounds.max.y - (bounds.max.y - bounds.min.y) * 0.15;
+      const origin = camera.getWorldPosition(new Vector3());
+      const ray = new Raycaster(origin, head.clone().sub(origin).normalize(), 0, origin.distanceTo(head));
+      const chest = world.scene.getObjectByName('persistent-chest')!;
+      expect(ray.intersectObject(chest, true), `chest hides head at ${cat.userData.seatId}`).toHaveLength(0);
+    }
+  } finally { world.dispose(); models.dispose(); }
+}, 30_000);
 
 function addFullInventory(boat: Group, models: PropModelLibrary): void {
   for (const id of ITEM_IDS) {
@@ -223,7 +269,11 @@ it('keeps the production animated cat visible with every item aboard through car
         camera.aspect = aspect;
         camera.updateProjectionMatrix();
         camera.rotation.set(0, rear ? Math.PI : 0, 0);
-        if (rear) camera.rotateX(-0.75);
+        camera.position.z = 0.96;
+        if (rear) {
+          camera.position.z = 0.18;
+          camera.rotateX(-0.4);
+        }
         for (let frame = 0; frame < 48; frame++) {
           boat.position.y = Math.sin(frame / 8) * 0.12;
           boat.rotation.set(Math.sin(frame / 9) * 0.055, 0, Math.sin(frame / 7) * 0.06);

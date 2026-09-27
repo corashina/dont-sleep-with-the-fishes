@@ -10,7 +10,8 @@ import type { TimedAnimation } from './animationMath';
 
 const FOCUSED_EVENT_CAMERA_DURATION = 1.1;
 const REAR_CAMERA_TURN_DURATION = 0.65;
-const REAR_CAMERA_PITCH = -0.75;
+const REAR_CAMERA_PITCH = -0.4;
+const REAR_CAMERA_Z = 0.18;
 const BASE_CAMERA_POSITION = Object.freeze({ x: 0, y: 0.88, z: 0.96 });
 const FOCUSED_EVENT_CAMERA_POSITION = Object.freeze({ x: 0, y: 1.38, z: -1.42 });
 
@@ -222,6 +223,9 @@ export class BoatCameraController {
 
   private applyBasePresentationPose(): void {
     this.applyExactBasePose();
+    // Leave room for the chest and supported companion seats, including portrait views.
+    const rearProgress = (1 - Math.cos(this.rearYaw)) / 2;
+    this.camera.position.z += (REAR_CAMERA_Z - this.basePosition.z) * rearProgress;
     this.camera.rotateY(this.rearYaw);
     this.camera.rotateX(this.rearPitch);
     this.camera.rotateY(this.itemAnimationLabYaw);

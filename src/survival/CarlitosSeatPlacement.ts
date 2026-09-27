@@ -1,5 +1,5 @@
 import {
-  Box3, InstancedMesh, Material, Matrix4, Mesh, Object3D, PerspectiveCamera, Quaternion, Raycaster, SkinnedMesh, Triangle, Vector3,
+  Box3, InstancedMesh, Material, Matrix4, Mesh, Object3D, PerspectiveCamera, Quaternion, Ray, Raycaster, SkinnedMesh, Triangle, Vector3,
 } from 'three';
 import {
   LIFEBOAT_DISPLAY_SHELF_SURFACE_Y, LIFEBOAT_FLOOR_SURFACE_Y, LIFEBOAT_GUNWALE_SURFACE_Y,
@@ -18,7 +18,7 @@ interface Seat {
 // Seats are attached to real support surfaces. Inventory and event models can block them.
 const SEATS: readonly Seat[] = [
   ...[-1, 1].flatMap(side => [
-    ...[-2.8, -2.4, -1.92, -1.4, 1.6, 2.12].map(z => ({
+    ...[-2.8, -2.4, -1.92, -1.4, 1.6, 2.12, 2.25, 2.35].map(z => ({
       id: `rim-${z}-${side}`, x: side * lifeboatHullHalfWidthAt(z)!, z,
       surfaceY: LIFEBOAT_GUNWALE_SURFACE_Y, yaw: z < 0 ? Math.PI : 0,
     })),
@@ -78,6 +78,8 @@ export class CarlitosSeatPlacement {
   private readonly rotation = new Quaternion();
   private readonly point = new Vector3();
   private readonly triangle = new Triangle();
+  private readonly viewRay = new Ray();
+  private viewDistance = 0;
   private currentSeat: Seat | null = null;
   private preferredSide: EventSide = 1;
   private seed = 0;
@@ -144,6 +146,13 @@ export class CarlitosSeatPlacement {
     this.candidateMatrix.premultiply(this.boat.matrixWorld);
     if (!this.fitsViewport()) return false;
     this.candidateInverse.copy(this.candidateMatrix).invert();
+    // Projected bounds alone can accept a cat completely hidden behind the chest.
+    this.camera.getWorldPosition(this.viewRay.origin).applyMatrix4(this.candidateInverse);
+    this.localBounds.getCenter(this.point);
+    this.point.y = this.localBounds.max.y - (this.localBounds.max.y - this.localBounds.min.y) * 0.15;
+    this.viewRay.direction.copy(this.point).sub(this.viewRay.origin);
+    this.viewDistance = this.viewRay.direction.length();
+    this.viewRay.direction.normalize();
     if (this.intersectsScene(this.scene)) return false;
     this.root.position.copy(this.position);
     this.root.quaternion.copy(this.rotation);
@@ -202,7 +211,10 @@ export class CarlitosSeatPlacement {
       this.meshBounds.copy(mesh.geometry.boundingBox!);
     }
     this.meshBounds.applyMatrix4(this.meshToCandidate);
-    if (!this.meshBounds.intersectsBox(this.localBounds)) return false;
+    const blocksBody = this.meshBounds.intersectsBox(this.localBounds);
+    const blocksView = this.viewRay.intersectBox(this.meshBounds, this.point) !== null
+      && this.point.distanceTo(this.viewRay.origin) < this.viewDistance;
+    if (!blocksBody && !blocksView) return false;
     if (this.meshBounds.containsBox(this.localBounds)) return true;
     return this.intersectsTriangles(mesh);
   }
@@ -215,7 +227,13 @@ export class CarlitosSeatPlacement {
       mesh.getVertexPosition(indices?.getX(index + 1) ?? index + 1, this.triangle.b).applyMatrix4(this.meshToCandidate);
       mesh.getVertexPosition(indices?.getX(index + 2) ?? index + 2, this.triangle.c).applyMatrix4(this.meshToCandidate);
       if (this.localBounds.intersectsTriangle(this.triangle)) return true;
+      if (this.triangleBlocksView()) return true;
     }
     return false;
+  }
+
+  private triangleBlocksView(): boolean {
+    return this.viewRay.intersectTriangle(this.triangle.a, this.triangle.b, this.triangle.c, false, this.point) !== null
+      && this.point.distanceTo(this.viewRay.origin) < this.viewDistance;
   }
 }
