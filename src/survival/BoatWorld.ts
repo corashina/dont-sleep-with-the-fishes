@@ -75,6 +75,7 @@ import { BoatHeartDisplay } from './BoatHeartDisplay';
 import { SIREN_SCENE_OFFSET_Z } from './SirenAppearance';
 import { BoatCameraController } from './BoatCameraController';
 import { CarlitosPresentation, CARLITOS_FEED_DURATION } from './CarlitosPresentation';
+import { CarlitosSeatPlacement } from './CarlitosSeatPlacement';
 import { ChestDisplay } from './ChestDisplay';
 import {
   DivePresentationController,
@@ -379,6 +380,7 @@ export class BoatWorld {
   private readonly supplyDisplay: BoatSupplyDisplay;
   private readonly heartDisplay: BoatHeartDisplay;
   private readonly carlitos: CarlitosPresentation;
+  private readonly carlitosPlacement: CarlitosSeatPlacement;
   private ambientCarlitosSide: EventSide = 1;
   private eventCarlitosSide: EventSide | null = null;
   private readonly chestDisplay: ChestDisplay;
@@ -607,6 +609,9 @@ export class BoatWorld {
       carlitos = new CarlitosPresentation(propModels);
       this.carlitos = carlitos;
       this.boat.add(carlitos.root);
+      this.carlitosPlacement = new CarlitosSeatPlacement(
+        carlitos.root, carlitos.modelRoot, this.boat, this.scene, camera,
+      );
 
       supplyDisplay = new BoatSupplyDisplay(
         propModels,
@@ -1022,6 +1027,8 @@ export class BoatWorld {
     this.carlitos.sync(snapshot.carlitos);
     this.chestState = snapshot.chest.state;
     this.chestDisplay.sync(snapshot.chest);
+    this.carlitosPlacement.setPreference(this.eventCarlitosSide ?? this.ambientCarlitosSide, snapshot.seed);
+    this.updateCarlitosSeat();
   }
 
   async playCarlitosAction(
@@ -1679,6 +1686,7 @@ export class BoatWorld {
     this.boatRainEffects.update(time, delta);
     this.dispatchPendingThunder();
     this.ocean.follow(this.worldCameraPosition.x, this.worldCameraPosition.z);
+    this.updateCarlitosSeat();
   }
 
   private syncOceanAtmosphere(): void {
@@ -2016,12 +2024,17 @@ export class BoatWorld {
 
   private setCarlitosAmbientSide(side: EventSide): void {
     this.ambientCarlitosSide = side;
-    if (this.eventCarlitosSide === null) this.carlitos.setSeatSide(side);
+    if (this.eventCarlitosSide === null) this.carlitosPlacement.setPreference(side);
   }
 
   private setCarlitosEventSide(side: EventSide | null): void {
     this.eventCarlitosSide = side;
-    this.carlitos.setSeatSide(side ?? this.ambientCarlitosSide);
+    this.carlitosPlacement.setPreference(side ?? this.ambientCarlitosSide);
+  }
+
+  private updateCarlitosSeat(): void {
+    if (!this.carlitos.isAboard) return;
+    this.carlitos.root.visible = this.carlitosPlacement.update();
   }
 
   private isTerminalCue(cue: PresentationCue): boolean {

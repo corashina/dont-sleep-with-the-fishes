@@ -33,7 +33,6 @@ import {
 } from '../world/SceneResources';
 import { eventItemUseDurationForItem } from './eventItemUseChoreography';
 import type { CarlitosSnapshot } from './CarlitosState';
-import type { EventSide } from './eventVariant';
 import {
   carlitosPoseState,
   createCarlitosPose,
@@ -76,8 +75,6 @@ export class CarlitosPresentation {
   private readonly tailTip: Object3D | null;
   private readonly tailAnimationQuaternion = new Quaternion();
   private readonly modelPresentation: PropPresentation;
-  private readonly seatPositionX: number;
-  private readonly seatRotationY: number;
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly ownedSkeletons = new Set<Skeleton>();
@@ -98,8 +95,6 @@ export class CarlitosPresentation {
   ) {
     this.root.name = 'carlitos-companion';
     const transform = boatStorageTransform(CARLITOS_INSTANCE);
-    this.seatPositionX = Math.abs(transform.position.x);
-    this.seatRotationY = Math.abs(transform.rotation.y);
     this.root.position.copy(transform.position);
     this.root.rotation.copy(transform.rotation);
     this.root.scale.setScalar(transform.scale);
@@ -265,11 +260,12 @@ export class CarlitosPresentation {
     sampleCarlitosPoseInto(this.pose, this.poseSample);
   }
 
-  setSeatSide(side: EventSide): void {
-    if (this.disposed) return;
-    this.root.position.x = this.seatPositionX * side;
-    this.root.rotation.y = this.seatRotationY * side;
-    this.root.userData.seatSide = side === -1 ? 'left' : 'right';
+  get modelRoot(): Group {
+    return this.modelPresentation.root;
+  }
+
+  get isAboard(): boolean {
+    return this.aboard;
   }
 
   private applyPose(): void {
@@ -287,7 +283,8 @@ export class CarlitosPresentation {
     this.updateHeadPosition();
     this.foodTarget.position.copy(this.headPosition);
     this.foodTarget.position.y += 0.015;
-    this.foodTarget.position.z -= 0.1;
+    // Leave room for the whole thrown can before it disappears at the feeding target.
+    this.foodTarget.position.z -= 0.4;
     this.hand.visible = this.aboard && this.activeAction?.id === 'pet' && pose.handReach > 0;
     this.updateHandOpacity();
     if (!this.hand.visible) return;
