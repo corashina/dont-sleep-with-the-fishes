@@ -4,6 +4,7 @@ import { AnimationClip, Box3, BoxGeometry, Group, InstancedMesh, Matrix4, Mesh, 
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { describe, expect, it, vi } from 'vitest';
 import { BoatWorld } from '../src/survival/BoatWorld';
+import { ChestDisplay } from '../src/survival/ChestDisplay';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { createTestPropModels } from './helpers/propModels';
 import { createTestSkyTextures } from './helpers/skyAssets';
@@ -13,6 +14,7 @@ import { createCarlitosState } from '../src/survival/CarlitosState';
 import { CarlitosSeatPlacement } from '../src/survival/CarlitosSeatPlacement';
 import { boatSupplyTransform } from '../src/world/BoatStorage';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
+import { EVENT_MODEL_SPECS } from '../src/world/eventModelManifest';
 import { normalizeLongestDimensionTemplate } from '../src/world/modelValidation';
 import { PropModelLibrary } from '../src/world/PropModelLibrary';
 import { createLifeboat } from '../src/world/Lifeboat';
@@ -161,11 +163,26 @@ function addFullInventory(boat: Group, models: PropModelLibrary): void {
   }
 }
 
+async function productionChest(): Promise<ChestDisplay> {
+  const bytes = await readFile('src/assets/models/events/mysteryChest.glb');
+  const data = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(data).set(bytes);
+  const gltf = await new GLTFLoader().register(() => ({
+    name: 'test-materials', loadMaterial: async () => new MeshStandardMaterial(),
+  })).parseAsync(data, '');
+  normalizeLongestDimensionTemplate(gltf.scene, EVENT_MODEL_SPECS.chestClosed, message => new Error(message));
+  const chest = new ChestDisplay(new Group().add(gltf.scene));
+  chest.sync({ state: 'closed', acquiredDay: 1 });
+  return chest;
+}
+
 it('keeps the production animated cat visible with every item aboard through care and status poses', async () => {
   const models = await productionModels();
   const { scene, boat, camera, cat: dummy } = fixture();
   dummy.removeFromParent();
   addFullInventory(boat, models);
+  const chest = await productionChest();
+  boat.add(chest.root);
   const cat = new CarlitosPresentation(models);
   boat.add(cat.root);
   const placement = new CarlitosSeatPlacement(cat.root, cat.modelRoot, boat, scene, camera);
@@ -198,7 +215,10 @@ it('keeps the production animated cat visible with every item aboard through car
       }
     }
     expect(selected.size).toBeGreaterThan(4);
-    for (const rear of [false, true]) {
+    for (const { rear, state } of [
+      { rear: false, state: 'closed' }, { rear: true, state: 'closed' }, { rear: true, state: 'mimic' },
+    ] as const) {
+      chest.sync({ state, acquiredDay: 1 });
       for (const aspect of [16 / 9, 9 / 16]) {
         camera.aspect = aspect;
         camera.updateProjectionMatrix();
@@ -215,6 +235,7 @@ it('keeps the production animated cat visible with every item aboard through car
     }
   } finally {
     cat.dispose();
+    chest.dispose();
     models.dispose();
   }
 }, 30_000);

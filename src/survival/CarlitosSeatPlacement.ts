@@ -33,6 +33,7 @@ const SEATS: readonly Seat[] = [
   { id: 'bow', x: 0, z: -3, surfaceY: LIFEBOAT_GUNWALE_SURFACE_Y, yaw: Math.PI },
   { id: 'stern', x: 0, z: 2.4, surfaceY: LIFEBOAT_GUNWALE_SURFACE_Y, yaw: 0 },
   { id: 'stern-rib-center', x: 0, z: 1.7, surfaceY: -0.2625, yaw: 0 },
+  { id: 'stern-floor-center', x: 0, z: 2.1, surfaceY: LIFEBOAT_FLOOR_SURFACE_Y, yaw: 0 },
   { id: 'floor-center', x: 0, z: -2.3, surfaceY: LIFEBOAT_FLOOR_SURFACE_Y, yaw: Math.PI },
 ];
 const UP = new Vector3(0, 1, 0);
