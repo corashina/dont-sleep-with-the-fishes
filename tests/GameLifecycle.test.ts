@@ -24,7 +24,6 @@ import { ScavengeSession,type ScavengeResult } from '../src/game/ScavengeSession
 import {
   createScavengeCinematicFrame,
   createScavengeEndingState,
-  ENDING_HOLD_SECONDS,
   SINKING_CINEMATIC_SECONDS,
 } from '../src/game/scavengeEnding';
 import { createScavengeIntroFrame } from '../src/game/scavengeIntro';
@@ -1677,14 +1676,12 @@ describe('ScavengePhase lifecycle integration', () => {
 
       first.update(0, SINKING_CINEMATIC_SECONDS);
       await flushPhases();
-      expect(firstInternals.ending).toEqual({ stage: 'endingHold', elapsedSeconds: 0 });
-      const action = mount.querySelector<HTMLButtonElement>('[data-ending-action]')!;
-      expect(action.hidden).toBe(true);
-
-      first.update(0, ENDING_HOLD_SECONDS);
-      await flushPhases();
+      // Importance: 95/100. Both actions must appear with the ending popup.
       expect(firstInternals.ending).toEqual({ stage: 'menuReady', elapsedSeconds: 0 });
+      const action = mount.querySelector<HTMLButtonElement>('[data-ending-action]')!;
+      expect(mount.querySelector('[data-ending]')!.classList.contains('is-visible')).toBe(true);
       expect(action.hidden).toBe(false);
+      expect(mount.querySelector<HTMLButtonElement>('[data-view-statistics]')!.hidden).toBe(false);
 
       pointerLocked.mockRestore();
 

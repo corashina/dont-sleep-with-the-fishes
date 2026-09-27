@@ -1,4 +1,5 @@
-import { GHOST_COUNT, ghostFlashlightCycle, ghostFlashlightDeparture } from './ghostFlashlightChoreography';
+import { GHOST_COUNT, ghostFlashlightCycle, ghostFlashlightFade } from './ghostFlashlightChoreography';
+import { ItemAimTarget } from './ItemAimTarget';
 import { smoothstep } from './animationMath';
 import {
   Box3,
@@ -218,16 +219,7 @@ export class SupernaturalEventAnimator {
     scaleY: 1,
     scaleZ: 1,
   };
-  private readonly ghostMaterial = new MeshStandardMaterial({
-    color: 0xb4c9c7,
-    emissive: 0x526b72,
-    emissiveIntensity: 0.34,
-    roughness: 0.92,
-    flatShading: true,
-    transparent: true,
-    opacity: 0.42,
-    depthWrite: false,
-  });
+  private readonly ghostMaterials: MeshStandardMaterial[] = [];
   private readonly flareMaterial = new MeshBasicMaterial({
     color: 0xffffff,
     vertexColors: true,
@@ -238,7 +230,8 @@ export class SupernaturalEventAnimator {
   });
   private readonly ghosts: readonly Group[];
   private readonly ghostFloatPose = createGhostFloatPose();
-  private readonly ghostAimTarget = new Object3D();
+  private readonly ghostRoot = new Group();
+  private readonly ghostAimTarget = new ItemAimTarget(this.ghostRoot);
   private readonly ghostAimFrom = new Vector3();
   private readonly ghostAimTo = new Vector3();
   private ghostsRepelled = false;
@@ -278,7 +271,18 @@ export class SupernaturalEventAnimator {
     this.ghosts = includeGhosts ? Array.from({ length: GHOST_COUNT }, (_, index) => {
       const ghost = eventModels.create('ghost');
       ghost.name = `ghost-${index + 1}`;
-      replaceMaterials(ghost, this.ghostMaterial);
+      const material = new MeshStandardMaterial({
+        color: 0xb4c9c7,
+        emissive: 0x526b72,
+        emissiveIntensity: 0.34,
+        roughness: 0.92,
+        flatShading: true,
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+      });
+      this.ghostMaterials.push(material);
+      replaceMaterials(ghost, material);
       this.poseFloatingGhost(ghost, index);
       ghost.scale.multiplyScalar(0.88 + index * 0.045);
       ghost.visible = false;
@@ -342,8 +346,9 @@ export class SupernaturalEventAnimator {
     );
     this.sirenTableau.visible = false;
     this.flareFlash = createFlareFlash(this.flareMaterial);
+    for (const ghost of this.ghosts) this.ghostRoot.add(ghost);
     this.worldRoot.add(
-      ...this.ghosts,
+      this.ghostRoot,
       this.sirenTableau,
       this.fogCurtain.root,
       this.flareFlash,
@@ -583,15 +588,12 @@ export class SupernaturalEventAnimator {
 
   private updateGhostFlashlight(progress: number): void {
     this.updateGhostAim(progress);
-    this.ghostMaterial.opacity = 0.56;
     for (let index = 0; index < this.ghosts.length; index += 1) {
       const ghost = this.ghosts[index]!;
-      const departure = ghostFlashlightDeparture(progress, index);
+      const fade = ghostFlashlightFade(progress, index);
       this.poseFloatingGhost(ghost, index);
-      ghost.position.x += (ghost.position.x < 0 ? -1 : 1) * departure * 12;
-      ghost.position.y += departure * 8;
-      ghost.position.z -= departure * 20;
-      ghost.visible = departure < 1;
+      this.ghostMaterials[index]!.opacity = 0.56 * (1 - fade);
+      ghost.visible = fade < 1;
     }
   }
 
@@ -599,6 +601,7 @@ export class SupernaturalEventAnimator {
     if (this.ghosts.length === 0) return;
     const cycle = ghostFlashlightCycle(progress);
     const index = Math.min(GHOST_COUNT - 1, Math.floor(cycle));
+    this.ghostAimTarget.activeModel = this.ghosts[index]!;
     sampleGhostFloatPathInto(this.ghostFloatPose, this.ghostFloatPaths[Math.max(0, index - 1)]!, this.ghostFloatTime);
     this.ghostAimFrom.fromArray(this.ghostFloatPose.position);
     sampleGhostFloatPathInto(this.ghostFloatPose, this.ghostFloatPaths[index]!, this.ghostFloatTime);
@@ -645,9 +648,9 @@ export class SupernaturalEventAnimator {
     );
     if (eventId === 'ghosts') {
       if (this.ghostsRepelled) { this.hideGhosts(); return; }
-      this.ghostMaterial.opacity = Math.min(0.62, sample.ghostVisibility * 0.52);
       for (let index = 0; index < this.ghosts.length; index += 1) {
         const ghost = this.ghosts[index]!;
+        this.ghostMaterials[index]!.opacity = Math.min(0.62, sample.ghostVisibility * 0.52);
         this.poseFloatingGhost(ghost, index);
         ghost.visible = sample.ghostVisibility > 0.015;
       }
@@ -680,9 +683,9 @@ export class SupernaturalEventAnimator {
   }
 
   private showGhostLoop(opacity: number): void {
-    this.ghostMaterial.opacity = opacity;
     for (let index = 0; index < this.ghosts.length; index += 1) {
       const ghost = this.ghosts[index]!;
+      this.ghostMaterials[index]!.opacity = opacity;
       this.poseFloatingGhost(ghost, index);
       ghost.visible = true;
     }
@@ -728,7 +731,6 @@ export class SupernaturalEventAnimator {
     this.sirenTableau.visible = false;
     this.fogCurtain.root.visible = false;
     this.flareFlash.visible = false;
-    this.ghostMaterial.emissiveIntensity = 0.34;
     this.setFogOpacity(0);
     this.flareMaterial.opacity = 0;
     this.flareFlash.scale.set(1, 1, 1);

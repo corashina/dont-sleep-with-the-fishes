@@ -19,6 +19,7 @@ export class FlashlightBeam extends Group {
   readonly beam = new Mesh(this.geometry, this.material);
   readonly light = new SpotLight(0xffedb5, 0, 0, Math.PI / 4, 0.1, 0);
   private model: Object3D | null = null;
+  private aimTarget: ItemAimTarget | null = null;
   private cache: ObjectScreenBoundsCache | null = null;
   private readonly corners: Vector3[] = [];
   private cornerCount = 0;
@@ -43,6 +44,7 @@ export class FlashlightBeam extends Group {
   }
 
   setTarget(target: Object3D | null): void {
+    this.aimTarget = target instanceof ItemAimTarget ? target : null;
     this.model = target instanceof ItemAimTarget ? target.model : target;
     this.cache = this.model === null ? null : createObjectScreenBoundsCache(this.model);
     for (const entry of this.cache?.entries ?? []) {
@@ -138,11 +140,14 @@ export class FlashlightBeam extends Group {
   }
 
   private isVisible(object: Object3D): boolean {
+    const activeModel = this.aimTarget?.activeModel ?? this.model;
+    let belongsToTarget = false;
     let current: Object3D | null = object;
     while (current !== null) {
       if (!current.visible) return false;
+      if (current === activeModel) belongsToTarget = true;
       current = current.parent;
     }
-    return true;
+    return belongsToTarget;
   }
 }

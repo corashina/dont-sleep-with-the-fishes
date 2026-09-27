@@ -57,6 +57,11 @@ describe('survival ending animation', () => {
     expect(shown).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(view.panel.hidden).toBe(false);
+    // Importance: 95/100. All actions must be available at the popup reveal.
+    for (const button of view.panel.querySelectorAll('button')) {
+      expect(button.hidden).toBe(false);
+      expect(button.disabled).toBe(false);
+    }
     expect(shown).toHaveBeenCalledExactlyOnceWith(id);
     expect(document.activeElement).toBe(view.title);
     expect(view.title.textContent).toBe({

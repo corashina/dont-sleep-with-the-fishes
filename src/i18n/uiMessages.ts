@@ -2,9 +2,9 @@ import { defineMessages } from './messages';
 
 export const uiCatalog = {
   carlitosChestReminder: {
-    en: 'You forgot to open that chest!',
-    pl: 'Nie zapomnij otworzyć tej skrzyni!',
-    'es-AR': '¡Te olvidaste de abrir ese cofre!',
+    en: 'Maybe we should open that chest?',
+    pl: 'Może otworzymy tę skrzynię?',
+    'es-AR': '¿Y si abrimos ese cofre?',
   },
   heartComplete: { en: 'The heart is whole. Something will find you next night.', pl: 'Serce jest całe. Coś znajdzie cię następnej nocy.', 'es-AR': 'El corazón está completo. Algo te encontrará la próxima noche.' },
   heartName: { en: 'Heart of the Sea', pl: 'Serce Morza', 'es-AR': 'Corazón del Mar' },
