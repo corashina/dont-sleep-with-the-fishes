@@ -1165,7 +1165,7 @@ export class BoatWorld {
 
   private itemUseAimTarget(context: EventItemUseContext, eventId: string): Object3D | null {
     if (context === 'bucket-bail') return this.bucketBailAimTarget;
-    if (context === 'tape-secure' || context === 'map-cover' || context === 'net-secure') {
+    if (context === 'tape-secure' || context === 'map-cover') {
       return this.supplyCargoAimTarget;
     }
     return this.eventItemAimTarget(eventId);
@@ -1922,10 +1922,6 @@ export class BoatWorld {
         if (this.scene.background instanceof Color) {
           this.scene.background.lerp(DIVE_SKY_TINT, pulse * 0.8);
         }
-        break;
-      case 'repair':
-        this.camera.rotateY(-0.18 * eased);
-        this.camera.rotateX(-0.035 * eased);
         break;
       case 'storm':
         this.motionRig.rotation.x += Math.sin(elapsed * 18) * 0.025 * (1 - progress);

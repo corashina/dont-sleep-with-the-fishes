@@ -1,4 +1,4 @@
-import { eventChoiceDecision, eventChoiceResource, type EventChoiceDecision } from './eventChoiceRules';
+import { eventAcceptsItemCondition, eventChoiceDecision, eventChoiceResource, type EventChoiceDecision } from './eventChoiceRules';
 import { resourceSupplyActorId } from './resourceSupplyActors';
 import { EMPTY_HEART, COMPLETE_HEART, isHeartComplete, collectHeartPiece, type HeartPieceId, type HeartPieces } from './heartOfTheSea';
 import { cloneActionOutcome, domainMessageId, domainText, resolveOutcomeText, withOutcomeText, type OutcomeText } from './outcomeText';
@@ -373,6 +373,10 @@ export class SurvivalSession {
   private heartPieces: HeartPieces;
   private chestState: ChestState;
   private chestAcquiredDay: number | null;
+  private chestOpenable = false;
+  private advancingDawn = false;
+  private chestFirstOpenableDay: number | null = null;
+  private chestLastReminderDay: number | null = null;
   private weather: WeatherId;
   private actedToday = false;
   private readonly inventory: SurvivalInventoryState;
@@ -430,6 +434,8 @@ export class SurvivalSession {
     } else {
       this.initializeNewSession(initialization.options!);
     }
+    this.resolveTerminal();
+    this.trackChestOpportunity();
     this.recordHistory();
   }
 
@@ -461,6 +467,8 @@ export class SurvivalSession {
 
   private restoreCheckpointState(checkpoint: SurvivalSessionCheckpoint): void {
     this.history = Object.freeze(checkpoint.history.map((reading) => Object.freeze({ ...reading })));
+    this.chestFirstOpenableDay = checkpoint.chestFirstOpenableDay;
+    this.chestLastReminderDay = checkpoint.chestLastReminderDay;
     this.food = checkpoint.food;
     this.bait = checkpoint.bait;
     this.recoveredFood = checkpoint.recoveredFood;
@@ -533,7 +541,6 @@ export class SurvivalSession {
     this.bait = initial.bait ?? this.recoveredBait;
     this.food = initial.food ?? this.recoveredFood;
     this.clampMeters();
-    this.resolveTerminal();
   }
 
   private restoreInitialAppearanceCounts(counts: Readonly<Record<string, number>> | undefined): void {
@@ -576,6 +583,8 @@ export class SurvivalSession {
       radioSignalAvailable: this.radioSignalAvailable,
       radioSignalsSent: this.radioSignalsSent,
       radioSignalsEnabled: this.radioSignalsEnabled,
+      chestFirstOpenableDay: this.chestFirstOpenableDay,
+      chestLastReminderDay: this.chestLastReminderDay,
       chest: { state: this.chestState, acquiredDay: this.chestAcquiredDay },
       weather: this.weather,
       actedToday: this.actedToday,
@@ -945,7 +954,7 @@ export class SurvivalSession {
     if (item.type !== choice.itemId) {
       return this.reject('item-mismatch', t('itemMismatch'));
     }
-    if (item.condition !== 'usable') {
+    if (!eventAcceptsItemCondition(this.pendingEvent!.id, item.condition)) {
       return this.reject('item-unavailable', t('itemSpent'));
     }
     return this.resolveEventChoice(
@@ -1246,6 +1255,15 @@ export class SurvivalSession {
   }
 
   beginDawn(): ActionOutcome {
+    this.advancingDawn = true;
+    try { return this.advanceDawn(); }
+    finally {
+      this.advancingDawn = false;
+      this.trackChestOpportunity();
+    }
+  }
+
+  private advanceDawn(): ActionOutcome {
     const rejection = this.dawnRejection();
     if (rejection !== null) return rejection;
     const hullWear = this.resetForDawn();
@@ -1336,10 +1354,7 @@ export class SurvivalSession {
     }
     const pressureIncrease = pressureIncreaseForDay(this.day);
     if (pressureIncrease > 0) deltas.pressure = pressureIncrease;
-    if (hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.maximum) {
-      this.lastHealthCause = { kind: 'starvation' };
-      deltas.health = -SURVIVAL_BALANCE.dawn.starvationDamage;
-    } else if (hungerAfterDawn < SURVIVAL_BALANCE.thresholds.hungry) {
+    if (hungerAfterDawn < SURVIVAL_BALANCE.thresholds.hungry) {
       deltas.health = SURVIVAL_BALANCE.dawn.healthRecovery;
     }
     return deltas;
@@ -1485,6 +1500,7 @@ export class SurvivalSession {
   private eat(): ActionOutcome {
     const deltas: ResourceDelta = {
       hunger: -resolveIntegerValue(SURVIVAL_BALANCE.actions.foodHunger, this.random),
+      health: resolveIntegerValue(SURVIVAL_BALANCE.actions.foodHealth, this.random),
       food: -1,
     };
     return this.commit(
@@ -1882,8 +1898,32 @@ export class SurvivalSession {
   }
 
   private changed(): void {
+    this.trackChestOpportunity();
     this.recordHistory();
     this.cachedSnapshot = null;
+  }
+
+  private trackChestOpportunity(): void {
+    if (this.advancingDawn) return;
+    this.chestOpenable = this.unavailable('openChest') === null;
+    if (this.chestState !== 'closed') {
+      this.chestFirstOpenableDay = null;
+      this.chestLastReminderDay = null;
+    } else if (this.chestFirstOpenableDay === null && this.chestOpenable) {
+      this.chestFirstOpenableDay = this.day;
+    }
+  }
+
+  canRemindAboutChest(): boolean {
+    return this.carlitos !== null && this.chestState === 'closed'
+      && this.chestAcquiredDay !== null && this.chestAcquiredDay < this.day
+      && this.chestFirstOpenableDay !== null && this.chestFirstOpenableDay < this.day
+      && this.chestLastReminderDay !== this.day && this.chestOpenable;
+  }
+
+  markChestReminderShown(): void {
+    if (!this.canRemindAboutChest()) return;
+    this.chestLastReminderDay = this.day;
   }
 
   private recordHistory(): void {
@@ -2094,6 +2134,8 @@ export class SurvivalSession {
   private applyChestEffect(effect: WeightedEventOutcome['effects']['chest']): void {
     if (effect === undefined) return;
     if (effect === 'acquire' || effect === 'close') {
+      this.chestFirstOpenableDay = null;
+      this.chestLastReminderDay = null;
       this.chestState = 'closed';
       this.chestAcquiredDay = this.day;
       return;
@@ -2248,11 +2290,12 @@ export class SurvivalSession {
 
   private resolveTerminal(): void {
     if (this.ending !== null) return;
-    if (this.health <= 0) {
+    const starved = this.hunger >= SURVIVAL_BALANCE.thresholds.maximum;
+    if (this.health <= 0 || starved) {
       this.state = 'dead';
       this.ending = Object.freeze({
         id: 'death', day: this.day, savedPickupCount: this.savedPickupCount,
-        cause: Object.freeze({ ...this.lastHealthCause }),
+        cause: Object.freeze(this.health <= 0 ? { ...this.lastHealthCause } : { kind: 'starvation' }),
       });
     } else if (this.hull <= 0) {
       this.state = 'sunk';

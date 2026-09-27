@@ -24,7 +24,6 @@ import { FlashlightBeam } from './FlashlightBeam';
 import { ShotgunBlast } from './ShotgunBlast';
 import {
   LIFEBOAT_GUNWALE_SURFACE_Y,
-  LIFEBOAT_PLAYER_BENCH_Z,
   lifeboatHullHalfWidthAt,
 } from '../world/Lifeboat';
 import type { EventItemUseSample } from './eventItemUseChoreography';
@@ -41,7 +40,8 @@ const FLARE_WATER_Y = 0.04;
 const FLARE_FORWARD = new Vector3(1, 0, 0);
 const CHAIN_LINK_AXIS = new Vector3(0, 1, 0);
 const CHAIN_FALLBACK_EDGE_OFFSET = new Vector3(1.35, -0.22, -0.25);
-const CHAIN_BOAT_ATTACHMENT_LOCAL = new Vector3(0, 0.29, LIFEBOAT_PLAYER_BENCH_Z);
+// Start below the seated camera so the loose chain end stays outside the view.
+const CHAIN_BOAT_ATTACHMENT_LOCAL = new Vector3(0, 0.6, 0.96);
 const CHAIN_ANCHOR_SINK_DEPTH = 3;
 const CHAIN_GUNWALE_Z = -0.85;
 const CHAIN_GUNWALE_X = lifeboatHullHalfWidthAt(CHAIN_GUNWALE_Z) ?? 1.63;

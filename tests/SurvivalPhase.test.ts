@@ -271,7 +271,7 @@ describe('formatDiveResult', () => {
   it('shows the truthful applied loss for a low-health fatal injury', () => {
     expect(formatDiveResult(accepted({
       deltas: { energy: -3, health: -4 },
-    }))).toEqual({
+    }), false)).toEqual({
       title: 'DIVE RESULT',
       reward: null,
       lines: ['NOTHING FOUND', 'YOU SUFFERED SOME INJURIES'],
@@ -473,6 +473,25 @@ async function flushPromises(): Promise<void> {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SurvivalPhase orchestration', () => {
+  // Importance: 95/100. Only a displayed reminder may be recorded as delivered.
+  it('records Carlitos reminders only after the UI shows them', () => {
+    const fresh = new SurvivalSession([{ type: 'carlitos', instanceId: 'carlitos-1' }], {
+      seed: 1, initialChest: { state: 'closed', acquiredDay: 1 },
+    });
+    const session = SurvivalSession.restore({ ...fresh.exportCheckpoint(), day: 2 });
+    const updateChestReminder = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true).mockReturnValue(false);
+    const phase = createTestSurvivalPhase({ session, world: {}, ui: { updateChestReminder } });
+    phase.start();
+    phase.update(3, 3);
+    expect(updateChestReminder).toHaveBeenLastCalledWith(3, true);
+    expect(session.canRemindAboutChest()).toBe(true);
+    phase.update(4, 1);
+    expect(session.canRemindAboutChest()).toBe(false);
+    phase.update(5, 1);
+    expect(updateChestReminder).toHaveBeenLastCalledWith(1, false);
+    phase.dispose();
+  });
+
 
   it('clears action outlines after eating, opening the chest and starting fishing', () => {
     const session = new SurvivalSession([], {

@@ -42,6 +42,33 @@ async function finishItemUse(
 }
 
 describe('DangerousWatersPresentation options', () => {
+  // Importance: 90/100. Compass inspection must not move the boat or supplies for either outcome.
+  it.each([0, -7])('keeps the scene still through compass inspection and hull result %s', async (hull) => {
+    const presentation = new DangerousWatersPresentation();
+    const pose = reaction();
+    try {
+      presentation.stage();
+      const duration = eventItemUseDurationForItem('compass-search', 'compass');
+      const inspection = presentation.playItemUse('compass', instance('compass-1'));
+      for (let frame = 1; frame <= 10; frame += 1) {
+        presentation.update(frame * duration / 10, duration / 10);
+        presentation.copyBoatReaction(pose);
+        expect(pose).toEqual(reaction());
+      }
+      presentation.settleForVisibilityChange();
+      await expect(inspection).resolves.toBe(true);
+      const result = presentation.react(outcome(hull));
+      for (let frame = 1; frame <= 10; frame += 1) {
+        presentation.update(duration + frame * 0.1, 0.1);
+        presentation.copyBoatReaction(pose);
+        expect(pose).toEqual(reaction());
+      }
+      await result;
+    } finally {
+      presentation.dispose();
+    }
+  });
+
   it('settles and cancels item promises during visibility and lifecycle changes', async () => {
     const presentation = new DangerousWatersPresentation();
     presentation.stage();

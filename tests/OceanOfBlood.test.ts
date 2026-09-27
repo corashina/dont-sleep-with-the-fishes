@@ -21,7 +21,7 @@ function session(hunger = 0, item?: ItemId): SurvivalSession {
 
 describe('Ocean of Blood rules', () => {
 
-  it.each([[0, 2], [60, 2], [80, 1]])('caps dawn energy at hunger %s across a checkpoint', (hunger, energy) => {
+  it.each([[0, 2], [60, 2], [70, 1]])('caps dawn energy at hunger %s across a checkpoint', (hunger, energy) => {
     const run = session(hunger);
     expect(run.resolveEvent({ kind: 'endure' })).toMatchObject({
       accepted: true, nextDawnEnergy: energy, eventResult: { resultId: 'blood-ocean-waited' },

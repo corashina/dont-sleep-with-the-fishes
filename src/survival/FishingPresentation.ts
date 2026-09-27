@@ -918,12 +918,12 @@ export class FishingPresentation {
     const surfaceBlend = smootherStep(clamp(normalized / 0.15, 0, 1));
     const surfaceY = this.reelStartWorld.y
       + (this.waveSample.height - this.reelStartWorld.y) * surfaceBlend;
-    const liftedY = Math.max(this.catchTargetWorld.y + 0.6, surfaceY + 1.1);
+    const liftedY = Math.max(this.catchTargetWorld.y + 0.5, surfaceY + 1.1);
     position.y = surfaceY + (liftedY - surfaceY) * lift;
     const approachY = position.y;
     position.lerp(this.catchTargetWorld, settle);
     // Keep the catch above the tip as it passes over the rod, then lower it into view.
-    const lower = smootherStep(clamp((settle - 0.15) / 0.85, 0, 1));
+    const lower = smootherStep(clamp((settle - 0.35) / 0.65, 0, 1));
     position.y = approachY + (this.catchTargetWorld.y - approachY) * lower;
     // Keep the lift on the camera centerline even when the boat rolls beneath it.
     this.dependencies.camera.getWorldPosition(this.projectionCamera);

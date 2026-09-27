@@ -2,12 +2,12 @@ import type { RandomSource } from './survivalTypes';
 
 export const SURVIVAL_BALANCE = {
   start: { health: 100, hunger: 0, energy: 3, hull: 100 },
-  dawn: { hungerIncrease: { min: 22, max: 28 }, healthRecovery: 5, starvationDamage: 7, normalEnergy: 3, hungryEnergy: 2, starvingEnergy: 1 },
+  dawn: { hungerIncrease: { min: 22, max: 28 }, healthRecovery: 5, normalEnergy: 3, hungryEnergy: 2, starvingEnergy: 1 },
   nightHullWear: { damage: { min: 8, max: 13 }, respiteInterval: 5 },
   thresholds: { hungry: 70, starving: 90, maximum: 100 },
   actions: {
     fishEnergy: 1, netEnergy: 2, diveEnergy: 3, openChestEnergy: 3,
-    foodHunger: { min: 18, max: 24 }, repairHullPerEnergy: 33,
+    foodHunger: { min: 18, max: 24 }, foodHealth: { min: 1, max: 5 }, repairHullPerEnergy: 33,
     maximumRepairEnergy: 3,
     maximumEnergy: 3,
     maximumStoredEnergy: 4,

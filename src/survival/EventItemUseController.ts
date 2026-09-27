@@ -92,7 +92,9 @@ export class EventItemUseController {
   play(request: EventItemUseRequest): Promise<boolean> {
     if (this.disposed) return Promise.resolve(false);
     this.clear('night');
-    const actor = this.supplies.borrowEventActor(request.instanceId);
+    const actor = request.eventId === 'carlitos' && request.choiceId === 'feedCarlitos'
+      ? this.supplies.borrowFoodCan()
+      : this.supplies.borrowEventActor(request.instanceId);
     if (actor === null) return Promise.resolve(false);
     this.held = { request, actor };
     this.adapter.begin(
@@ -101,7 +103,7 @@ export class EventItemUseController {
       request.aimTarget,
       request.context === 'bucket-helmet'
         || request.context === 'map-leak-patch' || request.context === 'map-cover',
-      request.context === 'umbrella-shield' ? 'x' : request.context === 'net-secure' ? 'y' : null,
+      request.context === 'umbrella-shield' ? 'x' : null,
       request.context === 'bucket-helmet' || request.context === 'knife-stab'
         || request.context === 'swim-ring-wear',
     );

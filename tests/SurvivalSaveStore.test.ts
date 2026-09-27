@@ -125,6 +125,10 @@ describe('SurvivalSaveStore', () => {
   });
 
   it.each([
+    // Importance: 100/100. Saves must not resume a run with an empty survival meter.
+    ['zero health', (value: any) => { value.checkpoint.session.health = 0; }],
+    ['zero fullness', (value: any) => { value.checkpoint.session.hunger = 100; }],
+    ['zero hull', (value: any) => { value.checkpoint.session.hull = 0; }],
     ['terminal state', (value: any) => { value.checkpoint.session.state = 'dead'; }],
     ['meter', (value: any) => { value.checkpoint.session.health = Number.NaN; }],
     ['item', (value: any) => { value.checkpoint.session.savedItems = [{ instanceId: 'bad-1', type: 'bad' }]; }],

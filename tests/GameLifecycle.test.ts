@@ -212,7 +212,7 @@ describe('Game survival save lifecycle', () => {
       await flushPhases();
 
       expect(JSON.parse(storage.getItem(SURVIVAL_SAVE_DATA_KEY)!))
-        .toMatchObject({ version: 8, checkpoint });
+        .toMatchObject({ version: 9, checkpoint });
       expect(rig.mount.querySelector('[data-save-status]')?.textContent).toBe('DAY 5');
     } finally {
       rig.game.dispose();

@@ -45,6 +45,8 @@ export interface SurvivalSessionCheckpoint {
   readonly radioSignalsEnabled: boolean;
   readonly heartPieces: HeartPieces;
   readonly chest: ChestSnapshot;
+  readonly chestFirstOpenableDay: number | null;
+  readonly chestLastReminderDay: number | null;
   readonly weather: WeatherId;
   readonly actedToday: boolean;
   readonly inventory: SurvivalInventorySnapshot;

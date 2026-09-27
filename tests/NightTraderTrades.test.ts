@@ -1,9 +1,11 @@
 
 import { describe, expect, it } from 'vitest';
-import { type ItemInstance, type ItemInstanceId } from '../src/game/ItemState';
+import { ITEM_DEFINITIONS, type ItemInstance, type ItemInstanceId } from '../src/game/ItemState';
 import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
 import { NIGHT_TRADER_TRADES, nightTraderOffers } from '../src/survival/nightTraderTrades';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { survivalEventById } from '../src/survival/eventCatalog';
+import { focusedChoicesFor } from '../src/survival/SurvivalEventFlow';
 
 const variant = (seed: number) => deriveEventVariantSeed(seed, 10, 'night-trader');
 const seedFor = (id: string) => {
@@ -14,6 +16,53 @@ const seedFor = (id: string) => {
 };
 
 describe('Night Trader offers', () => {
+  // Importance: 98/100. Broken payments must buy the same reward and be removed exactly once.
+  it.each(NIGHT_TRADER_TRADES.filter(({ payment }) => ITEM_DEFINITIONS[payment].breakable))(
+    'accepts broken $payment for the normal $reward reward after saving', (trade) => {
+      const instanceId = `${trade.payment}-1` as ItemInstanceId;
+      const options = { seed: seedFor(trade.id), initial: { day: 10 }, initialEventId: 'night-trader' };
+      const saved = [{ type: trade.payment, instanceId }];
+      const normal = new SurvivalSession(saved, options);
+      const broken = SurvivalSession.restore(new SurvivalSession(saved, {
+        ...options, initialConditions: { [instanceId]: 'broken' as const },
+      }).exportCheckpoint());
+      const event = survivalEventById('night-trader', variant(options.seed))!;
+      expect(focusedChoicesFor(event, broken.snapshot()).find(({ id }) => id === trade.id))
+        .toMatchObject({ instanceId, unavailableReason: null });
+      const response = { kind: 'item', choiceId: trade.id, instanceId } as const;
+      const expected = normal.resolveEvent(response);
+      const result = broken.resolveEvent(response);
+      expect(result.accepted).toBe(true);
+      expect(result.rewardSummary).toEqual(expected.rewardSummary);
+      expect(result.deltas).toEqual(expected.deltas);
+      expect(broken.snapshot().inventory[instanceId]?.condition).toBe('lost');
+      expect(Object.values(broken.snapshot().inventory).some((item) =>
+        item?.type === trade.reward && item.condition === 'usable')).toBe(true);
+      expect(broken.resolveEvent(response).accepted).toBe(false);
+    },
+  );
+
+  // Importance: 95/100. Trading broken items must not permit absent payments or other broken-item uses.
+  it.each([['map', 'map', 'lost'], ['flareGun-shotgun', 'flareGun', 'consumed']] as const)(
+    'rejects %s payment when %s is %s', (choiceId, payment, condition) => {
+      const instanceId = `${payment}-1` as ItemInstanceId;
+      const session = new SurvivalSession([{ type: payment, instanceId }], {
+        seed: seedFor(choiceId), initial: { day: 10 }, initialEventId: 'night-trader',
+        initialConditions: { [instanceId]: condition },
+      });
+      const before = session.snapshot();
+      expect(session.resolveEvent({ kind: 'item', choiceId, instanceId }).accepted).toBe(false);
+      expect(session.snapshot().inventory).toEqual(before.inventory);
+    },
+  );
+
+  it('still rejects broken equipment outside the Night Trader', () => {
+    const session = new SurvivalSession([{ type: 'flashlight', instanceId: 'flashlight-1' }], {
+      seed: 1, initialEventId: 'flying-saucer', initialConditions: { 'flashlight-1': 'broken' },
+    });
+    expect(session.resolveEvent({ kind: 'item', choiceId: 'flashlight', instanceId: 'flashlight-1' }).accepted).toBe(false);
+  });
+
 
   it.each(NIGHT_TRADER_TRADES.filter(({ id }) => ['map', 'energyBar-cannedFood', 'cannedFood-baitTin'].includes(id)))('exchanges exactly the displayed $payment for $reward after restoring', (trade) => {
     const instanceId = `${trade.payment}-1` as ItemInstanceId;

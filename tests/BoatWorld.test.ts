@@ -275,6 +275,27 @@ function focusedPresenterTestDouble(eventId: string): FocusedPresenterTestDouble
 }
 
 describe('BoatWorld helpers', () => {
+  // Importance: 90/100. Duct tape repairs must preserve the player's camera pose throughout the cue.
+  it('keeps the camera stationary during the item repair cue', async () => {
+    const camera = new PerspectiveCamera();
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(camera, propModels, ...createTestSkyTextures());
+    try {
+      world.update(0, 0.016);
+      const position = camera.position.clone();
+      const rotation = camera.quaternion.clone();
+      const repair = world.play('repair');
+      for (let frame = 1; frame <= 12; frame += 1) {
+        world.update(frame * 0.1, 0.1);
+        expect(camera.position.toArray()).toEqual(position.toArray());
+        expect(camera.quaternion.toArray()).toEqual(rotation.toArray());
+      }
+      await repair;
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
   // Importance: 98/100. Item recovery must not delay the bite blackout or start a bite after cancellation.
   it.each([false, true])('finishes item recovery before the shark bite, cancelled=%s', async (cancelled) => {
     const propModels = createTestPropModels();
@@ -715,7 +736,6 @@ describe('BoatWorld helpers', () => {
       ['map-read', 'flowers', 'map', 'map', eventItemUseDuration('map-read')],
       ['map-cover', 'shower-night', 'map', 'map', eventItemUseDuration('map-cover')],
       ['map-wind', 'windy-night', 'map', 'map', eventItemUseDuration('map-wind')],
-      ['net-secure', 'windy-night', 'fishingNet', 'fishingNet', eventItemUseDuration('net-secure')],
       ['bucket-bail', 'shower-night', 'bucket', 'bucket', eventItemUseDuration('bucket-bail')],
       ['bucket-bail', 'thunderstorm', 'bucket', 'bucket', eventItemUseDuration('bucket-bail')],
       ['binocular-look', 'flowers', 'spyglass', 'spyglass', eventItemUseDuration('binocular-look')],
@@ -1149,7 +1169,7 @@ describe('BoatWorld helpers', () => {
 
   // Importance: 94/100. Cargo tools must contact the supplies, remain deployed, and release on scene cleanup.
   it.each([
-    ['shower-night', 'map'], ['windy-night', 'fishingNet'],
+    ['shower-night', 'map'],
   ] as const)('places %s cargo cover on the supplies', async (eventId, itemId) => {
     const item = savedItem(itemId);
     const propModels = createTestPropModels();
@@ -1162,7 +1182,7 @@ describe('BoatWorld helpers', () => {
       await use;
       const actor = world.scene.getObjectByName(`boat-supply-event:${item.instanceId}`)!;
       const target = world.scene.getObjectByName('event-cargo-target')!;
-      const contact = actor.localToWorld(new Vector3(0, 0, itemId === 'fishingNet' ? -0.56 : 0));
+      const contact = actor.localToWorld(new Vector3());
       expect(contact.distanceTo(target.getWorldPosition(new Vector3()))).toBeLessThan(0.01);
       const normal = new Vector3(0, 1, 0).applyQuaternion(actor.getWorldQuaternion(new Quaternion()));
       const targetNormal = new Vector3(0, 0, 1).applyQuaternion(target.getWorldQuaternion(new Quaternion()));

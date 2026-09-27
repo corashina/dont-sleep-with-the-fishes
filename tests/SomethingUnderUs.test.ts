@@ -16,7 +16,7 @@ function session(hunger = 0, ...items: ItemId[]): SurvivalSession {
 }
 
 describe('Something Under Us rules', () => {
-  it.each([[0, 2], [80, 1]])('charges one dawn energy without reducing wake-up energy below one at hunger %s, including after saving', (hunger, energy) => {
+  it.each([[0, 2], [70, 1]])('charges one dawn energy without reducing wake-up energy below one at hunger %s, including after saving', (hunger, energy) => {
     const run = session(hunger);
     const health = run.snapshot().health;
     const hull = run.snapshot().hull;
@@ -69,8 +69,8 @@ function presentation(movingWater = false) {
 
 describe('Something Under Us presentation', () => {
 
-  // Importance: 95/100. Prevents the reported hull clipping across a complete orbit.
-  it('circles through every quadrant while moving waves keep the entire mesh outside the hull', () => {
+  // Importance: 95/100. Prevents hull clipping while the monster prowls across the bow.
+  it('keeps the moving monster outside the hull and in front of the boat', () => {
     const { event } = presentation(true);
     event.reveal(); event.skip();
     const shadow = event.worldRoot.getObjectByName('under-us-sea-shadow') as Mesh;
@@ -78,7 +78,7 @@ describe('Something Under Us presentation', () => {
     const material = shadow.material as import('three').ShaderMaterial;
     const opacity = material.uniforms.opacity!.value;
     expect(opacity).toBeGreaterThan(0.8);
-    const quadrants = new Set<string>();
+
     for (let time = 0; time < 50; time += 0.25) {
       event.update(time, 0.25);
       let clearance = Infinity;
@@ -89,15 +89,14 @@ describe('Something Under Us presentation', () => {
       }
       expect(clearance).toBeGreaterThan(5);
       expect(material.uniforms.opacity!.value).toBe(opacity);
-      // Track one body point; the center of a complete coil remains at the boat.
-      quadrants.add(`${Math.sign(positions.getX(0))},${Math.sign(positions.getZ(0))}`);
+      expect(positions.getZ(Math.floor(positions.count / 2))).toBeLessThan(-5);
     }
-    expect(quadrants.size).toBe(4);
+
     event.dispose();
   });
 
   // Importance: 95/100. Opacity alone does not keep the shadow in the player's view.
-  it.each([16 / 9, 9 / 16])('keeps black body in the player view for a full orbit at aspect %s', (aspect) => {
+  it.each([16 / 9, 9 / 16])('keeps the monster head in the player view throughout its swim at aspect %s', (aspect) => {
     const { event } = presentation(true);
     event.reveal(); event.skip();
     const camera = new PerspectiveCamera(50, aspect, 0.1, 1000);
@@ -112,8 +111,8 @@ describe('Something Under Us presentation', () => {
       event.update(time, 0.2);
       let visibleBodyPoints = 0;
       for (let index = 0; index < positions.count; index += 1) {
-        // The central strip is the black body, away from eyes, teeth and soft edges.
-        if (Math.abs(uvs.getY(index) - 0.5) > 0.025) continue;
+        // Only count the head, excluding the transparent space between the arms.
+        if (Math.abs(uvs.getY(index) - 0.5) > 0.10 || Math.abs(uvs.getX(index) - 0.5) > 0.08) continue;
         point.fromBufferAttribute(positions, index).project(camera);
         if (Math.abs(point.x) < 0.9 && point.y > -0.9 && point.y < 0 && point.z > -1 && point.z < 1) {
           visibleBodyPoints += 1;

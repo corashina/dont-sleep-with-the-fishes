@@ -421,9 +421,6 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(1, 'windTapeResult', effects(
         [subtract('hull', { min: 10, max: 20 })], [consume('ductTape')],
       ))),
-    choice('fishingNet', 'eventText066', 'fishingNet',
-      outcome(65, 'eventText153'),
-      outcome(35, 'eventText154', effects(undefined, [breakItem('fishingNet')]))),
     choice('map', 'eventText060', 'map', outcome(1, 'eventText155', effects(undefined, [lose('map')]))),
     choice('umbrella', 'eventText072', 'umbrella',
       outcome(1, 'eventText157', effects(undefined, [lose('umbrella')]))),
@@ -622,8 +619,6 @@ const survivalEvents: SurvivalEventDefinition[] = [
       featuredOutcome('check-the-back.ignore', 1, 'eventText236')),
   ], undefined, { allowedChestStates: ['none'] }),
   event('flowers', 'night', 'eventText053', 'safe', 'sighting', 4, 9, 0, [
-    contextualChoice('collect', 'flowersCollectChoice',
-      featuredOutcome('flowers.collect', 1, 'flowersCollectResult', { grantHeartPiece: 'flowers' })),
     choice('fishingNet', 'eventText066', 'fishingNet',
       featuredOutcome('flowers.collect', 1, 'eventText237', { grantHeartPiece: 'flowers' })),
     choice('bucket', 'eventText065', 'bucket',
@@ -737,7 +732,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     choice('flashlight', 'eventText071', 'flashlight', outcome(
       1, 'ufoBeamHit', effects([subtract('health', 40)]), 'ufo-beam-hit',
     )),
-    contextualChoice('sleep', 'ufoIgnore', outcome(1, 'ufoPassed', {}, 'ufo-pass')),
+    contextualChoice('sleep', 'eventText063', outcome(1, 'ufoPassed', {}, 'ufo-pass')),
   ], undefined, { maximumAppearances: 1 }),
   event('lighthouse', 'night', 'lighthouseTitle', 'safe', 'sighting', 2, 15, 2, [
     choice('flareGun', 'eventText070', 'flareGun', outcome(

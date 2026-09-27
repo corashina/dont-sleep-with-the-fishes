@@ -44,16 +44,17 @@ it.each(['fishingNet', 'bucket'] as const)('collects the Flowers piece with %s o
   expect(session.resolveEvent(response).accepted).toBe(false);
 });
 
-it('collects the Flowers piece without tools or extra loot', () => {
+// Importance: 98/100. Collection must require a tool and reject the removed shortcut.
+it('requires a net or bucket to collect the Flowers piece', () => {
   const session = new SurvivalSession([], { seed: 41, initialEventId: 'flowers' });
   const before = session.snapshot();
+  expect(survivalEventById('flowers')!.choices.map(({ id }) => id)).toEqual(['fishingNet', 'bucket', 'sleep']);
   const result = session.resolveEvent({ kind: 'choice', choiceId: 'collect' });
-  expect(result.accepted).toBe(true);
-  expect(result.rewardSummary).toEqual({ kind: 'bundle', rewards: [{ kind: 'heartPiece', id: 'flowers', quantity: 1 }] });
+  expect(result.accepted).toBe(false);
+  expect(result.rewardSummary).toBeUndefined();
   expect(session.snapshot().inventory).toEqual(before.inventory);
-  expect(session.snapshot().food).toBe(before.food);
-  expect(session.snapshot().bait).toBe(before.bait);
-  expect(session.snapshot().heartPieces.flowers).toBe(true);
+  expect(session.snapshot().heartPieces.flowers).toBe(false);
+  expect(session.snapshot().pendingEventId).toBe('flowers');
 });
 
 it('grants only the blood piece with scuba gear and keeps the pressure cost', () => {

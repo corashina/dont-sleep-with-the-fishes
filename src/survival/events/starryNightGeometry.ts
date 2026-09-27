@@ -196,7 +196,7 @@ export class StarryNightGeometry {
     }
   }
 
-  update(time: number, reveal: number, opacity: number, selected: number, flash: number, aspect: number): void {
+  update(time: number, reveal: number, opacity: number, aspect: number): void {
     // Reach 95% of the hover color in 0.3 seconds, independent of frame rate.
     const highlightBlend = 1 - Math.exp(-Math.max(0, time - this.previousTime) * 10);
     this.previousTime = time;
@@ -207,15 +207,12 @@ export class StarryNightGeometry {
       } else {
         group.position.set((index - 0.5)*105, 12, 0);
       }
-      const chosen = index === selected;
-      const alpha = chosen ? Math.min(1, opacity * 2) : opacity;
       const highlightTarget = index === this.highlighted ? 1 : 0;
-      group.scale.setScalar(2.4 * (chosen ? 1 + flash*0.08 : 1));
       for (const mesh of this.meshes[index]!) {
         const uniforms = mesh.material.uniforms;
         uniforms.time!.value = time;
         uniforms.reveal!.value = reveal;
-        uniforms.opacity!.value = alpha * (chosen ? 1 + flash*2 : 1);
+        uniforms.opacity!.value = opacity;
         uniforms.highlight!.value += (highlightTarget - uniforms.highlight!.value) * highlightBlend;
       }
     }

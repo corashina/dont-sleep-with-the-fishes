@@ -1,3 +1,5 @@
+import { GHOST_COUNT, ghostFlashlightCycle, ghostFlashlightDeparture } from './ghostFlashlightChoreography';
+import { smoothstep } from './animationMath';
 import {
   Box3,
   BufferGeometry,
@@ -236,6 +238,10 @@ export class SupernaturalEventAnimator {
   });
   private readonly ghosts: readonly Group[];
   private readonly ghostFloatPose = createGhostFloatPose();
+  private readonly ghostAimTarget = new Object3D();
+  private readonly ghostAimFrom = new Vector3();
+  private readonly ghostAimTo = new Vector3();
+  private ghostsRepelled = false;
   private ghostFloatPaths = createGhostFloatPaths(0);
   private readonly siren: Group;
   private readonly sirenRock: Group;
@@ -265,9 +271,11 @@ export class SupernaturalEventAnimator {
       ? null
       : new StationaryEventCamera(viewCamera);
     this.worldRoot.name = 'supernatural-event-world';
+    this.ghostAimTarget.name = 'ghost-flashlight-target';
+    this.worldRoot.add(this.ghostAimTarget);
     const includeGhosts = onlyEventId === undefined || onlyEventId === 'ghosts';
     const includeSiren = onlyEventId === undefined || onlyEventId === 'eerie-melody';
-    this.ghosts = includeGhosts ? Array.from({ length: 5 }, (_, index) => {
+    this.ghosts = includeGhosts ? Array.from({ length: GHOST_COUNT }, (_, index) => {
       const ghost = eventModels.create('ghost');
       ghost.name = `ghost-${index + 1}`;
       replaceMaterials(ghost, this.ghostMaterial);
@@ -353,10 +361,12 @@ export class SupernaturalEventAnimator {
     this.cancelActive();
     this.stagedEventId = supernaturalRevealDuration(eventId) === null ? null : eventId;
     if (eventId === 'ghosts') this.ghostFloatPaths = createGhostFloatPaths(variantSeed);
+    this.ghostsRepelled = false;
     this.ghostFloatTime = 0;
     this.ghostLoopVisible = eventId === 'ghosts';
     this.rememberCameraBase();
     this.restoreStage();
+    this.updateGhostAim(0);
   }
 
   supportsItemUse(eventId: string, choiceId: string): boolean {
@@ -365,7 +375,7 @@ export class SupernaturalEventAnimator {
 
   itemAimTarget(eventId: string): Object3D | null {
     if (this.disposed || this.stagedEventId !== eventId) return null;
-    if (eventId === 'ghosts') return this.ghosts[0] ?? null;
+    if (eventId === 'ghosts') return this.ghostAimTarget;
     if (eventId === 'eerie-melody') return this.sirenTableau;
     return null;
   }
@@ -404,6 +414,10 @@ export class SupernaturalEventAnimator {
     if (eventId === 'ghosts') {
       this.ghostLoopVisible = false;
       this.hideGhosts();
+    }
+    if (eventId === 'ghosts' && choiceId === 'flashlight') {
+      this.ghostsRepelled = true;
+      this.updateGhostFlashlight(0);
     }
     sampleSupernaturalItemUse(eventId, choiceId, 0, this.itemSample);
     return new Promise((resolve) => {
@@ -555,12 +569,41 @@ export class SupernaturalEventAnimator {
       this.itemSample,
     )) return;
     if (active.eventId === 'ghosts') {
+      if (active.choiceId === 'flashlight') {
+        this.updateGhostFlashlight(progress);
+        return;
+      }
       this.hideGhosts();
       return;
     }
     if (active.eventId === 'eerie-melody' && active.choiceId === 'radio') {
       this.siren.rotation.z = this.sirenBaseRotation.z - this.itemSample.effect * 0.12;
     }
+  }
+
+  private updateGhostFlashlight(progress: number): void {
+    this.updateGhostAim(progress);
+    this.ghostMaterial.opacity = 0.56;
+    for (let index = 0; index < this.ghosts.length; index += 1) {
+      const ghost = this.ghosts[index]!;
+      const departure = ghostFlashlightDeparture(progress, index);
+      this.poseFloatingGhost(ghost, index);
+      ghost.position.x += (ghost.position.x < 0 ? -1 : 1) * departure * 12;
+      ghost.position.y += departure * 8;
+      ghost.position.z -= departure * 20;
+      ghost.visible = departure < 1;
+    }
+  }
+
+  private updateGhostAim(progress: number): void {
+    if (this.ghosts.length === 0) return;
+    const cycle = ghostFlashlightCycle(progress);
+    const index = Math.min(GHOST_COUNT - 1, Math.floor(cycle));
+    sampleGhostFloatPathInto(this.ghostFloatPose, this.ghostFloatPaths[Math.max(0, index - 1)]!, this.ghostFloatTime);
+    this.ghostAimFrom.fromArray(this.ghostFloatPose.position);
+    sampleGhostFloatPathInto(this.ghostFloatPose, this.ghostFloatPaths[index]!, this.ghostFloatTime);
+    this.ghostAimTo.fromArray(this.ghostFloatPose.position);
+    this.ghostAimTarget.position.copy(this.ghostAimFrom).lerp(this.ghostAimTo, smoothstep((cycle - index) / 0.2));
   }
 
   private updateReaction(
@@ -601,6 +644,7 @@ export class SupernaturalEventAnimator {
       sample.cameraRoll,
     );
     if (eventId === 'ghosts') {
+      if (this.ghostsRepelled) { this.hideGhosts(); return; }
       this.ghostMaterial.opacity = Math.min(0.62, sample.ghostVisibility * 0.52);
       for (let index = 0; index < this.ghosts.length; index += 1) {
         const ghost = this.ghosts[index]!;
@@ -672,7 +716,7 @@ export class SupernaturalEventAnimator {
     this.siren.position.copy(this.sirenBasePosition);
     this.siren.rotation.copy(this.sirenBaseRotation);
     if (this.stagedEventId === 'ghosts') {
-      this.showGhostLoop(0.42);
+      if (!this.ghostsRepelled) this.showGhostLoop(0.42);
       this.showGhostFog();
     } else if (this.stagedEventId === 'eerie-melody') {
       this.sirenTableau.visible = true;
@@ -768,7 +812,7 @@ export class SupernaturalEventAnimator {
     response: EventPhysicalResponsePresentation | null,
   ): void {
     this.hideAll();
-    if (eventId === 'ghosts' && response?.choiceId !== 'flareGun') {
+    if (eventId === 'ghosts' && !this.ghostsRepelled && response?.choiceId !== 'flareGun') {
       this.ghostLoopVisible = true;
       this.showGhostFog();
       this.showGhostLoop(0.32);

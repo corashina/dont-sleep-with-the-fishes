@@ -37,13 +37,13 @@ describe('run statistics history', () => {
 
   it('records the fatal dawn instead of the last living state', () => {
     const session = new SurvivalSession([], {
-      seed: 77, initialEventId: 'bad-sleep', initial: { health: 1, hunger: 100 },
+      seed: 77, initialEventId: 'bad-sleep', initial: { health: 20, hunger: 95 },
     });
     session.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
     session.beginDawn();
     const ending = session.snapshot();
     expect(ending.ending?.id).toBe('death');
-    expect(ending.history.at(-1)).toEqual({ day: ending.day, health: 0, hunger: 100, hull: ending.hull });
+    expect(ending.history.at(-1)).toEqual({ day: ending.day, health: 20, hunger: 100, hull: ending.hull });
   });
 
   it.each([

@@ -1,3 +1,4 @@
+import { CarlitosChestReminderView } from './CarlitosChestReminderView';
 import { onLanguageChange } from '../i18n/language';
 import {
   ITEM_DEFINITIONS,
@@ -64,6 +65,7 @@ export class SurvivalUI {
   onCameraTurn: (() => void) | null = null;
 
   private readonly root: HTMLDivElement;
+  private readonly chestReminder = new CarlitosChestReminderView();
   private readonly hudView: SurvivalHudView;
   private readonly anchorView: BoatAnchorView;
   private readonly eventView: SurvivalEventView;
@@ -112,6 +114,7 @@ export class SurvivalUI {
       this.eventView.sleepMask,
     );
     this.root.append(
+      this.chestReminder.root,
       ...this.hudView.roots,
       ...this.anchorView.roots,
       ...this.fishingView.roots,
@@ -223,7 +226,10 @@ export class SurvivalUI {
     );
     this.fishingView.onInteractionShow = () => this.showLayer(this.fishingView.interactionRoot);
     this.fishingView.onInteractionHide = () => this.hideLayer(this.fishingView.interactionRoot);
-    this.fishingView.onResultShow = () => this.showLayer(this.fishingView.resultRoot);
+    this.fishingView.onResultShow = () => {
+      this.showLayer(this.fishingView.resultRoot);
+      this.onRewardShown();
+    };
     this.fishingView.onResultHide = () => this.hideLayer(this.fishingView.resultRoot);
     this.focusedEventView.onChoice = (choice) => {
       if (!this.disposed) this.onFocusedEventChoice?.(choice);
@@ -275,12 +281,24 @@ export class SurvivalUI {
     DAY_ACTION_IDS.forEach((action) => reasons.set(action, unavailable(action)));
     this.hudView.render(snapshot, reasons);
     this.anchorView.render(snapshot, reasons);
+    this.chestReminder.configure(snapshot.day, snapshot.carlitos !== null && reasons.get('openChest') === null);
     this.syncCommandState();
   }
 
   setAnchors(anchors: readonly BoatInteractionAnchor[]): void {
     if (this.disposed) return;
     this.anchorView.setAnchors(anchors);
+    this.chestReminder.setAnchors(anchors);
+  }
+
+  updateChestReminder(seconds: number, due: boolean): boolean {
+    if (this.disposed) return false;
+    return this.chestReminder.update(seconds, due);
+  }
+
+  private syncChestReminder(): void {
+    this.chestReminder.setBlocked(this.busy || this.paused || this.endingStarted
+      || this.carlitosRadioPause || this.modalFocus.topmostModal() !== null);
   }
 
   setJournalUnread(unread: boolean): void {
@@ -526,6 +544,7 @@ export class SurvivalUI {
     this.anchorView.setBusy(busy);
     this.eventView.setBusy(busy);
     this.focusedEventView.setBusy(busy);
+    this.syncChestReminder();
     this.syncCommandState();
     if (!busy && this.modalFocus.topmostModal() === this.focusedEventView.root) {
       this.modalFocus.focusInitial(this.focusedEventView.root);
@@ -700,10 +719,12 @@ export class SurvivalUI {
     this.hudView.setModalOpen(open, !open || topmost === this.fishingView.interactionRoot);
     this.anchorView.setModalOpen(open);
     this.eventView.setModalOpen(open);
+    this.syncChestReminder();
   }
 
   private syncRadioPause(): void {
     this.onRadioPauseChange(this.journalRadioPause || this.carlitosRadioPause);
+    this.syncChestReminder();
   }
 
   private activateDayAction(action: DayActionId, origin: HTMLButtonElement | null): void {

@@ -552,6 +552,7 @@ export class DangerousWatersPresentation {
     choiceId: DangerousWatersChoiceId | null,
   ): void {
     this.resetPose();
+    if (this.resultBaseChoiceId === 'compass') return;
     const value = clamp01(progress);
     switch (kind) {
       case 'reveal':
@@ -602,9 +603,7 @@ export class DangerousWatersPresentation {
   ): void {
     const pulse = progress >= 1 ? 0 : Math.sin(Math.PI * progress);
     const lift = smoothstep(Math.min(1, progress / 0.55));
-    if (choiceId === 'compass') {
-      this.boatReaction.yaw -= pulse * 0.014 + lift * 0.035;
-    } else if (choiceId === 'anchor') {
+    if (choiceId === 'anchor') {
       const stop = smoothstep(Math.min(1, progress / 0.72));
       this.boatReaction.driftX -= stop * 0.24;
       this.boatReaction.pitch += pulse * 0.018;

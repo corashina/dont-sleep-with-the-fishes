@@ -104,6 +104,36 @@ function createFixture(): ProjectorFixture {
 }
 
 describe('BoatInteractionProjector', () => {
+  // Importance: 95/100. Wood and empty space must not activate the fishing rod behind them.
+  it('accepts only exposed fishing rod geometry inside the boat', () => {
+    const { projector, roots } = createFixture();
+    roots.fishingRoot.scale.y = 10;
+    roots.boatRoot.add(roots.fishingRoot);
+    const anchor = projector.projectAnchors(1280, 720).find(({ id }) => id === 'fishing-tools')!;
+    try {
+      expect(anchor.hitTest).toBeTypeOf('function');
+      expect(anchor.hitTest!(anchor.x, anchor.y)).toBe(true);
+      expect(anchor.hitTest!(anchor.x + 18, anchor.y)).toBe(false);
+
+      const wood = meshRoot('wooden-seat', 0, 0, -3);
+      wood.scale.x = 10;
+      roots.boatRoot.add(wood);
+      expect(anchor.hitTest!(anchor.x, anchor.y)).toBe(false);
+      expect(anchor.hitTest!(anchor.x, anchor.y - anchor.hitArea!.height * 0.35)).toBe(true);
+
+      wood.position.z = -7;
+      expect(anchor.hitTest!(anchor.x, anchor.y)).toBe(true);
+      wood.position.z = -3;
+      wood.visible = false;
+      expect(anchor.hitTest!(anchor.x, anchor.y)).toBe(true);
+      roots.fishingRoot.visible = false;
+      expect(anchor.hitTest!(anchor.x, anchor.y)).toBe(false);
+    } finally {
+      projector.dispose();
+    }
+    expect(anchor.hitTest!(anchor.x, anchor.y)).toBe(false);
+  });
+
   // Importance: 95/100. Prevents selecting the hand through the hull or empty space.
   it('requires a visible mesh hit for precise event targets', () => {
     const { projector, roots } = createFixture();

@@ -23,7 +23,7 @@ it.each(['en', 'pl', 'es-AR'] as const)('does not disclose rescue progress in %s
   expect(outcome.accepted).toBe(true);
   expect(outcome.deltas.rescueLead).toBe(2);
   const visibleOutcome = { ...outcome, deltas: { energy: -1 } };
-  expect(formatDiveResult(outcome)).toEqual(formatDiveResult(visibleOutcome));
+  expect(formatDiveResult(outcome, false)).toEqual(formatDiveResult(visibleOutcome, false));
 
   const action: JournalSurvivalActionRecord = {
     kind: 'dayAction', action: 'dive', deltas: outcome.deltas, inventoryMutations: [],

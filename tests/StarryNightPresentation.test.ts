@@ -44,7 +44,7 @@ describe('Starry Night presentation', () => {
     presentation.dispose();
   });
 
-  // Importance: 90/100. Selecting a gift must keep both constellations visible.
+  // Importance: 90/100. Selecting a gift must keep both constellations visible at their original size.
   it.each(['animate', 'settle'] as const)('keeps both constellations after a gift (%s)', async (completion) => {
     const { presentation } = setup();
     presentation.reveal();
@@ -57,6 +57,7 @@ describe('Starry Night presentation', () => {
       for (const target of presentation.interactionTargets()) {
         for (const mesh of target.root.children as Mesh[]) {
           const uniforms = (mesh.material as ShaderMaterial).uniforms;
+          expect(target.root.scale.toArray()).toEqual([2.4, 2.4, 2.4]);
           expect(uniforms.reveal!.value).toBe(1);
           expect(uniforms.opacity!.value).toBeGreaterThanOrEqual(1);
         }

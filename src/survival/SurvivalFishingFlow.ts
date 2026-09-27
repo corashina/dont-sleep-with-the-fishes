@@ -93,9 +93,7 @@ export function formatFishingResult(result: FishingTerminalResult, outcome: Acti
     items,
     get message() {
       if (result.kind === 'miss') return flowText('nothing');
-      if (result.catch.id === 'backpack' || result.catch.kind === 'fish') return '';
-      return result.catch.reward.kind === 'none'
-        ? flowText('junk') : result.catch.label;
+      return result.catch.reward.kind === 'none' ? flowText('junk') : '';
     },
   };
 }

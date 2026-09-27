@@ -280,6 +280,44 @@ function createSessionRig(
 }
 
 describe('event selection contracts', () => {
+  // Importance: 95/100. The worn bucket must remain intact until the Eerie Melody scene is covered and cleared.
+  it('keeps the Eerie Melody bucket intact during the event and shows damage afterward', async () => {
+    const rig = createSessionRig(new SurvivalSession([{ type: 'bucket', instanceId: 'bucket-1' }], {
+      seed: 17, initial: { day: 13 }, initialEventId: 'eerie-melody',
+    }));
+    const reaction = deferred();
+    const hold = deferred();
+    const cover = deferred();
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    rig.world.reactToEventOutcome.mockImplementation(() => reaction.promise);
+    rig.ui.holdEventOutcome.mockImplementation(() => hold.promise);
+    rig.ui.setSleepCovered.mockImplementation(() => cover.promise);
+    rig.world.clearEvent.mockClear();
+    rig.flow.resolveItem('bucket', 'bucket-1');
+    await vi.waitFor(() => expect(rig.world.reactToEventOutcome).toHaveBeenCalledOnce());
+    const assertIntact = () => {
+      rig.flow.sync(rig.realSession.snapshot());
+      expect(rig.world.syncInventory).toHaveBeenLastCalledWith(expect.objectContaining({
+        inventory: { 'bucket-1': expect.objectContaining({ condition: 'usable' }) },
+      }));
+      expect(rig.world.clearEvent).not.toHaveBeenCalled();
+    };
+    assertIntact();
+    reaction.resolve();
+    await vi.waitFor(() => expect(rig.ui.holdEventOutcome).toHaveBeenCalledOnce());
+    assertIntact();
+    hold.resolve();
+    await vi.waitFor(() => expect(rig.ui.setSleepCovered).toHaveBeenCalledWith(true));
+    assertIntact();
+    cover.resolve();
+    await vi.waitFor(() => expect(rig.world.clearEvent).toHaveBeenCalledOnce());
+    rig.flow.sync(rig.realSession.snapshot());
+    expect(rig.world.syncInventory).toHaveBeenLastCalledWith(expect.objectContaining({
+      inventory: { 'bucket-1': expect.objectContaining({ condition: 'broken' }) },
+    }));
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
   // Importance: 95/100. Boat bites must stay black through cleanup, including a fatal hull result.
   it.each([100, 10])('keeps the fog bite covered through resolution at %s hull', async hull => {
     const rig = createSessionRig(new SurvivalSession([{ type: 'flashlight', instanceId: 'flashlight-1' }], {
@@ -505,7 +543,8 @@ describe('event selection contracts', () => {
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });
 
-  it('anchors two constellations and grants the selected item once', async () => {
+  // Importance: 95/100. The gift must arrive once, after the screen is fully covered.
+  it('anchors two constellations and grants the selected item once after fade out', async () => {
     const rig = createSessionRig(new SurvivalSession([
       { instanceId: 'carlitos-1', type: 'carlitos' },
     ], {
@@ -520,8 +559,14 @@ describe('event selection contracts', () => {
       ...items.map((id) => expect.objectContaining({ id, anchorId: 'starry-night:' + id })),
       expect.objectContaining({ id: 'sleep' }),
     ]);
+    const fade = deferred();
+    rig.ui.setSleepCovered.mockImplementationOnce(() => fade.promise);
     rig.flow.resolveContextual(items[0]!);
     rig.flow.resolveContextual(items[0]!);
+    await vi.waitFor(() => expect(rig.ui.setSleepCovered).toHaveBeenLastCalledWith(true));
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    expect(Object.values(rig.realSession.snapshot().inventory).some(item => item?.type === items[0])).toBe(false);
+    fade.resolve();
     await vi.waitFor(() => expect(rig.session.beginDawn).toHaveBeenCalledTimes(1));
     expect(rig.session.resolveEvent).toHaveBeenCalledTimes(1);
     expect(Object.values(rig.realSession.snapshot().inventory)).toContainEqual({
@@ -531,6 +576,30 @@ describe('event selection contracts', () => {
     expect(rig.onFatalError).not.toHaveBeenCalled();
     rig.flow.dispose();
   });
+  // Importance: 95/100. Cancelling the fade must not grant a late constellation reward.
+  it('does not grant a constellation gift when cleared during fade out', async () => {
+    const rig = createSessionRig(new SurvivalSession([], {
+      seed: 715, initial: { day: 4 }, initialEventId: 'starry-night',
+    }));
+    try {
+      await rig.flow.revealPending(rig.realSession.snapshot());
+      const fade = deferred();
+      rig.ui.setSleepCovered.mockClear();
+      rig.ui.setSleepCovered.mockImplementationOnce(() => fade.promise);
+      const item = constellationItems(deriveEventVariantSeed(715, 4, 'starry-night'), new Set())[0]!;
+      const before = rig.realSession.snapshot();
+      rig.flow.resolveContextual(item);
+      await vi.waitFor(() => expect(rig.ui.setSleepCovered).toHaveBeenCalledWith(true));
+      rig.flow.clear();
+      fade.resolve();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+      expect(rig.realSession.snapshot()).toEqual(before);
+    } finally {
+      rig.flow.dispose();
+    }
+  });
+
   it('offers the Radio to call a crew and routes its reply through the event flow', async () => {
     const rig = createSessionRig(new SurvivalSession([
       { instanceId: 'radio-1', type: 'radio' },
@@ -690,15 +759,18 @@ describe('event selection contracts', () => {
     },
   );
 
-  it.each([true, false])('offers only UFO signals and pauses the twelve-second window, equipped=%s', async (equipped) => {
+  it.each([true, false])('offers UFO signals and sleep and pauses the twelve-second window, equipped=%s', async (equipped) => {
     const isVisibilityBlocked = vi.fn(() => false);
     const rig = createSessionRig(new SurvivalSession(equipped ? [
       { instanceId: 'flashlight-1', type: 'flashlight' },
     ] : [], { seed: 1113, initial: { day: 15 }, initialEventId: 'flying-saucer' }), { isVisibilityBlocked });
     rig.flow.update(100);
     await rig.flow.revealPending(rig.realSession.snapshot());
-    expect(rig.flow.canUsePillow(rig.realSession.snapshot())).toBe(false);
-    expect(rig.ui.setEventSelection).toHaveBeenLastCalledWith(new Map(equipped ? [['flashlight-1', 'flashlight']] : []), []);
+    expect(rig.flow.canUsePillow(rig.realSession.snapshot())).toBe(true);
+    expect(rig.ui.setEventSelection).toHaveBeenLastCalledWith(
+      new Map(equipped ? [['flashlight-1', 'flashlight']] : []),
+      [expect.objectContaining({ id: 'sleep', label: 'Sleep', unavailableReason: null })],
+    );
     rig.flow.update(UFO_CHOICE_WINDOW_SECONDS - 1);
     isVisibilityBlocked.mockReturnValue(true);
     rig.flow.update(100);
@@ -708,6 +780,34 @@ describe('event selection contracts', () => {
     await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
     expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'endure' });
     expect(rig.audio.confirm).not.toHaveBeenCalled();
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
+  // Importance: 95/100. Pillow sleep must safely finish the event once, even when its timer expires.
+  it.each([true, false])('sleeps through the UFO with the pillow, equipped=%s', async (equipped) => {
+    const rig = createSessionRig(new SurvivalSession(equipped ? [
+      { instanceId: 'flashlight-1', type: 'flashlight' },
+    ] : [], { seed: 1113, initial: { day: 15 }, initialEventId: 'flying-saucer' }));
+    const cover = deferred();
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    rig.ui.setSleepCovered.mockImplementation(() => cover.promise);
+    expect(rig.flow.canUsePillow(rig.realSession.snapshot())).toBe(true);
+    rig.flow.resolveContextual('sleep');
+    expect(rig.audio.sleep).toHaveBeenCalledOnce();
+    expect(rig.ui.setSleepCovered).toHaveBeenCalledWith(true);
+    expect(rig.flow.canUsePillow(rig.realSession.snapshot())).toBe(false);
+    rig.flow.update(UFO_CHOICE_WINDOW_SECONDS);
+    rig.flow.resolveContextual('sleep');
+    rig.flow.resolveEndure();
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    cover.resolve();
+    await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+    expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'choice', choiceId: 'sleep' });
+    expect(rig.session.resolveEvent.mock.results[0]!.value).toMatchObject({
+      accepted: true, eventResult: { eventId: 'flying-saucer', choiceId: 'sleep', resultId: 'ufo-pass' },
+    });
+    expect(rig.realSession.snapshot()).toMatchObject({ state: 'day', day: 16, health: 100 });
+    expect(rig.onInvariantError).not.toHaveBeenCalled();
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });
 

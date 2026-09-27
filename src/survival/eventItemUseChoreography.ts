@@ -1,3 +1,4 @@
+import { GHOST_FLASHLIGHT_BASE_DURATION, GHOST_FLASHLIGHT_CUES, ghostFlashlightBeam } from './ghostFlashlightChoreography';
 import type { ItemId } from '../game/ItemState';
 import { clamp01, pulse, smoothstep } from './animationMath';
 import { eventItemMotionProfile, type EventItemMass } from './eventItemMotionProfile';
@@ -16,8 +17,8 @@ export type EventItemUseContext =
   | 'radio-signal-receive' | 'radio-call' | 'tape-secure'
   | 'flare-target' | 'flare-sky' | 'anchor-drop'
   | 'umbrella-overhead' | 'umbrella-shield'
-  | 'flashlight-threat-beam' | 'flashlight-signal' | 'shotgun-fire'
-  | 'knife-stab' | 'map-cover' | 'map-wind' | 'net-secure' | 'bucket-bail';
+  | 'flashlight-threat-beam' | 'flashlight-signal' | 'flashlight-ghosts' | 'shotgun-fire'
+  | 'knife-stab' | 'map-cover' | 'map-wind' | 'bucket-bail';
 
 export type EventItemEffectKind =
   | 'none' | 'tape' | 'binocular-mask'
@@ -106,7 +107,7 @@ const SWIM_RING_OVERHEAD_Y = 0.65;
 const SWIM_RING_WORN_Y = -0.62;
 const NO_ACTION_CUE_PROGRESSES: readonly number[] = Object.freeze([]);
 const DEPLOYED_CONTEXTS: ReadonlySet<EventItemUseContext> = new Set([
-  'anchor-drop', 'swim-ring-deploy', 'map-cover', 'net-secure',
+  'anchor-drop', 'swim-ring-deploy', 'map-cover',
 ]);
 
 export function isDeployedEventItemContext(context: EventItemUseContext): boolean {
@@ -206,11 +207,11 @@ const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number
   'umbrella-shield': 1.35,
   'flashlight-threat-beam': 1.45,
   'flashlight-signal': 1.7,
+  'flashlight-ghosts': GHOST_FLASHLIGHT_BASE_DURATION,
   'shotgun-fire': 1.2,
   'knife-stab': 1.15,
   'map-cover': 1.55,
   'map-wind': 1.55,
-  'net-secure': 1.9,
   'bucket-bail': 2.1,
 };
 
@@ -344,12 +345,12 @@ function resolveFishingNetContext(
 ): EventItemUseContext | null {
   if (choiceId === 'attack') return 'net-slap';
   if (choiceId !== 'fishingNet') return null;
-  if (eventId === 'windy-night') return 'net-secure';
   return NET_SLAP_EVENTS.has(eventId) ? 'net-slap' : 'net-scoop';
 }
 
 function resolveFlashlightContext(eventId: string, choiceId: string): EventItemUseContext | null {
   if (choiceId !== 'flashlight') return null;
+  if (eventId === 'ghosts') return 'flashlight-ghosts';
   return FLASHLIGHT_SIGNAL_EVENTS.has(eventId)
     ? 'flashlight-signal'
     : 'flashlight-threat-beam';
@@ -814,7 +815,7 @@ function sampleMapLeakPatch(
   samplePickupAndHold(output, travel, travel);
   const open = smoothstep((progress - 0.34) / 0.16);
   const align = smoothstep((progress - 0.44) / 0.18);
-  const press = smoothstep((progress - 0.64) / 0.22);
+  const press = smoothstep((progress - 0.5) / (MAP_PATCH_CONTACT_PROGRESS - 0.5));
   output.viewX -= 0.12 * open;
   output.viewY += 0.08 * open;
   output.pitch = 0;
@@ -822,14 +823,14 @@ function sampleMapLeakPatch(
   output.scaleX = 1 + 0.28 * open;
   output.scaleY = 1 + 0.28 * open;
   output.scaleZ = 1 + 0.28 * open;
-  output.targetBlend = 0.98 * press;
+  output.targetBlend = press;
   output.flightArc = 4 * press * (1 - press);
   output.flightArcHeight = MAP_PATCH_TRAVEL_ARC_HEIGHT;
   output.aimBlend = align;
   output.cameraTargetBlend = 0.3 * align;
   output.ballisticFlight = false;
   output.surfaceFacing = 'target-plane-opposite';
-  output.minimumLiftY = MAP_PATCH_MINIMUM_LIFT_Y * lift;
+  output.minimumLiftY = MAP_PATCH_MINIMUM_LIFT_Y * lift * (1 - travel);
 }
 
 function sampleFlare(
@@ -915,6 +916,15 @@ function sampleUmbrella(
   output.pitch = UMBRELLA_OVERHEAD_ROTATION.pitch * pickup;
   output.yaw = UMBRELLA_OVERHEAD_ROTATION.yaw * pickup;
   output.roll = UMBRELLA_OVERHEAD_ROTATION.roll * pickup;
+}
+
+function sampleGhostFlashlight(output: EventItemUseSample, progress: number): void {
+  const lift = smoothstep(progress / 0.16);
+  samplePickupAndHold(output, lift, lift);
+  const beam = ghostFlashlightBeam(progress);
+  output.effectKind = beam > 0 ? 'flashlight' : 'none';
+  output.primaryEffect = beam;
+  output.secondaryEffect = beam;
 }
 
 function sampleFlashlightMorse(progress: number): number {
@@ -1048,7 +1058,7 @@ export function sampleEventItemUse(
   staged[MOTION_PROFILE] = eventItemMotionProfile(itemId ?? 'cannedFood');
   staged[ANTICIPATE] = anticipate;
 
-  if (sampleWeatherItemUse(context, output, pickup, hold, t)) return;
+  if (sampleSpecialEventItemUse(context, output, pickup, hold, t)) return;
   if (context === 'tape-secure') {
     sampleTapeSecure(output, pickup, hold, t);
   } else if (context === 'radio-call') {
@@ -1064,13 +1074,13 @@ export function sampleEventItemUse(
   }
 }
 
-function sampleWeatherItemUse(
+function sampleSpecialEventItemUse(
   context: EventItemUseContext, output: EventItemUseSample,
   pickup: number, hold: number, progress: number,
 ): boolean {
   switch (context) {
-    case 'map-cover':
-    case 'net-secure': sampleCargoCover(output, pickup, hold, progress); return true;
+    case 'flashlight-ghosts': sampleGhostFlashlight(output, progress); return true;
+    case 'map-cover': sampleCargoCover(output, pickup, hold, progress); return true;
     case 'map-wind': sampleWindMap(output, pickup, hold, progress); return true;
     case 'bucket-bail': sampleBucketBail(output, pickup, hold, progress); return true;
     default: return false;
@@ -1152,6 +1162,7 @@ const ACTION_CUES: Readonly<Partial<Record<EventItemUseContext, readonly number[
   'flare-sky': FLARE_GUN_ACTION_CUE_PROGRESSES,
   'flashlight-threat-beam': FLASHLIGHT_THREAT_CUE_PROGRESSES,
   'flashlight-signal': FLASHLIGHT_MORSE_CUE_PROGRESSES,
+  'flashlight-ghosts': GHOST_FLASHLIGHT_CUES,
   'bucket-helmet': BUCKET_HELMET_RAIN_CUE_PROGRESSES,
 };
 
@@ -1356,6 +1367,7 @@ function sampleRecoveringEventItemOutcome(
     case 'map-read': sampleMapOutcome(itemId, progress, output); return true;
     case 'compass-search': sampleCompassOutcome(progress, profile, output); return true;
     case 'radio-signal-receive': sampleRadioOutcome(progress, profile, output); return true;
+    case 'flashlight-ghosts': sampleFlashlightOutcome('flashlight-signal', progress, output); return true;
     case 'flashlight-threat-beam': sampleFlashlightOutcome(context, progress, output); return true;
     case 'flashlight-signal': sampleFlashlightOutcome(context, progress, output); return true;
   }

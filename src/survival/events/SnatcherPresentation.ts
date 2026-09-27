@@ -32,9 +32,9 @@ import {
   type SnatcherSample,
 } from './snatcherChoreography';
 
-const TENTACLE_X = 1.2;
+const TENTACLE_X = 2.55;
 const TENTACLE_Y = -0.62;
-const TENTACLE_Z = -2.2;
+const TENTACLE_Z = -2.0;
 const TENTACLE_SCALE = 0.94;
 const TENTACLE_HIT_Y = 1.25;
 const TENTACLE_HIT_Z = 0.44;
@@ -85,7 +85,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     () => { this.activeChoiceId = null; },
   );
   private activeChoiceId: string | null = null;
-  private foodOffered = false;
+  private usedChoiceId: string | null = null;
   private staged = false;
   private disposed = false;
 
@@ -147,8 +147,8 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     }
     this.animation.cancel();
     this.activeChoiceId = choiceId;
-    this.foodOffered = choiceId === 'cannedFood';
-    if (this.foodOffered) {
+    this.usedChoiceId = choiceId;
+    if (choiceId === 'cannedFood') {
       this.boatRoot.add(this.itemAimTarget);
       this.itemAimTarget.position.set(TENTACLE_X + 2.45, 0, TENTACLE_Z);
     }
@@ -164,7 +164,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     if (this.disposed || !this.staged) return Promise.resolve();
     this.animation.cancel();
     this.activeChoiceId = null;
-    sampleSnatcherReaction(0, this.sample, this.foodOffered);
+    sampleSnatcherReaction(0, this.sample, this.usedChoiceId);
     this.applySample();
     return this.animation.start('reaction', SNATCHER_REACTION_DURATION);
   }
@@ -190,7 +190,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     if (this.disposed) return;
     this.animation.cancel();
     this.activeChoiceId = null;
-    this.foodOffered = false;
+    this.usedChoiceId = null;
     this.tentacle.add(this.itemAimTarget);
     this.staged = false;
     this.idleAction?.stop();
@@ -225,7 +225,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
       if (this.activeChoiceId === null) return;
       sampleSnatcherItemUse(this.activeChoiceId, progress, this.sample);
     } else {
-      sampleSnatcherReaction(progress, this.sample, this.foodOffered);
+      sampleSnatcherReaction(progress, this.sample, this.usedChoiceId);
     }
     this.applySample();
   }
@@ -241,7 +241,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     );
     this.tentacle.rotation.set(
       -0.12 + this.sample.creaturePitch,
-      -0.32 + this.sample.creatureYaw,
+      Math.PI - 0.32 + this.sample.creatureYaw,
       -0.2 + this.sample.creatureRoll,
     );
     const riseScale = 0.72 + this.sample.crouchStrength * 0.28;
@@ -267,7 +267,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   }
 
   private updateItemAimTarget(): void {
-    if (this.foodOffered) return;
+    if (this.usedChoiceId === 'cannedFood') return;
     this.tentacle.updateWorldMatrix(true, true);
     this.hitTargetWorldPosition
       .set(0, TENTACLE_HIT_Y, TENTACLE_HIT_Z)
@@ -300,7 +300,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     this.tentacle.visible = false;
     this.modelInstance.root.visible = false;
     this.tentacle.position.set(TENTACLE_X, TENTACLE_Y, TENTACLE_Z);
-    this.tentacle.rotation.set(-0.12, -0.32, -0.2);
+    this.tentacle.rotation.set(-0.12, Math.PI - 0.32, -0.2);
     this.tentacle.scale.setScalar(TENTACLE_SCALE);
   }
 }

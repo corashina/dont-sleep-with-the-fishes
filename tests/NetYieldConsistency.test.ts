@@ -19,10 +19,8 @@ describe('net catch agreement', () => {
       const outcome = game.finishFishing(begun.attempt.view().id, result);
       const popup = formatFishingResult(result, outcome);
       expect(outcome.accepted).toBe(true);
-      if (result.catch.kind === 'fish' || result.catch.id === 'backpack') {
+      if (result.catch.reward.kind !== 'none') {
         expect(popup.message).toBe('');
-      } else if (result.catch.reward.kind !== 'none') {
-        expect(popup.message).toContain(result.catch.label);
       }
       expect(popup.items.length).toBeLessThanOrEqual(1);
       if (result.catch.reward.kind === 'none') {

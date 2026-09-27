@@ -487,6 +487,16 @@ export class SurvivalPhase implements GamePhase {
     this.syncVisualState(presentationSnapshot);
     this.eventFlow.sync(snapshot);
     this.presentTerminalOnce(snapshot);
+    this.updateChestReminder(deltaSeconds);
+  }
+
+  private updateChestReminder(seconds: number): void {
+    if (!this.started || this.itemAnimationLab) return;
+    const due = this.session.canRemindAboutChest?.() ?? false;
+    if (this.ui.updateChestReminder?.(seconds, due)) {
+      this.session.markChestReminderShown?.();
+      this.emitStableCheckpoint();
+    }
   }
 
   resize(width: number, height: number): void {

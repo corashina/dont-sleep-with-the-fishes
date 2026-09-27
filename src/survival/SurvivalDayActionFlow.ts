@@ -88,7 +88,7 @@ function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-function buildDiveResult(outcome: ActionOutcome): RewardResultView {
+function buildDiveResult(outcome: ActionOutcome, scubaBroke: boolean): RewardResultView {
   const lines: string[] = [];
   let reward = outcome.rewardSummary ?? null;
   const itemRewards = [
@@ -109,14 +109,15 @@ function buildDiveResult(outcome: ActionOutcome): RewardResultView {
   if (appliedHealthDelta !== undefined && appliedHealthDelta < 0) {
     lines.push(flowText('injured'));
   }
+  if (scubaBroke) lines.push(flowText('scubaBroke'));
   return { title: 'DIVE RESULT', reward, lines };
 }
 
-export function formatDiveResult(outcome: ActionOutcome): RewardResultView {
+export function formatDiveResult(outcome: ActionOutcome, scubaBroke: boolean): RewardResultView {
   return {
     title: 'DIVE RESULT',
-    reward: buildDiveResult(outcome).reward,
-    get lines() { return buildDiveResult(outcome).lines; },
+    reward: buildDiveResult(outcome, scubaBroke).reward,
+    get lines() { return buildDiveResult(outcome, scubaBroke).lines; },
   };
 }
 
@@ -285,7 +286,11 @@ export class SurvivalDayActionFlow {
       const snapshot = await this.settleCoveredDive(generation, operation);
       if (snapshot === null) return;
       if (!await this.uncoverDive(generation, operation)) return;
-      await this.presentDiveResult(outcome, snapshot, generation, operation);
+      const scubaBroke = Object.values(beforeAction.inventory).some((item) => (
+        item?.type === 'scubaSet' && item.condition === 'usable'
+        && snapshot.inventory[item.instanceId]?.condition === 'broken'
+      ));
+      await this.presentDiveResult(formatDiveResult(outcome, scubaBroke), snapshot, generation, operation);
     } catch (error) {
       this.handleFailure(error, generation, operation, () => {
         try {
@@ -458,14 +463,14 @@ export class SurvivalDayActionFlow {
   }
 
   private async presentDiveResult(
-    outcome: ActionOutcome,
+    result: RewardResultView,
     snapshot: SurvivalSnapshot,
     generation: number,
     operation: number,
   ): Promise<void> {
     this.dependencies.events.cancelDeferredSync(generation);
     this.dependencies.events.sync(snapshot);
-    await (this.dependencies.ui.showRewardResult?.(formatDiveResult(outcome)) ?? Promise.resolve());
+    await (this.dependencies.ui.showRewardResult?.(result) ?? Promise.resolve());
     if (!await this.resumeCurrent(generation, operation)) return;
     this.setBusy(false);
     if (isTerminal(snapshot.state)) this.dependencies.presentTerminal(snapshot);

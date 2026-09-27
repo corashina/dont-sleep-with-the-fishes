@@ -17,6 +17,8 @@ import type { AudioScope } from './AudioScope';
 import { AUDIO_MANIFEST, SURVIVAL_SOUND_IDS, type SoundId } from './audioManifest';
 import type { SinkingSoundCue } from '../survival/SinkingEndingPresentation';
 
+const RADIO_SIGNAL_DURATION_SECONDS = 12;
+
 const WEATHER_GAINS: Readonly<Record<
   PresentationWeatherId,
   Readonly<Record<'calmOcean' | 'roughOcean' | 'lightWind' | 'strongWind' | 'rain' | 'boatCreak', number>>
@@ -134,6 +136,8 @@ export class SurvivalAudio {
   private sinkingActive = false;
   private sinkingBreakVoice: AudioVoice | null = null;
   private radioSignalVoice: AudioVoice | null = null;
+  private radioSignalRemaining = 0;
+  private radioSignalOnEnded: (() => void) | null = null;
   private paused = false;
   private radioSignalPaused = false;
   private readonly meowBag: SoundId[] = [];
@@ -162,6 +166,7 @@ export class SurvivalAudio {
   update(deltaSeconds: number): void {
     if (this.disposed || this.paused || this.sinkingActive || this.worldAudioMuted) return;
     const elapsed = Math.max(0, deltaSeconds);
+    this.updateRadioSignal(elapsed);
     this.waveClock += elapsed;
     if (this.midnightDigVoice !== null) {
       this.midnightDigRemaining -= elapsed;
@@ -226,13 +231,26 @@ export class SurvivalAudio {
     const voice = this.scope.play('radioSignal');
     if (voice === null) return false;
     this.radioSignalVoice = voice;
+    this.radioSignalRemaining = RADIO_SIGNAL_DURATION_SECONDS;
+    this.radioSignalOnEnded = onEnded;
     voice.setPaused(this.paused || this.radioSignalPaused);
     voice.onEnded(() => {
       if (this.radioSignalVoice !== voice) return;
       this.radioSignalVoice = null;
+      this.radioSignalRemaining = 0;
+      this.radioSignalOnEnded = null;
       onEnded();
     });
     return true;
+  }
+
+  private updateRadioSignal(elapsed: number): void {
+    if (this.radioSignalVoice === null || this.radioSignalPaused) return;
+    this.radioSignalRemaining -= elapsed;
+    if (this.radioSignalRemaining > 0) return;
+    const onEnded = this.radioSignalOnEnded;
+    this.clearRadioSignal();
+    onEnded?.();
   }
 
   setRadioSignalPaused(paused: boolean): void {
@@ -245,6 +263,8 @@ export class SurvivalAudio {
     const voice = this.radioSignalVoice;
     if (voice === null) return;
     this.radioSignalVoice = null;
+    this.radioSignalRemaining = 0;
+    this.radioSignalOnEnded = null;
     voice.stop(0.03);
   }
 
@@ -348,12 +368,15 @@ export class SurvivalAudio {
 
   sleep(): void {
     if (this.disposed) return;
+    this.clearRadioSignal();
     this.scope.play('goingToSleep');
     this.scope.play(YAWN_SOUNDS[Math.floor(this.random() * YAWN_SOUNDS.length)]!);
   }
 
   nightfall(): void {
-    if (!this.disposed) this.scope.play('nightfall');
+    if (this.disposed) return;
+    this.clearRadioSignal();
+    this.scope.play('nightfall');
   }
 
   dawn(): void {
@@ -535,6 +558,7 @@ export class SurvivalAudio {
   }
 
   clearEvent(): void {
+    this.clearRadioSignal();
     if (this.diveActive) this.cancelDive();
     this.scope.stopLoop('underwaterMovement', 0.3);
     this.pendingShadowMeow = null;

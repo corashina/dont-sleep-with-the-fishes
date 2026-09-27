@@ -367,6 +367,32 @@ describe('SurvivalDayActionFlow', () => {
     ]);
   });
 
+  // Importance: 90/100. Report new scuba damage alongside injuries, without reporting old damage again.
+  it.each([false, true])('reports only scuba gear broken by the current dive: %s', async (breaks) => {
+    const rig = createRig();
+    const before = snapshot({ inventory: {
+      'scubaSet-1': { instanceId: 'scubaSet-1', type: 'scubaSet', condition: 'broken' },
+      'scubaSet-2': { instanceId: 'scubaSet-2', type: 'scubaSet', condition: 'usable' },
+    } });
+    rig.setSnapshot(before);
+    vi.mocked(rig.session.perform).mockImplementationOnce(() => {
+      rig.setSnapshot(snapshot({ inventory: {
+        ...before.inventory,
+        'scubaSet-2': { instanceId: 'scubaSet-2', type: 'scubaSet', condition: breaks ? 'broken' : 'usable' },
+      } }));
+      return accepted({ cue: 'dive', deltas: { energy: -3, health: -4, food: 1 } });
+    });
+
+    await rig.flow.run('dive');
+
+    expect(rig.ui.showRewardResult).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      reward: { kind: 'resource', id: 'food', quantity: 1 },
+      lines: breaks
+        ? ['YOU SUFFERED SOME INJURIES', 'Your scuba gear broke.']
+        : ['YOU SUFFERED SOME INJURIES'],
+    }));
+  });
+
   it('holds a terminal dive result before presenting the ending', async () => {
     const rig = createRig();
     const result = deferred();

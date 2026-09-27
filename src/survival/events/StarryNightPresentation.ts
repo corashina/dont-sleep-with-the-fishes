@@ -12,9 +12,8 @@ import type {
 } from '../eventPresentationTypes';
 import { StarryNightGeometry } from './starryNightGeometry';
 
-type Beat = 'reveal' | 'gift' | 'sleep';
+type Beat = 'reveal' | 'sleep';
 export const STARRY_NIGHT_REVEAL_SECONDS = 1;
-export const STARRY_NIGHT_GIFT_SECONDS = 1.8;
 const ease = (value: number): number => {
   const t = Math.min(1, Math.max(0, value));
   return t*t*(3-2*t);
@@ -32,8 +31,6 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
     (kind, _time, progress) => this.sample(kind, progress),
   );
   private targets: readonly FocusedEventInteractionTarget[] = [];
-  private selected = -1;
-  private flash = 0;
   private revealProgress = 0;
   private visibility = 1;
   private elapsed = 0;
@@ -69,8 +66,6 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
       minimumHitWidth: 72,
       minimumHitHeight: 72,
     }));
-    this.selected = -1;
-    this.flash = 0;
     this.staged = true;
     this.elapsed = 0;
     this.revealProgress = 0;
@@ -99,10 +94,7 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
   react(result: EventOutcomePresentation): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
     const choiceId = result.outcome.eventResult?.choiceId;
-    this.selected = this.targets.findIndex((target) => target.choiceId === choiceId);
-    if (this.selected >= 0) {
-      return this.animation.start('gift', STARRY_NIGHT_GIFT_SECONDS);
-    }
+    if (this.targets.some((target) => target.choiceId === choiceId)) return Promise.resolve();
     return this.animation.start('sleep', 1.5);
   }
 
@@ -119,8 +111,7 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
       this.revealProgress = progress;
       this.light.intensity = ease(progress)*0.6;
     } else {
-      this.visibility = beat === 'gift' ? 1 : 1-ease(progress);
-      this.flash = beat === 'gift' ? Math.sin(progress * Math.PI) : 0;
+      this.visibility = 1-ease(progress);
       this.light.intensity = this.visibility*0.6;
     }
   }
@@ -131,7 +122,7 @@ export class StarryNightPresentation implements DedicatedEventPresentation {
     this.environment.camera?.getWorldPosition(this.sky.root.position);
     this.sky.root.position.add(this.moonOffset);
     this.itemAimTarget.position.copy(this.sky.root.position);
-    this.sky.update(this.elapsed, this.revealProgress, this.visibility, this.selected, this.flash,
+    this.sky.update(this.elapsed, this.revealProgress, this.visibility,
       this.environment.camera?.aspect ?? 16/9);
   }
 

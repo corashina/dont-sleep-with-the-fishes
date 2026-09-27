@@ -1,4 +1,4 @@
-import { eventChoiceDecision, type EventChoiceFailure } from './eventChoiceRules';
+import { eventAcceptsItemCondition, eventChoiceDecision, type EventChoiceFailure } from './eventChoiceRules';
 import { isHeartComplete } from './heartOfTheSea';
 import { carlitosHelpUnavailableMessage } from './CarlitosState';
 import { domainMessage } from '../i18n/domainMessages';
@@ -1082,7 +1082,8 @@ export class SurvivalEventFlow {
     )) return;
     const resolved = this.dependencies.session.snapshot();
     this.finishDeferredChoiceSync(
-      focusedResult || (eventId === 'ocean-of-blood' && choiceId === 'scubaSet'),
+      focusedResult || (eventId === 'ocean-of-blood' && choiceId === 'scubaSet')
+        || (eventId === 'eerie-melody' && choiceId === 'bucket'),
       resolved,
       generation,
     );
@@ -1301,7 +1302,7 @@ export class SurvivalEventFlow {
       ? choice
       : choice.choiceId;
     await Promise.all([
-      choice.choiceId === 'sleep'
+      choice.choiceId === 'sleep' || eventId === 'starry-night'
         ? this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve()
         : Promise.resolve(),
       this.dependencies.ui.playEventChoiceBeat?.(choice.choiceId) ?? Promise.resolve(),
@@ -1317,7 +1318,7 @@ export class SurvivalEventFlow {
     generation: number,
     operation: number,
   ): Promise<void> {
-    if (choiceId === 'sleep') {
+    if (choiceId === 'sleep' || eventId === 'starry-night') {
       await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
       if (!this.isCurrent(generation, operation)) return;
     }
@@ -2497,7 +2498,7 @@ export class SurvivalEventFlow {
     );
     const eligibility = new Map<ItemInstanceId, EventResponseId>();
     Object.values(snapshot.inventory).forEach((item) => {
-      if (item?.condition !== 'usable') return;
+      if (item === undefined || !eventAcceptsItemCondition(event.id, item.condition)) return;
       const choiceId = choiceByItem.get(item.type);
       if (choiceId !== undefined) eligibility.set(item.instanceId, choiceId);
     });
@@ -2527,7 +2528,6 @@ export class SurvivalEventFlow {
     choice: SurvivalEventChoice,
     snapshot: SurvivalSnapshot,
   ): EventContextChoice | null {
-    if (event.id === 'flying-saucer') return null;
     const decision = eventChoiceDecision(event, choice, snapshot);
     if (!decision.visible) return null;
     const currentReasons = () => decision.failures.map((failure) => choiceFailureReason(failure, snapshot));

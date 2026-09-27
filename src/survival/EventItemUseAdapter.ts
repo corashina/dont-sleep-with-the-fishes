@@ -744,7 +744,7 @@ export class EventItemUseAdapter {
     const facingBlend = targetPlane || this.cameraFacingSurface === 'x'
       ? sample.aimBlend
       : sample.cameraSpaceBlend;
-    if (this.cameraFacingSurface === 'x') {
+    if (this.cameraFacingSurface === 'x' || this.compass) {
       this.applyStableCameraFacingTurn(facingBlend);
     } else {
       this.facingWorldQuaternion.slerp(

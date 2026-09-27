@@ -145,7 +145,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private digCueEmitted = false;
   private digContacts = 0;
   private chestBuriedY = 0;
-  private preparedResultId: 'tour-camp' | 'tour-grave' | null = null;
+  private preparedResultId: 'tour-camp' | 'tour-grave' | 'tour-chest' | null = null;
   private staged = false;
   private disposed = false;
 
@@ -253,13 +253,16 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       this.root.userData.state = 'camp-prepared';
       return;
     }
-    if (result.resultId !== 'tour-grave' || this.preparedResultId === 'tour-grave') return;
+    if (result.resultId !== 'tour-grave' && result.resultId !== 'tour-chest') return;
+    if (this.preparedResultId === result.resultId) return;
     this.clearResultActors();
     this.resetResultCounters();
-    this.activeActor = this.createBuriedReward('midnightCoffin');
+    this.activeActor = this.createBuriedReward(
+      result.resultId === 'tour-grave' ? 'midnightCoffin' : 'chestClosed',
+    );
     this.createShovel();
-    this.preparedResultId = 'tour-grave';
-    this.root.userData.state = 'grave-prepared';
+    this.preparedResultId = result.resultId;
+    this.root.userData.state = result.resultId === 'tour-grave' ? 'grave-prepared' : 'chest-prepared';
   }
 
   react(result: EventResultPresentation, outcome: ActionOutcome): Promise<void> {

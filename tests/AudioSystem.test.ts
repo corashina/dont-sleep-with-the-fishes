@@ -479,6 +479,74 @@ describe('AudioSystem', () => {
     expect(backend.voices.filter(({ id }) => id.startsWith('catMeow'))).toHaveLength(1);
   });
 
+  // Importance: 95/100. Incoming radio must expire after 12 seconds of audible playback.
+  it('stops the incoming radio signal after 12 seconds and expires it once', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    const expired = vi.fn();
+    audio.beginRadioSignal(expired);
+    const signal = backend.voices.at(-1)!;
+    audio.update(11.5);
+    expect(signal.stop).not.toHaveBeenCalled();
+    expect(expired).not.toHaveBeenCalled();
+    audio.update(0.5);
+    expect(signal.stop).toHaveBeenCalledOnce();
+    expect(expired).toHaveBeenCalledOnce();
+    audio.update(20);
+    signal.finish();
+    expect(expired).toHaveBeenCalledOnce();
+    audio.dispose();
+  });
+
+  // Importance: 95/100. Paused playback must retain its remaining response time.
+  it.each(['game', 'panel'] as const)('excludes %s pauses from the 12-second radio limit', (pause) => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    const expired = vi.fn();
+    audio.beginRadioSignal(expired);
+    const signal = backend.voices.at(-1)!;
+    audio.update(5);
+    if (pause === 'game') audio.setPaused(true);
+    else audio.setRadioSignalPaused(true);
+    audio.update(60);
+    expect(signal.stop).not.toHaveBeenCalled();
+    if (pause === 'game') audio.setPaused(false);
+    else audio.setRadioSignalPaused(false);
+    audio.update(6.5);
+    expect(expired).not.toHaveBeenCalled();
+    audio.update(0.5);
+    expect(signal.stop).toHaveBeenCalledOnce();
+    expect(expired).toHaveBeenCalledOnce();
+    audio.dispose();
+  });
+
+  // Importance: 95/100. Radio audio must not leak into sleep or later events.
+  it.each(['sleep', 'nightfall', 'event-start', 'event-end'] as const)('clears radio playback on %s without expiring a later signal', (transition) => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    const expired = vi.fn();
+    audio.beginRadioSignal(expired);
+    const signal = backend.voices.at(-1)!;
+    signal.stop.mockImplementationOnce(() => undefined);
+    audio.update(5);
+    if (transition === 'sleep') audio.sleep();
+    else if (transition === 'nightfall') audio.nightfall();
+    else if (transition === 'event-start') audio.beginEvent('windy-night');
+    else audio.clearEvent();
+    expect(signal.stop).toHaveBeenCalledOnce();
+    expect(expired).not.toHaveBeenCalled();
+
+    const nextExpired = vi.fn();
+    expect(audio.beginRadioSignal(nextExpired)).toBe(true);
+    signal.finish();
+    audio.update(11.5);
+    expect(nextExpired).not.toHaveBeenCalled();
+    audio.update(0.5);
+    expect(nextExpired).toHaveBeenCalledOnce();
+    expect(expired).not.toHaveBeenCalled();
+    audio.dispose();
+  });
+
   it('plays an incoming radio signal until it ends or the player answers', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());

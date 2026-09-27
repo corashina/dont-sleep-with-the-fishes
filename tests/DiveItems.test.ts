@@ -37,8 +37,8 @@ describe('normal dive item rewards', () => {
     const outcome = session.perform('dive');
     expect(outcome.rewardSummary).toEqual({ kind: 'item', id: missing, quantity: 1 });
     expect(session.snapshot().inventory[`${missing}-1`]?.condition).toBe('usable');
-    expect(formatDiveResult(outcome)).toMatchObject({ reward: outcome.rewardSummary });
-    expect(formatDiveResult(outcome).lines).not.toContain('Nothing found.');
+    expect(formatDiveResult(outcome, false)).toMatchObject({ reward: outcome.rewardSummary });
+    expect(formatDiveResult(outcome, false).lines).not.toContain('Nothing found.');
     expect(SurvivalSession.restore(session.exportCheckpoint()).snapshot()).toEqual(session.snapshot());
   });
 

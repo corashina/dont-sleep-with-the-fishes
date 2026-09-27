@@ -42,7 +42,7 @@ import type {
 } from './survivalTypes';
 import type { FishingCatchId } from './fishingCatalog';
 
-export const SURVIVAL_SAVE_VERSION = 8 as const;
+export const SURVIVAL_SAVE_VERSION = 9 as const;
 
 export interface SurvivalSaveDocument {
   readonly version: typeof SURVIVAL_SAVE_VERSION;
@@ -514,7 +514,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const day = parseInteger(value.day, 1, MAX_COUNTER);
   const pressure = parseInteger(value.pressure, 0, 4);
   const health = parseInteger(value.health, 1, 100);
-  const hunger = parseInteger(value.hunger, 0, 100);
+  const hunger = parseInteger(value.hunger, 0, 99);
   const energy = parseInteger(value.energy, 0, 4);
   const hull = parseInteger(value.hull, 1, 100);
   const food = parseInteger(value.food, 0, MAX_COUNTER);
@@ -534,6 +534,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   if (!hasSessionFlags(value)) return null;
   const heartPieces = parseHeartPieces(value.heartPieces);
   const chest = parseChest(value.chest, day!);
+  const chestReminder = parseChestReminder(value, chest, day!);
   const inventory = parseInventory(value.inventory);
   const savedItems = parseItemList(value.savedItems);
   const carlitos = parseCarlitos(value.carlitos);
@@ -554,7 +555,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const pendingJournalActions = parseJournalActions(value.pendingJournalActions);
   const journalEntries = parseJournalEntries(value.journalEntries);
   const history = parseHistory(value.history, day!);
-  if ([heartPieces, chest, inventory, savedItems, lastSeenDays, appearanceCounts,
+  if ([heartPieces, chest, chestReminder, inventory, savedItems, lastSeenDays, appearanceCounts,
     lastHealthCause, pendingJournalActions, journalEntries, history].some((field) => field === null)) return null;
   if ([carlitos, lastEventId, lastOutcome, lastHullEventId, pendingJournalDaytime,
     pendingJournalNighttime].some((field) => field === undefined)) return null;
@@ -568,6 +569,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
     state, pendingEventId, pendingEventTargetId, inventory!,
   )) return null;
   return createSurvivalSessionCheckpoint({
+    ...chestReminder!,
     history: history!,
     state: state as SurvivalSessionCheckpoint['state'], day: day!, pressure: pressure!, health: health!, hunger: hunger!, energy: energy!, hull: hull!,
     food: food!, bait: bait!, recoveredFood: recoveredFood!, recoveredBait: recoveredBait!, rescueLead: rescueLead! as RescueLead,
@@ -578,6 +580,19 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
     pendingJournalDaytime: pendingJournalDaytime!, pendingJournalNighttime: pendingJournalNighttime!, pendingJournalActions: pendingJournalActions!, journalEntries: journalEntries!,
     fishingCounter: fishingCounter!, seed: seed!, randomState: randomState!,
   });
+}
+
+function parseChestReminder(value: Record<string, unknown>, chest: ChestSnapshot | null, day: number):
+  Pick<SurvivalSessionCheckpoint, 'chestFirstOpenableDay' | 'chestLastReminderDay'> | null {
+  const first = value.chestFirstOpenableDay;
+  const last = value.chestLastReminderDay;
+  if (chest === null) return null;
+  if (first === null && last === null) return { chestFirstOpenableDay: null, chestLastReminderDay: null };
+  if (chest.state !== 'closed' || chest.acquiredDay === null) return null;
+  const firstDay = parseInteger(first, chest.acquiredDay, day);
+  if (firstDay === null) return null;
+  if (last !== null && parseInteger(last, firstDay + 1, day) === null) return null;
+  return { chestFirstOpenableDay: firstDay, chestLastReminderDay: last as number | null };
 }
 
 function parsedUpperBound(value: number | null): number {

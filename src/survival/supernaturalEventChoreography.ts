@@ -1,3 +1,4 @@
+import { GHOST_FLASHLIGHT_BASE_DURATION } from './ghostFlashlightChoreography';
 import { clamp01, pulse, smoothstep } from './animationMath';
 import {
   isEventPresentationRoute,
@@ -53,7 +54,7 @@ const REVEAL_DURATIONS: Readonly<Record<SupernaturalAnimationEventId, number>> =
 });
 
 const ITEM_DURATIONS = Object.freeze({
-  ghosts: Object.freeze({ flareGun: 1.2, flashlight: 1.35 }),
+  ghosts: Object.freeze({ flareGun: 1.2, flashlight: GHOST_FLASHLIGHT_BASE_DURATION }),
   'eerie-melody': Object.freeze({
     radio: 1.65,
     bucket: 1.35,

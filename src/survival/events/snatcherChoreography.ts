@@ -119,9 +119,12 @@ export function sampleSnatcherItemUse(
 export function sampleSnatcherReaction(
   progress: number,
   output: SnatcherSample,
-  foodOffered = false,
+  choiceId: string | null,
 ): boolean {
-  if (foodOffered) {
+  if (choiceId === 'shotgun' || choiceId === 'fishingNet' || choiceId === 'knife') {
+    return sampleSnatcherReveal(1 - clamp01(progress), output);
+  }
+  if (choiceId === 'cannedFood') {
     sampleSnatcherItemUse('cannedFood', 1, output);
     const leave = smoothstep(progress);
     output.creatureX += leave * 1.2;

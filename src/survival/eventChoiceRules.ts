@@ -6,7 +6,7 @@ import { ownsNightTraderReward } from './nightTraderTrades';
 import { resourceSupplyActorId } from './resourceSupplyActors';
 import { eligibleHandymanRewards } from './tradeRules';
 import type { SurvivalSnapshot } from './survivalSnapshot';
-import type { EventChoiceDefinition, EventChoiceRequirement, SurvivalEventDefinition } from './survivalTypes';
+import type { EventChoiceDefinition, EventChoiceRequirement, ItemCondition, SurvivalEventDefinition } from './survivalTypes';
 
 export type EventChoiceFailure =
   | { readonly kind: 'resource'; readonly resource: EventChoiceRequirement['resource']; readonly minimum: number }
@@ -27,10 +27,14 @@ export function eventChoiceResource(event: SurvivalEventDefinition, choice: Even
   return choice.itemId === 'cannedFood' ? 'food' : choice.itemId === 'baitTin' ? 'bait' : null;
 }
 
-function defaultInstance(choice: EventChoiceDefinition, snapshot: SurvivalSnapshot): ItemInstanceId | null {
+export function eventAcceptsItemCondition(eventId: string, condition: ItemCondition): boolean {
+  return condition === 'usable' || (eventId === 'night-trader' && condition === 'broken');
+}
+
+function defaultInstance(eventId: string, choice: EventChoiceDefinition, snapshot: SurvivalSnapshot): ItemInstanceId | null {
   if (choice.itemId === undefined) return null;
   return Object.values(snapshot.inventory)
-    .filter((item) => item?.type === choice.itemId && item?.condition === 'usable')
+    .filter((item) => item !== undefined && item.type === choice.itemId && eventAcceptsItemCondition(eventId, item.condition))
     .map((item) => item!.instanceId).sort()[0] ?? null;
 }
 
@@ -56,7 +60,7 @@ export function eventChoiceDecision(event: SurvivalEventDefinition, catalogChoic
   const choice = event.id === 'drifting-supplies'
     ? driftingSupplyChoiceForVariant(catalogChoice, deriveEventVariantSeed(snapshot.seed, snapshot.day, event.id))
     : catalogChoice;
-  const instanceId = defaultInstance(choice, snapshot)
+  const instanceId = defaultInstance(event.id, choice, snapshot)
     ?? (eventChoiceResource(event, choice) === null ? null : resourceSupplyActorId(choice.itemId));
   const failures: EventChoiceFailure[] = (choice.requirements ?? [])
     .filter(({ resource, minimum }) => snapshot[resource] < minimum)

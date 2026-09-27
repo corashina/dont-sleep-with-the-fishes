@@ -220,6 +220,9 @@ export class BoatInteractionProjector {
     this.carlitosCache = createBoatObjectBoundsCache(roots.carlitosInteractionRoot);
     this.fishingAnchor = {
       id: 'fishing-tools',
+      hitTest: (x: number, y: number) => !this.disposed && this.pointerRaycast.hits(
+        roots.fishingRoot, x, y, this.viewportWidth, this.viewportHeight,
+      ),
       itemType: null,
       toolId: 'fishingRod',
       action: 'fish',

@@ -37,14 +37,17 @@ it('excludes Kraken from every ordinary draw', () => {
 });
 
 it('collects each source, restores progress, crosses dawn, then reaches the Kraken ending', () => {
-  let session = new SurvivalSession([{ type: 'scubaSet', instanceId: 'scubaSet-1' }], {
+  let session = new SurvivalSession([
+    { type: 'scubaSet', instanceId: 'scubaSet-1' },
+    { type: 'bucket', instanceId: 'bucket-1' },
+  ], {
     seed: 41, radioSignalsEnabled: false, initial: { day: 3, energy: 3, pressure: 2 },
     initialChest: { state: 'closed', acquiredDay: 3 },
   });
   session.perform('openChest');
   session.endDay();
   session = SurvivalSession.restore({ ...session.exportCheckpoint(), state: 'nightEvent', pendingEventId: 'flowers', pendingEventTargetId: null });
-  expect(session.resolveEvent({ kind: 'choice', choiceId: 'collect' }).accepted).toBe(true);
+  expect(session.resolveEvent({ kind: 'item', choiceId: 'bucket', instanceId: 'bucket-1' }).accepted).toBe(true);
   session.beginDawn();
   const save = createSurvivalSaveDocument({ scavengeElapsedSeconds: 8, session: session.exportCheckpoint() });
   session = SurvivalSession.restore(parseSurvivalSaveDocument(JSON.parse(JSON.stringify(save)))!.checkpoint.session);

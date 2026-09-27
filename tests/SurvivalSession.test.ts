@@ -24,6 +24,37 @@ const saved = (...types: ItemId[]): ItemInstance[] => {
   });
 };
 
+// Importance: 100/100. Empty survival meters must end new and restored runs and block further actions.
+it.each([
+  [{ health: 0 }, 'dead', 'death'],
+  [{ hunger: 100 }, 'dead', 'death'],
+  [{ hull: 0 }, 'sunk', 'sinking'],
+] as const)('ends the run at the resource limit %j', (initial, state, endingId) => {
+  const checkpoint = new SurvivalSession([], { seed: 1 }).exportCheckpoint();
+  const sessions = [
+    new SurvivalSession([], { seed: 1, initial, initialEventId: 'quiet-night' }),
+    SurvivalSession.restore({ ...checkpoint, ...initial }),
+  ];
+  for (const session of sessions) {
+    const terminal = session.snapshot();
+    expect(terminal).toMatchObject({ state, ending: { id: endingId }, pendingEventId: null });
+    if ('hunger' in initial) expect(terminal.ending).toMatchObject({ cause: { kind: 'starvation' } });
+    expect(session.perform('endDay').accepted).toBe(false);
+    expect(session.beginDawn().accepted).toBe(false);
+    expect(session.beginFishing().accepted).toBe(false);
+    expect(session.snapshot()).toEqual(terminal);
+    expect(() => session.exportCheckpoint()).toThrow('Cannot checkpoint terminal state.');
+  }
+});
+
+// Importance: 95/100. Empty food stores and energy must not count as empty survival meters.
+it('keeps the player alive while each survival meter is above zero', () => {
+  const session = new SurvivalSession([], {
+    seed: 1, initial: { health: 1, hunger: 99, hull: 1, food: 0, energy: 0 },
+  });
+  expect(session.snapshot()).toMatchObject({ state: 'day', ending: null, food: 0, energy: 0 });
+});
+
 it('round-trips a stable pending event checkpoint', () => {
   const source = new SurvivalSession(saved('carlitos', 'compass', 'cannedFood'), {
     seed: 41,
@@ -329,7 +360,7 @@ describe('SurvivalSession daytime actions', () => {
     const eating = new SurvivalSession(saved('cannedFood'), {
       seed: 1, random: sequenceRandom([0.999999]), initial: { hunger: 20 },
     });
-    expect(eating.perform('eat').deltas).toEqual({ hunger: -20, food: -1 });
+    expect(eating.perform('eat').deltas).toEqual({ hunger: -20, health: 0, food: -1 });
     const treating = new SurvivalSession(saved('medicalKit'), { seed: 1, initial: { health: 90 } });
     expect(treating.perform('treat').deltas).toEqual({ health: 10 });
     const repairing = new SurvivalSession(saved(), { seed: 1, initial: { hull: 90, energy: 3 } });
@@ -624,7 +655,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(new SurvivalSession(saved(), { seed: 1 }).snapshot().energy).toBe(3);
     expect(recover(20)).toBe(3);
     expect(recover(53)).toBe(2);
-    expect(recover(73)).toBe(1);
+    expect(recover(70)).toBe(1);
   });
 
   it('answers a radio signal for one energy without consuming the radio', () => {
@@ -733,16 +764,11 @@ describe('SurvivalSession daytime actions', () => {
       initial: { hunger: 95, health: 20, hull: 100, energy: 0 },
     });
     session.perform('endDay');
-    session.beginDawn();
-    expect(session.snapshot()).toMatchObject({ day: 2, hunger: 100, energy: 1, health: 13 });
-    session.perform('endDay');
-    expect(session.resolveEvent(choiceResponse('sleep')).accepted).toBe(true);
-    session.beginDawn();
-    expect(session.snapshot()).toMatchObject({ day: 3, health: 6, state: 'day' });
-    session.perform('endDay');
-    expect(session.resolveEvent(choiceResponse('sleep')).accepted).toBe(true);
-    session.beginDawn();
-    expect(session.snapshot().state).toBe('dead');
+    expect(session.beginDawn()).toMatchObject({ accepted: true, cue: 'death' });
+    expect(session.snapshot()).toMatchObject({
+      day: 2, hunger: 100, energy: 1, health: 20, state: 'dead',
+      ending: { id: 'death', cause: { kind: 'starvation' } },
+    });
     const terminal = session.snapshot();
     expect(session.beginFishing()).toMatchObject({ accepted: false, outcome: { code: 'terminal' } });
     expect(session.snapshot()).toEqual(terminal);

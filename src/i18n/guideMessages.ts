@@ -45,9 +45,9 @@ export const guideText = defineMessages({
     'es-AR': "Sobrevivir",
   },
   needsBody: {
-    en: "Keep Health and Hull above zero. The Food meter shows fullness; cans show stored portions. Eat before night: hunger reduces the energy you regain at dawn, and starvation damages Health. Eating and using a medical kit cost no energy. Start each day with up to ⚡3. You lose unused energy at dawn.",
-    pl: "Utrzymuj zdrowie i kadłub powyżej zera. Wskaźnik jedzenia pokazuje sytość, a puszki oznaczają zapas porcji. Jedz przed nocą: głód ogranicza energię odzyskaną o świcie, a wygłodzenie odbiera zdrowie. Jedzenie i użycie apteczki nie kosztują energii. O świcie odzyskujesz do ⚡3. Niewykorzystaną energię tracisz o świcie.",
-    'es-AR': "Mantené la Salud y el Casco por encima de cero. El indicador de Comida muestra saciedad; las latas muestran las porciones guardadas. Comé antes de la noche: el hambre reduce la energía que recuperás al amanecer, y la inanición daña la Salud. Comer y usar un botiquín no gastan energía. Empezás cada día con hasta ⚡3. Al amanecer perdés la energía que no usaste.",
+    en: "Keep Health, Food, and Hull above zero. You die if any of these meters reaches zero. The Food meter shows fullness; cans show stored portions. Eat before night: hunger reduces the energy you regain at dawn. Eating and using a medical kit cost no energy. Start each day with up to ⚡3. You lose unused energy at dawn.",
+    pl: "Utrzymuj zdrowie, jedzenie i kadłub powyżej zera. Gdy którykolwiek z tych wskaźników spadnie do zera, umierasz. Wskaźnik jedzenia pokazuje sytość, a puszki oznaczają zapas porcji. Jedz przed nocą: głód ogranicza energię odzyskaną o świcie. Jedzenie i użycie apteczki nie kosztują energii. O świcie odzyskujesz do ⚡3. Niewykorzystaną energię tracisz o świcie.",
+    'es-AR': "Mantené la Salud, la Comida y el Casco por encima de cero. Si cualquiera llega a cero, morís. El indicador de Comida muestra saciedad; las latas muestran las porciones guardadas. Comé antes de la noche: el hambre reduce la energía que recuperás al amanecer. Comer y usar un botiquín no gastan energía. Empezás cada día con hasta ⚡3. Al amanecer perdés la energía que no usaste.",
   },
   needsAlt: {
     en: 'The lifeboat in daylight with supplies and the four condition meters.',

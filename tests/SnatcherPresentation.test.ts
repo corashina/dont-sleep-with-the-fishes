@@ -5,7 +5,8 @@ import { PerspectiveCamera, SkinnedMesh, Texture, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { SnatcherPresentation } from '../src/survival/events/SnatcherPresentation';
-import { snatcherItemDuration } from '../src/survival/events/snatcherChoreography';
+import { lifeboatHullHalfWidthAt } from '../src/world/Lifeboat';
+import { snatcherItemDuration, SNATCHER_REACTION_DURATION } from '../src/survival/events/snatcherChoreography';
 
 let models: EventModelLibrary;
 
@@ -49,9 +50,67 @@ function vertices(presentation: SnatcherPresentation): Vector3[] {
 }
 
 describe('tentacle attack framing', () => {
-  it.each([0, 1])('keeps the exposed model inside a narrow viewport, seed %s', (seed) => {
+  // Importance: 95/100. Every attack must send the tentacle underwater and hide it before the result completes.
+  it.each(['shotgun', 'fishingNet', 'knife'])('sinks back out of sight after %s', async (choice) => {
     const presentation = new SnatcherPresentation({ eventModels: models } as never);
-    const camera = new PerspectiveCamera(80, 535 / 575, 0.1, 500);
+    try {
+      stage(presentation, 1);
+      const tentacle = presentation.boatRoot.getObjectByName('tentacle-attack-tentacle')!;
+      const revealed = tentacle.position.clone();
+      const attack = presentation.playItemUse(choice, 'knife-1');
+      presentation.skip();
+      await expect(attack).resolves.toBe(true);
+      const retreat = presentation.react({} as never);
+      expect(tentacle.position.toArray()).toEqual(revealed.toArray());
+      presentation.update(0.9, SNATCHER_REACTION_DURATION * 0.75);
+      expect(tentacle.position.y).toBeLessThan(revealed.y - 1);
+      expect(tentacle.position.x).toBe(revealed.x);
+      presentation.update(1.2, SNATCHER_REACTION_DURATION * 0.25);
+      await retreat;
+      expect(tentacle.visible).toBe(false);
+      stage(presentation, 1);
+      expect(tentacle.visible).toBe(true);
+      const nextAttack = presentation.playItemUse(choice, 'knife-1');
+      presentation.skip();
+      await nextAttack;
+      const skippedRetreat = presentation.react({} as never);
+      presentation.settleForVisibilityChange();
+      await skippedRetreat;
+      expect(tentacle.visible).toBe(false);
+    } finally { presentation.dispose(); }
+  });
+
+  // Importance: 95/100. The production skin must clear the hull through every attack stage on either side.
+  it.each([0, 1])('keeps the animated tentacle outside the hull, seed %s', (seed) => {
+    const presentation = new SnatcherPresentation({ eventModels: models } as never);
+    let minimumClearance = Infinity;
+    const advance = (duration: number) => {
+      for (let frame = 0; frame < 40; frame += 1) {
+        presentation.update(frame * duration / 40, duration / 40);
+        for (const point of vertices(presentation)) {
+          const halfWidth = lifeboatHullHalfWidthAt(point.z);
+          if (halfWidth !== null) minimumClearance = Math.min(minimumClearance, Math.abs(point.x) - halfWidth);
+        }
+      }
+    };
+    try {
+      for (const choice of ['knife', 'shotgun', 'fishingNet', 'cannedFood']) {
+        presentation.stage({ eventId: 'tentacle-attack', targetInstanceId: null, variantSeed: seed });
+        void presentation.reveal();
+        advance(2.5);
+        advance(4);
+        void presentation.playItemUse(choice, 'knife-1');
+        advance(snatcherItemDuration(choice));
+        void presentation.react({} as never);
+        advance(1.2);
+      }
+      expect(minimumClearance).toBeGreaterThan(0.12);
+    } finally { presentation.dispose(); }
+  });
+
+  it.each([0, 1])('keeps the side attack visible in wide and narrow viewports, seed %s', (seed) => {
+    const presentation = new SnatcherPresentation({ eventModels: models } as never);
+    const camera = new PerspectiveCamera(80, 16 / 9, 0.1, 500);
     camera.position.set(0, 0.88, 0.96);
     camera.lookAt(0, 0.88, -1.55);
     camera.updateMatrixWorld();
@@ -66,6 +125,13 @@ describe('tentacle attack framing', () => {
         expect(Math.max(...projected.map((point) => Math.abs(point.y)))).toBeLessThan(0.95);
         expect(Math.min(...projected.map((point) => point.z))).toBeGreaterThan(-1);
         expect(Math.max(...projected.map((point) => point.z))).toBeLessThan(1);
+        camera.aspect = 535 / 575;
+        camera.updateProjectionMatrix();
+        const narrow = vertices(presentation).filter((point) => point.y > 0).map((point) => point.project(camera));
+        const visible = narrow.filter((point) => Math.abs(point.x) < 1 && Math.abs(point.y) < 1);
+        expect(visible.length / narrow.length).toBeGreaterThan(0.25);
+        camera.aspect = 16 / 9;
+        camera.updateProjectionMatrix();
       }
     } finally { presentation.dispose(); }
   });

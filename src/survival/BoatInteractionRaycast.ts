@@ -16,21 +16,21 @@ export class BoatInteractionRaycast {
     this.pointer.set(x / width * 2 - 1, 1 - y / height * 2);
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const targetDistance = this.distanceTo(target);
-    return Number.isFinite(targetDistance) && targetDistance < this.distanceTo(this.boat);
+    return Number.isFinite(targetDistance) && targetDistance < this.distanceTo(this.boat, target);
   }
 
-  private distanceTo(root: Object3D): number {
+  private distanceTo(root: Object3D, excludedRoot?: Object3D): number {
     if (!this.isVisible(root)) return Infinity;
     root.updateWorldMatrix(true, true);
     this.intersections.length = 0;
-    this.intersectVisible(root);
+    this.intersectVisible(root, excludedRoot);
     let distance = Infinity;
     for (const hit of this.intersections) distance = Math.min(distance, hit.distance);
     return distance;
   }
 
-  private intersectVisible(object: Object3D): void {
-    if (!object.visible) return;
+  private intersectVisible(object: Object3D, excludedRoot?: Object3D): void {
+    if (!object.visible || object === excludedRoot) return;
     if (object instanceof Mesh) {
       if (object instanceof SkinnedMesh) {
         object.skeleton.update();
@@ -39,7 +39,7 @@ export class BoatInteractionRaycast {
       }
       this.raycaster.intersectObject(object, false, this.intersections);
     }
-    for (const child of object.children) this.intersectVisible(child);
+    for (const child of object.children) this.intersectVisible(child, excludedRoot);
   }
 
   private isVisible(object: Object3D): boolean {
