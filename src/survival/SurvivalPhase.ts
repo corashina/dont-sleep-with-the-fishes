@@ -892,7 +892,7 @@ export class SurvivalPhase implements GamePhase {
     });
     this.world.setEventCueHandler?.(({ eventId, cue }) => {
       if (eventId === 'seagull-theft') this.eventFlow.seagullGrab();
-      else if (eventId === 'monster-in-the-fog') {
+      else if (eventId === 'monster-in-the-fog' || eventId === 'death-stare') {
         this.reactionPreviewCovered = this.itemAnimationLab;
         this.audio.fogMonsterBite();
         void this.ui.setSleepCoverProfile?.('midnight-attack');

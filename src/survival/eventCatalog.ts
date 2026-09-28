@@ -363,8 +363,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(80, 'eventText131'),
       outcome(20, 'deathStareLightFlickers', atNextDawn(1))), breakChance: 0.40 },
     choice('umbrella', 'eventText072', 'umbrella',
-      outcome(60, 'eventText133'),
-      outcome(40, 'eventText134', effects([
+      outcome(1, 'eventText134', effects([
         subtract('hull', { min: 44, max: 60 }), subtract('health', 60),
       ], [breakItem('umbrella')]))),
     choice('cannedFood', 'eventText073', 'cannedFood',
