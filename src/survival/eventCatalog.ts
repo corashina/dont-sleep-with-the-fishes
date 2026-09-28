@@ -531,6 +531,11 @@ const survivalEvents: SurvivalEventDefinition[] = [
     choice('flashlight', 'eventText071', 'flashlight',
       outcome(50, 'eventText185', effects([add('pressure', 1)])),
       outcome(50, 'eventText186', effects([subtract('health', 50)]))),
+    choice('knife', 'eventText068', 'knife',
+      outcome(70, 'shadowKnifeScatter'),
+      outcome(30, 'shadowKnifeClaw', effects([subtract('health', 25)]))),
+    choice('shotgun', 'eventText069', 'shotgun',
+      outcome(1, 'shadowShotgunResult', effects(undefined, [consume('shotgun')]))),
     choice('flareGun', 'eventText070', 'flareGun', outcome(
       1,
       'eventText187',
