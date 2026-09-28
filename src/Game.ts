@@ -716,11 +716,6 @@ export class Game {
     const { width, height } = viewport;
     const ratioCap = this.viewportController?.coarsePrimaryPointer ? 1 : 2;
     const pixelRatio = Math.min(Math.max(window.devicePixelRatio || 1, 1), ratioCap);
-    const canvas = this.renderer.domElement;
-    canvas.style.left = `${viewport.left}px`;
-    canvas.style.top = `${viewport.top}px`;
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
     const sizeChanged = width !== this.renderedWidth || height !== this.renderedHeight;
     if (sizeChanged || pixelRatio !== this.renderedPixelRatio) {
       if (pixelRatio !== this.renderedPixelRatio) this.renderer.setPixelRatio(pixelRatio);

@@ -639,6 +639,7 @@ export class SurvivalPhase implements GamePhase {
     if (this.disposed || (!suspended && this.documentIsHidden())) return;
     if (this.mobileSuspended === suspended) return;
     this.mobileSuspended = suspended;
+    if (suspended) this.ui.clearTouchInput?.();
     if (!suspended && this.visibilityPauseActive) this.setPaused(false);
     this.audio.setPaused(this.gameplayPaused());
     this.itemAnimationLabCameraControls?.setEnabled(!this.gameplayPaused());
@@ -649,6 +650,7 @@ export class SurvivalPhase implements GamePhase {
   setOverlayActive(active: boolean): void {
     if (this.disposed || this.overlayActive === active) return;
     this.overlayActive = active;
+    if (active) this.ui.clearTouchInput?.();
     this.audio.setPaused(this.gameplayPaused());
     this.itemAnimationLabCameraControls?.setEnabled(!this.gameplayPaused());
     this.syncCameraTurnControl(this.session.snapshot());

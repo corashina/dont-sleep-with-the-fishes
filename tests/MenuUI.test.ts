@@ -28,7 +28,7 @@ describe('MenuUI how-to-play popup', () => {
   });
 
   // Importance: 95/100. The guide must name the touch action in each supported language.
-  it('describes touch fishing and the Reel button in all three languages', () => {
+  it('describes touch fishing and the existing guide image in all three languages', () => {
     document.documentElement.dataset.touchControls = 'true';
     const ui = new MenuUI(document.body);
     try {
@@ -42,13 +42,16 @@ describe('MenuUI how-to-play popup', () => {
       )?.alt;
       expect(description()).toContain('Reel');
       expect(description()).not.toContain('click the bubbles');
-      expect(image()).toContain('Reel');
+      expect(image()).toContain('Bubbles');
+      expect(image()).not.toContain('Reel');
       setLanguage('pl');
       expect(description()).toContain('Zwiń');
-      expect(image()).toContain('Zwiń');
+      expect(image()).toContain('Bąbelki');
+      expect(image()).not.toContain('Zwiń');
       setLanguage('es-AR');
       expect(description()).toContain('Recogé');
-      expect(image()).toContain('Recogé');
+      expect(image()).toContain('burbujas');
+      expect(image()).not.toContain('Recogé');
     } finally { ui.dispose(); }
   });
 

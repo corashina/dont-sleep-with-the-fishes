@@ -22,8 +22,8 @@ export const touchText = defineMessages({
     'es-AR': 'Elegí la caña y tocá el agua para lanzar por ⚡1. Tocá Recogé dentro de los seis segundos de la picada. Comé los peces que pescaste desde tus suministros. La carnada se usa automáticamente. Cerrá el resultado para volver a lanzar.',
   },
   catchAlt: {
-    en: 'The Reel button appears when a fish bites.',
-    pl: 'Przycisk Zwiń pojawia się, gdy ryba bierze.',
-    'es-AR': 'El botón Recogé aparece cuando pica un pez.',
+    en: 'Bubbles surround the fishing bobber in the water.',
+    pl: 'Bąbelki otaczają spławik na wodzie.',
+    'es-AR': 'Las burbujas rodean la boya de pesca en el agua.',
   },
 });

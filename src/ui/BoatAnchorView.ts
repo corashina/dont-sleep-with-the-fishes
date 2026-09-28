@@ -163,6 +163,7 @@ const DEFAULT_ANCHOR_HIT_AREA = Object.freeze({
 const requireElement = createElementRequirement('boat anchor view');
 
 export class BoatAnchorView {
+  onTouchInterrupt: () => void = () => undefined;
   readonly anchorLayer: HTMLElement;
   readonly carlitosCard: HTMLElement;
   readonly roots: readonly [HTMLElement, HTMLElement];
@@ -279,6 +280,7 @@ export class BoatAnchorView {
     this.touchSurface.addEventListener('pointerdown', this.handleTouchDown, true);
     this.touchSurface.addEventListener('pointerup', this.handleTouchUp, true);
     this.touchSurface.addEventListener('pointercancel', this.handleTouchCancel, true);
+    this.touchSurface.addEventListener('lostpointercapture', this.handleTouchCancel, true);
     this.touchSurface.addEventListener('click', this.handleTouchClick, true);
     this.carlitosCard.addEventListener('click', this.handleCarlitosClick);
     this.anchorLayer.addEventListener('pointerover', this.handleAnchorPointerOver);
@@ -290,6 +292,8 @@ export class BoatAnchorView {
     this.anchorLayer.addEventListener('wheel', this.handleAnchorWheel, { passive: false });
     document.addEventListener('click', this.handleDocumentClick);
     window.addEventListener('resize', this.handleWindowResize);
+    window.visualViewport?.addEventListener('resize', this.handleWindowResize);
+    window.visualViewport?.addEventListener('scroll', this.handleWindowResize);
     this.refreshViewport();
     this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
     this.refreshLanguage();
@@ -465,7 +469,7 @@ export class BoatAnchorView {
     if (this.disposed || this.paused === paused) return;
     if (paused) {
       this.closeCarlitosCard(true);
-      this.clearTouchSelection();
+      this.clearTouchInput();
     }
     this.paused = paused;
   }
@@ -473,7 +477,7 @@ export class BoatAnchorView {
   setModalOpen(open: boolean): void {
     if (this.disposed || this.modalOpen === open) return;
     this.modalOpen = open;
-    if (open) this.clearTouchSelection();
+    if (open) this.clearTouchInput();
   }
 
   beginEventPresentation(): void {
@@ -684,6 +688,9 @@ export class BoatAnchorView {
     clean(() => this.touchSurface.removeEventListener('pointerdown', this.handleTouchDown, true));
     clean(() => this.touchSurface.removeEventListener('pointerup', this.handleTouchUp, true));
     clean(() => this.touchSurface.removeEventListener('pointercancel', this.handleTouchCancel, true));
+    clean(() => this.touchSurface.removeEventListener('lostpointercapture', this.handleTouchCancel, true));
+    this.clearTouchInput();
+    this.onTouchInterrupt = () => undefined;
     clean(() => this.touchSurface.removeEventListener('click', this.handleTouchClick, true));
     clean(() => this.carlitosCard.removeEventListener('click', this.handleCarlitosClick));
     clean(() => this.anchorLayer.removeEventListener('pointerover', this.handleAnchorPointerOver));
@@ -695,6 +702,8 @@ export class BoatAnchorView {
     clean(() => this.anchorLayer.removeEventListener('wheel', this.handleAnchorWheel));
     clean(() => document.removeEventListener('click', this.handleDocumentClick));
     clean(() => window.removeEventListener('resize', this.handleWindowResize));
+    clean(() => window.visualViewport?.removeEventListener('resize', this.handleWindowResize));
+    clean(() => window.visualViewport?.removeEventListener('scroll', this.handleWindowResize));
     clean(() => { this.onAction = () => undefined; });
     clean(() => { this.onUnavailableAction = () => undefined; });
     clean(() => { this.onEventItem = () => undefined; });
@@ -1567,6 +1576,11 @@ export class BoatAnchorView {
       && button.dataset.eventState !== 'locked';
   }
 
+  clearTouchInput(): void {
+    this.touchStarts.clear();
+    this.clearTouchSelection();
+  }
+
   private clearTouchSelection(): void {
     if (this.touchSelectedAnchorId === null) return;
     this.anchorButtons.get(this.touchSelectedAnchorId)?.classList.remove('is-touch-selected');
@@ -1616,11 +1630,14 @@ export class BoatAnchorView {
       this.lastTouchTarget = null;
       return;
     }
+    if (this.disposed || this.paused || this.modalOpen || !this.isTouchSurfaceTarget(event.target)) return;
     this.touchStarts.set(event.pointerId, { x: event.clientX, y: event.clientY });
   };
 
   private readonly handleTouchCancel = (event: PointerEvent): void => {
-    if (event.pointerType === 'touch') this.touchStarts.delete(event.pointerId);
+    if (event.pointerType !== 'touch' || !this.touchStarts.has(event.pointerId)) return;
+    this.clearTouchInput();
+    this.onTouchInterrupt();
   };
 
   private readonly handleTouchUp = (event: PointerEvent): void => {
@@ -1643,7 +1660,7 @@ export class BoatAnchorView {
   private isTouchSurfaceTarget(target: EventTarget | null): boolean {
     if (!(target instanceof Element)) return false;
     if (!this.host.contains(target) && !(target instanceof HTMLCanvasElement)) return false;
-    if (target.closest('.event-caption') !== null) return false;
+    if (target.closest('.event-caption, .settings-menu, .journal-book, .carlitos-card, .fishing-layer') !== null) return false;
     return target.closest('.boat-anchor') !== null
       || target.closest('button, [role="dialog"], [inert]') === null;
   }

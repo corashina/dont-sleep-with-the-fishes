@@ -53,7 +53,7 @@ export class MobileViewportController {
   private gateVisible = false;
   private shownPortrait = false;
 
-  constructor(mount: HTMLElement, onChange: () => void) {
+  constructor(private readonly mount: HTMLElement, onChange: () => void) {
     this.onChange = onChange;
     this.priorTouchControls = document.documentElement.dataset.touchControls;
     if (this.touchDevice) document.documentElement.dataset.touchControls = 'true';
@@ -107,6 +107,9 @@ export class MobileViewportController {
     this.resumeButton.removeEventListener('click', this.onResume);
     this.stopLanguage();
     this.overlay.remove();
+    for (const property of ['left', 'top', 'width', 'height']) {
+      this.mount.style.removeProperty(`--visible-viewport-${property}`);
+    }
     this.restoreFocus();
     if (this.priorTouchControls === undefined) delete document.documentElement.dataset.touchControls;
     else document.documentElement.dataset.touchControls = this.priorTouchControls;
@@ -153,6 +156,10 @@ export class MobileViewportController {
   }
 
   private render(): void {
+    this.mount.style.setProperty('--visible-viewport-left', `${this.viewport.left}px`);
+    this.mount.style.setProperty('--visible-viewport-top', `${this.viewport.top}px`);
+    this.mount.style.setProperty('--visible-viewport-width', `${this.viewport.width}px`);
+    this.mount.style.setProperty('--visible-viewport-height', `${this.viewport.height}px`);
     this.overlay.hidden = !this.suspended;
     this.overlay.style.left = `${this.viewport.left}px`;
     this.overlay.style.top = `${this.viewport.top}px`;

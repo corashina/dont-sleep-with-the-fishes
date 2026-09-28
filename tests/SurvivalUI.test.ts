@@ -880,12 +880,13 @@ describe('SurvivalUI', () => {
     const acceptedResults = [false, true];
     const cast = vi.fn(() => acceptedResults.shift() ?? true);
     ui.onFishingCast = cast;
-    vi.spyOn(mount, 'getBoundingClientRect').mockReturnValue({
+    const layer = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    vi.spyOn(layer, 'getBoundingClientRect').mockReturnValue({
       x: 20, y: 30, left: 20, top: 30, right: 820, bottom: 630,
       width: 800, height: 600,
       toJSON: () => ({}),
     });
-    const layer = mount.querySelector<HTMLElement>('[data-fishing]')!;
+
     ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
 
     const tap = (x: number, y: number): void => {

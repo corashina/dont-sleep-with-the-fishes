@@ -34,6 +34,168 @@ function anchor(id: string, x: number, y: number, overrides: Partial<BoatInterac
 }
 
 describe('survival touch interaction', () => {
+  // Importance: 100/100. A browser interruption must preserve the active bite until Resume.
+  it.each(['pointercancel', 'lostpointercapture'])('pauses a bite after %s and waits for Resume', async (type) => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new SurvivalUI(mount);
+    const session = new SurvivalSession([], { seed: 1, initial: { energy: 2 }, random: { next: () => 0 } });
+    const world = {
+      update: vi.fn(), moveFishingBite: vi.fn(), enterFishingView: vi.fn(async () => undefined),
+      centeredFishingCast: () => ({ x: 0, z: -6.4 }),
+      playFishingCast: vi.fn(async () => undefined), playFishingMiss: vi.fn(async () => undefined),
+    };
+    const phase = SurvivalPhase.forTest({ ui, world, session });
+    views.push(phase);
+    phase.start();
+    phase.handleAction('fish');
+    const fishing = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    await vi.waitFor(() => expect(fishing.dataset.mode).toBe('aiming'));
+    fishing.click();
+    await vi.waitFor(() => expect(fishing.dataset.mode).toBe('waiting'));
+    touch(fishing, 'pointerdown', 200, 100, 2);
+    for (let second = 1; second <= 20 && fishing.dataset.mode === 'waiting'; second++) phase.update(second, 1);
+    expect(fishing.dataset.mode).toBe('bite');
+    const reel = mount.querySelector<HTMLButtonElement>('[data-fishing-bite]')!;
+    touch(reel, 'pointerdown', 100, 100, 1);
+    touch(fishing, type, 200, 100, 2);
+    expect(mount.querySelector('[data-pause]')?.classList.contains('is-visible')).toBe(true);
+    world.update.mockClear();
+    phase.update(30, 10);
+    expect(world.update).not.toHaveBeenCalled();
+    expect(fishing.dataset.mode).toBe('bite');
+    mount.querySelector<HTMLButtonElement>('[data-resume]')!.click();
+    phase.update(31, 1);
+    expect(world.update).toHaveBeenCalledOnce();
+    expect(fishing.dataset.mode).toBe('bite');
+  });
+
+  // Importance: 100/100. Cancellation must discard other fingers across Resume.
+  it.each(['boat', 'fishing'])('clears all owned %s gestures after cancellation', (surface) => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new SurvivalUI(mount);
+    views.push(ui);
+    ui.onPauseChange = (paused) => ui.setPaused(paused);
+    const cast = vi.fn(() => true);
+    ui.onFishingCast = cast;
+    ui.setAnchors([anchor('supply', 100, 100)]);
+    if (surface === 'fishing') ui.setFishingState({ mode: 'aiming', message: 'Cast', biteTarget: null });
+    const target = mount.querySelector<HTMLElement>(surface === 'boat' ? '[data-anchor-id="supply"]' : '[data-fishing]')!;
+    touch(target, 'pointerdown', 100, 100, 1);
+    touch(target, 'pointerdown', 100, 100, 2);
+    touch(target, 'pointercancel', 100, 100, 1);
+    expect(mount.querySelector('[data-pause]')?.classList.contains('is-visible')).toBe(true);
+    ui.setPaused(false);
+    touch(target, 'pointerup', 100, 100, 2);
+    expect(target.classList.contains('is-touch-selected')).toBe(false);
+    expect(cast).not.toHaveBeenCalled();
+  });
+
+  // Importance: 100/100. A finger held before interruption must not reel after Resume.
+  it('discards a held Reel action across cancellation and Resume', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new SurvivalUI(mount);
+    views.push(ui);
+    ui.onPauseChange = (paused) => ui.setPaused(paused);
+    const reel = vi.fn(() => true);
+    ui.onFishingReel = reel;
+    ui.setFishingState({ mode: 'bite', message: 'Reel', biteTarget: { x: 100, y: 100, width: 48, height: 48, depth: 1, visible: true } });
+    const fishing = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    const button = mount.querySelector<HTMLButtonElement>('[data-fishing-bite]')!;
+    touch(fishing, 'pointerdown', 200, 100, 1);
+    touch(button, 'pointerdown', 100, 100, 2);
+    touch(fishing, 'pointercancel', 200, 100, 1);
+    ui.setPaused(false);
+    touch(button, 'pointerup', 100, 100, 2);
+    touch(button, 'click', 100, 100, 2);
+    expect(reel).not.toHaveBeenCalled();
+    touch(button, 'pointerdown', 100, 100, 3);
+    touch(button, 'pointerup', 100, 100, 3);
+    touch(button, 'click', 100, 100, 3);
+    expect(reel).toHaveBeenCalledOnce();
+  });
+
+  // Importance: 95/100. Native panel scrolling must not pause gameplay or select world items.
+  it.each(['event-caption', 'settings-menu', 'journal-book'])('ignores cancelled scrolling in %s', (className) => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new SurvivalUI(mount);
+    views.push(ui);
+    const pause = vi.fn();
+    ui.onPauseChange = pause;
+    const panel = document.createElement('section');
+    panel.className = className;
+    mount.querySelector('.survival-ui')!.append(panel);
+    touch(panel, 'pointerdown', 100, 100);
+    touch(panel, 'pointercancel', 100, 100);
+    expect(pause).not.toHaveBeenCalled();
+  });
+
+  // Importance: 97/100. Browser-bar resizing must keep selected target text inside the viewport.
+  it('moves a target tooltip inward after the visible viewport narrows', () => {
+    const visible = new EventTarget();
+    vi.stubGlobal('visualViewport', visible);
+    const host = document.createElement('main');
+    document.body.append(host);
+    let width = 1000;
+    vi.spyOn(host, 'getBoundingClientRect').mockImplementation(() => ({ width, height: 400, left: 30, top: 20 }) as DOMRect);
+    const view = new BoatAnchorView(host);
+    host.append(...view.roots);
+    views.push(view);
+    const hit = vi.fn(() => 'direct' as const);
+    view.setAnchors([anchor('supply', 500, 150, { touchHitTest: hit })]);
+    const target = host.querySelector<HTMLButtonElement>('[data-anchor-id="supply"]')!;
+    touch(target, 'pointerdown', 530, 170);
+    touch(target, 'pointerup', 530, 170);
+    expect(hit).toHaveBeenCalledWith(500, 150);
+    expect(target.dataset.tooltipX).toBe('center');
+    width = 600;
+    visible.dispatchEvent(new Event('resize'));
+    expect(target.dataset.tooltipX).toBe('right');
+    width = 1000;
+    visible.dispatchEvent(new Event('resize'));
+    expect(target.dataset.tooltipX).toBe('center');
+  });
+
+  // Importance: 100/100. Normal implicit capture release must not interrupt a completed gesture.
+  it.each(['boat', 'fishing'])('ignores normal capture loss after a %s release', (surface) => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new SurvivalUI(mount);
+    views.push(ui);
+    const pause = vi.fn();
+    ui.onPauseChange = pause;
+    ui.onFishingCast = () => false;
+    ui.setAnchors([anchor('supply', 100, 100)]);
+    if (surface === 'fishing') ui.setFishingState({ mode: 'aiming', message: 'Cast', biteTarget: null });
+    const target = mount.querySelector<HTMLElement>(surface === 'boat' ? '[data-anchor-id="supply"]' : '[data-fishing]')!;
+    touch(target, 'pointerdown', 100, 100);
+    touch(target, 'pointerup', 100, 100);
+    touch(target, 'lostpointercapture', 100, 100);
+    expect(pause).not.toHaveBeenCalled();
+  });
+
+  // Importance: 97/100. Screen taps must use the same origin as fishing targets.
+  it('casts relative to the shifted fishing surface and restores zero offsets', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new SurvivalUI(mount);
+    views.push(ui);
+    const cast = vi.fn(() => true);
+    ui.onFishingCast = cast;
+    const fishing = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    for (const offset of [{ left: 30, top: 20 }, { left: 0, top: 0 }]) {
+      vi.spyOn(fishing, 'getBoundingClientRect').mockReturnValue({ ...offset, width: 600, height: 300 } as DOMRect);
+      ui.setFishingState({ mode: 'hidden', message: '', biteTarget: null });
+      ui.setFishingState({ mode: 'aiming', message: 'Cast', biteTarget: null });
+      touch(fishing, 'pointerdown', 100 + offset.left, 100 + offset.top);
+      touch(fishing, 'pointerup', 100 + offset.left, 100 + offset.top);
+      expect(cast).toHaveBeenLastCalledWith({ x: 100, y: 100 });
+    }
+  });
+
   it('selects the direct visible target before an overlapping expanded target', () => {
     const host = document.createElement('main');
     document.body.append(host);
@@ -137,7 +299,7 @@ describe('survival touch interaction', () => {
   it('casts once for a touch pointer and its generated click, then reels once per bite', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
-    const view = new SurvivalFishingView(mount);
+    const view = new SurvivalFishingView();
     mount.append(...view.roots);
     views.push(view);
     const cast = vi.fn(() => true);
@@ -162,7 +324,7 @@ describe('survival touch interaction', () => {
   it('casts only after a matching short water touch', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
-    const view = new SurvivalFishingView(mount);
+    const view = new SurvivalFishingView();
     mount.append(...view.roots);
     views.push(view);
     const cast = vi.fn(() => true);
@@ -187,7 +349,7 @@ describe('survival touch interaction', () => {
   it('does not cast when a touch starts on Exit and ends on water', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
-    const view = new SurvivalFishingView(mount);
+    const view = new SurvivalFishingView();
     mount.append(...view.roots);
     views.push(view);
     const cast = vi.fn(() => true);

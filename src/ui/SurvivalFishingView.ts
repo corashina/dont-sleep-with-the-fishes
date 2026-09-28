@@ -49,6 +49,7 @@ export class SurvivalFishingView {
   readonly exitButton: HTMLButtonElement;
   readonly resultClose: HTMLButtonElement;
 
+  onTouchInterrupt: () => void = () => undefined;
   onCast: (point: { readonly x: number; readonly y: number } | null) => boolean = () => false;
   onReel: () => boolean = () => false;
   onContinue: () => void = () => undefined;
@@ -80,7 +81,7 @@ export class SurvivalFishingView {
   private hasTarget = false;
   private castIssued = false;
   private reelIssued = false;
-  private readonly pointerStarts = new Map<number, { x: number; y: number }>();
+  private readonly pointerStarts = new Map<number, { x: number; y: number; cast: boolean; button: Element | null }>();
   private pointerCastTime = 0;
   private pointerCastX = 0;
   private pointerCastY = 0;
@@ -100,9 +101,7 @@ export class SurvivalFishingView {
 
   private disposed = false;
 
-  constructor(
-    private readonly mount: HTMLElement,
-  ) {
+  constructor() {
     const template = document.createElement('template');
     template.innerHTML = `
       <section class="fishing-layer" data-fishing role="region" data-ui-aria="fishingInteraction" aria-label="${uiText('fishingInteraction')}" aria-hidden="true" inert tabindex="-1">
@@ -141,6 +140,7 @@ export class SurvivalFishingView {
     this.interactionRoot.addEventListener('pointerdown', this.handlePointerDown);
     this.interactionRoot.addEventListener('pointerup', this.handlePointerUp);
     this.interactionRoot.addEventListener('pointercancel', this.handlePointerCancel);
+    this.interactionRoot.addEventListener('lostpointercapture', this.handlePointerCancel);
     this.resultRoot.addEventListener('click', this.handleResultClick);
     this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
     this.refreshLanguage();
@@ -158,7 +158,7 @@ export class SurvivalFishingView {
     const targetChanged = !this.sameTarget(state.biteTarget);
     if (!modeChanged && !messageChanged && !targetChanged) return false;
 
-    if (modeChanged) this.resetModeInput();
+    if (modeChanged) this.resetModeInput(state.mode);
 
     this.currentMode = state.mode;
     this.interactionRoot.dataset.mode = state.mode;
@@ -170,9 +170,22 @@ export class SurvivalFishingView {
     return true;
   }
 
-  private resetModeInput(): void {
+  private resetModeInput(mode: FishingUiMode): void {
     this.castIssued = false;
     this.reelIssued = false;
+    if (mode === 'hidden' || mode === 'result') this.clearTouchInput();
+    else {
+      // Keep ownership until release, but do not cast from a previous mode's touch.
+      for (const start of this.pointerStarts.values()) {
+        start.cast = false;
+        start.button = null;
+      }
+      this.pointerCastTime = 0;
+      this.pointerCastTarget = null;
+    }
+  }
+
+  clearTouchInput(): void {
     this.pointerStarts.clear();
     this.pointerCastTime = 0;
     this.pointerCastTarget = null;
@@ -193,7 +206,9 @@ export class SurvivalFishingView {
   }
 
   setPaused(paused: boolean): void {
-    if (!this.disposed) this.paused = paused;
+    if (this.disposed) return;
+    this.paused = paused;
+    if (paused) this.clearTouchInput();
   }
 
   updateBiteTarget(target: ProjectedBoatBounds | null): void {
@@ -336,11 +351,14 @@ export class SurvivalFishingView {
       () => this.interactionRoot.removeEventListener('pointerdown', this.handlePointerDown),
       () => this.interactionRoot.removeEventListener('pointerup', this.handlePointerUp),
       () => this.interactionRoot.removeEventListener('pointercancel', this.handlePointerCancel),
+      () => this.interactionRoot.removeEventListener('lostpointercapture', this.handlePointerCancel),
       () => this.resultRoot.removeEventListener('click', this.handleResultClick),
     ]));
   }
 
   resetCallbacksForDispose(): void {
+    this.onTouchInterrupt = () => undefined;
+    this.clearTouchInput();
     throwCleanupFailure(runCleanupSteps([
       () => { this.onCast = () => false; },
       () => { this.onReel = () => false; },
@@ -421,7 +439,7 @@ export class SurvivalFishingView {
     if (clientX === undefined || clientY === undefined) {
       accepted = this.onCast(null);
     } else {
-      const bounds = this.mount.getBoundingClientRect();
+      const bounds = this.interactionRoot.getBoundingClientRect();
       accepted = this.onCast({ x: clientX - bounds.left, y: clientY - bounds.top });
     }
     if (!accepted) this.castIssued = false;
@@ -436,7 +454,7 @@ export class SurvivalFishingView {
   private readonly handleInteractionClick = (event: MouseEvent): void => {
     if (this.disposed || !this.canUseInteraction()) return;
     const target = event.target;
-    if (!(target instanceof Element)) return;
+    if (!(target instanceof Element) || this.ignoreGeneratedPointerClick(event)) return;
     if (target.closest('[data-fishing-view-exit]') !== null) {
       this.onExit();
       return;
@@ -445,11 +463,10 @@ export class SurvivalFishingView {
       this.issueReel();
       return;
     }
-    if (this.ignoreGeneratedCastClick(event)) return;
     this.issueCast(event.clientX, event.clientY);
   };
 
-  private ignoreGeneratedCastClick(event: MouseEvent): boolean {
+  private ignoreGeneratedPointerClick(event: MouseEvent): boolean {
     const source = event as MouseEvent & {
       pointerType?: string;
       sourceCapabilities?: { firesTouchEvents?: boolean };
@@ -466,38 +483,55 @@ export class SurvivalFishingView {
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
     this.pointerStarts.delete(event.pointerId);
-    if (this.currentMode !== 'aiming' || event.target !== this.interactionRoot) return;
+    if (this.disposed || this.paused || !this.canUseInteraction()
+      || this.currentMode === 'hidden' || this.currentMode === 'result') return;
     this.pointerCastTime = 0;
     this.pointerCastTarget = null;
-    this.pointerStarts.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    this.pointerStarts.set(event.pointerId, {
+      x: event.clientX, y: event.clientY,
+      cast: this.currentMode === 'aiming' && event.target === this.interactionRoot,
+      button: event.target instanceof Element ? event.target.closest('button') : null,
+    });
   };
 
   private readonly handlePointerCancel = (event: PointerEvent): void => {
-    this.pointerStarts.delete(event.pointerId);
+    if (event.pointerType !== 'touch' || !this.pointerStarts.has(event.pointerId)) return;
+    this.clearTouchInput();
+    this.onTouchInterrupt();
   };
 
   private readonly handlePointerUp = (event: PointerEvent): void => {
     const start = this.pointerStarts.get(event.pointerId);
     this.pointerStarts.delete(event.pointerId);
-    this.pointerCastTime = Date.now();
-    this.pointerCastX = event.clientX;
-    this.pointerCastY = event.clientY;
-    this.pointerCastTarget = event.target;
+    this.recordPointerClick(event);
     const target = event.target;
-    if (
-      this.disposed
-      || target !== this.interactionRoot
-      || !this.canUseInteraction()
-      || this.currentMode !== 'aiming'
+    if (this.disposed || this.paused || !this.canUseInteraction()
       || start === undefined
-      || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 12
-    ) return;
+      || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 12) return;
+    if (this.issuePointerButton(event, start.button)) return;
+    if (target !== this.interactionRoot || this.currentMode !== 'aiming' || !start.cast) return;
     if (event.pointerType === 'touch') {
       this.seenTouch = true;
       if (this.currentState !== null) this.applyStateMessage(this.currentState);
     }
     this.issueCast(event.clientX, event.clientY);
   };
+
+  private recordPointerClick(event: PointerEvent): void {
+    if (event.pointerType !== 'touch' && event.target !== this.interactionRoot) return;
+    this.pointerCastTime = Date.now();
+    this.pointerCastX = event.clientX;
+    this.pointerCastY = event.clientY;
+    this.pointerCastTarget = event.target;
+  }
+
+  private issuePointerButton(event: PointerEvent, button: Element | null): boolean {
+    if (event.pointerType !== 'touch' || button === null
+      || !(event.target instanceof Element) || event.target.closest('button') !== button) return false;
+    if (button === this.biteButton) this.issueReel();
+    else if (button === this.exitButton) this.onExit();
+    return true;
+  }
 
   private readonly handleResultClick = (event: MouseEvent): void => {
     const target = event.target;
