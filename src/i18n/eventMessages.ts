@@ -228,7 +228,6 @@ const EVENT_TEXT = {
   'eventText130': { en: 'The tentacle steals a supply and wounds you.', pl: 'Macka kradnie zapasy i cię rani.', 'es-AR': 'El tentáculo roba un suministro y te hiere.' },
   'eventText131': { en: 'The creature sinks below the beam.', pl: 'Stworzenie znika pod snopem światła.', 'es-AR': 'La criatura se hunde bajo el haz de luz.' },
   'eventText132': { en: 'The flashlight is lost.', pl: 'Tracisz latarkę.', 'es-AR': 'Perdés la linterna.' },
-  'eventText133': { en: "The umbrella breaks the creature's gaze.", pl: 'Parasol zasłania spojrzenie stworzenia.', 'es-AR': 'El paraguas bloquea la mirada de la criatura.' },
   'eventText134': { en: 'The creature attacks.', pl: 'Stworzenie atakuje.', 'es-AR': 'La criatura ataca.' },
   'eventText135': { en: 'The creature takes one Food and leaves.', pl: 'Stworzenie zabiera jedną porcję jedzenia i odchodzi.', 'es-AR': 'La criatura toma una porción de comida y se va.' },
   'eventText136': { en: 'The shotgun is fired.', pl: 'Oddajesz strzał ze strzelby.', 'es-AR': 'Disparás la escopeta.' },

@@ -35,15 +35,20 @@ import { StationaryEventCamera } from '../StationaryEventCamera';
 import { ItemAimTarget } from '../ItemAimTarget';
 import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import {
+  DEATH_STARE_BITE_DURATION,
+  DEATH_STARE_BITE_PROGRESS,
   DEATH_STARE_REACTION_DURATION,
   DEATH_STARE_REVEAL_DURATION,
   deathStareItemDuration,
   identityDeathStareSample,
+  sampleDeathStareBite,
   sampleDeathStareItemUse,
   sampleDeathStareReaction,
   sampleDeathStareReveal,
   type DeathStareSample,
 } from './deathStareChoreography';
+
+type DeathStareAnimationKind = 'reveal' | 'item' | 'reaction' | 'bite';
 
 interface WaterStrand {
   readonly mesh: Mesh;
@@ -194,14 +199,14 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private readonly mouthWorldPosition = new Vector3();
   private readonly mouthParentPosition = new Vector3();
   private readonly actorParentWorldInverse = new Matrix4();
-  private readonly animation = new TimedPresentationAnimation<
-    'reveal' | 'item' | 'reaction'
-  >(
+  private readonly animation = new TimedPresentationAnimation<DeathStareAnimationKind>(
     (kind, time, progress) => this.applyAnimation(kind, time, progress),
     (kind) => this.finishAnimation(kind),
     1e-9,
   );
   private activeChoiceId: string | null = null;
+  private usedChoiceId: string | null = null;
+  private bitePlayed = false;
   private borrowedActor: BorrowedSupplyActor | null = null;
   private staged = false;
   private disposed = false;
@@ -385,6 +390,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     }
     this.animation.cancel();
     this.activeChoiceId = choiceId;
+    this.usedChoiceId = sceneChoiceId(choiceId);
     sampleDeathStareItemUse(sceneChoiceId(choiceId), 0, this.sample);
     this.applySample(0);
     return this.animation.start(
@@ -402,6 +408,12 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.animation.cancel();
     this.activeChoiceId = null;
     this.resetBorrowedPose();
+    if (this.usedChoiceId === 'umbrella' && outcomeAttacked(result)) {
+      this.bitePlayed = false;
+      sampleDeathStareBite(0, this.sample);
+      this.applySample(0);
+      return this.animation.start('bite', DEATH_STARE_BITE_DURATION);
+    }
 
     const selectedId = result.selectedInstanceId;
     const selectedBroken = selectedId !== null
@@ -447,6 +459,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     if (this.disposed) return;
     this.animation.cancel();
     this.activeChoiceId = null;
+    this.usedChoiceId = null;
     this.resetCameraEffect();
     this.releaseActor();
     this.staged = false;
@@ -508,12 +521,14 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   }
 
   private applyAnimation(
-    kind: 'reveal' | 'item' | 'reaction',
+    kind: DeathStareAnimationKind,
     time: number,
     progress: number,
   ): void {
     if (kind === 'reveal') {
       sampleDeathStareReveal(progress, this.sample);
+    } else if (kind === 'bite') {
+      sampleDeathStareBite(progress, this.sample);
     } else if (kind === 'item') {
       if (this.activeChoiceId === null) return;
       sampleDeathStareItemUse(
@@ -526,9 +541,16 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     }
     this.applySample(time);
     if (kind === 'reaction') this.applyReactionBorrowedPose();
+    if (kind === 'bite') this.emitBite(progress);
   }
 
-  private finishAnimation(kind: 'reveal' | 'item' | 'reaction'): void {
+  private emitBite(progress: number): void {
+    if (this.bitePlayed || progress < DEATH_STARE_BITE_PROGRESS) return;
+    this.bitePlayed = true;
+    this.environment.emitCue({ eventId: 'death-stare', cue: 'bite' });
+  }
+
+  private finishAnimation(kind: DeathStareAnimationKind): void {
     this.activeChoiceId = null;
     if (kind === 'reaction' && this.reactionState.lostItem) {
       const actor = this.borrowedActor;

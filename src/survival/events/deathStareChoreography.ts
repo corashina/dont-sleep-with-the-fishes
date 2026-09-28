@@ -6,6 +6,9 @@ import { eventItemUseDuration } from '../eventItemUseChoreography';
 export const DEATH_STARE_REVEAL_DURATION = 3.2;
 export const DEATH_STARE_ITEM_DURATION = scaleEventItemDuration(1.25);
 export const DEATH_STARE_REACTION_DURATION = 1.25;
+export const DEATH_STARE_BITE_DURATION = 2.4;
+export const DEATH_STARE_BITE_PROGRESS = 0.82;
+const DEATH_STARE_BITE_REACH = 2.9;
 
 export function deathStareItemDuration(choiceId: string): number {
   if (choiceId === 'flareGun') return eventItemUseDuration('flare-target');
@@ -310,5 +313,28 @@ export function sampleDeathStareReaction(
     output.itemScaleY = 1 - collapse * 0.76;
     output.itemScaleZ = 1 - collapse * 0.18;
   }
+  return true;
+}
+
+export function sampleDeathStareBite(
+  progress: number,
+  output: DeathStareSample,
+): boolean {
+  resetSample(output);
+  holdGaze(output);
+  const t = clamp01(progress);
+  const windUp = pulse(t, 0, 0.26, 0.42);
+  const lunge = smoothstep((t - 0.3) / 0.5);
+  const gape = smoothstep(t / 0.3) * (1 - smoothstep((t - 0.76) / 0.06));
+  const impact = pulse(t, 0.78, DEATH_STARE_BITE_PROGRESS, 1);
+  output.fishZ = -windUp * 0.38 + lunge * DEATH_STARE_BITE_REACH;
+  output.fishY = -windUp * 0.24 + lunge * 0.34;
+  output.fishPitch = windUp * 0.06 - lunge * 0.14;
+  output.jawOpen = 0.18 + gape * 1.1;
+  output.lureStrength = 0.72 + lunge * 0.28;
+  output.lunge = lunge;
+  output.cameraPitch = impact * -0.12;
+  output.cameraRoll = impact * 0.04;
+  output.hullRoll = impact * -0.1;
   return true;
 }

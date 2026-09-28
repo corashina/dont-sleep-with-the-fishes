@@ -24,7 +24,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
     sounds: [],
   },
   'tentacle-attack': { models: ['snatcher'], sounds: ['tentacleMovement', 'netImpact'] },
-  'death-stare': { models: ['deathStareBlob'], sounds: [] },
+  'death-stare': { models: ['deathStareBlob'], sounds: ['fogMonsterBite'] },
   'swarm-of-sharks': { models: ['shark'], sounds: ['midnightMonsterAttack'] },
   tornado: { models: [], sounds: ['tornadoWind'] },
   'monster-in-the-fog': { models: ['fogMonster'], sounds: ['fogMonsterBite'] },
