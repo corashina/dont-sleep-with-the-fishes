@@ -1,3 +1,24 @@
+/* Keep the scavenging inventory and clock clear of the mobile play area. */
+html[data-touch-controls='true'] .illustrated-hud {
+  --carry-slot-size: clamp(40px, calc(var(--visible-viewport-width) * .075), 72px);
+  --scavenge-clock-size: clamp(52px, calc(var(--visible-viewport-width) * .09), 88px);
+}
+html[data-touch-controls='true'] .scavenge-status {
+  top: max(8px, env(safe-area-inset-top));
+  gap: 8px;
+}
+html[data-touch-controls='true'] .weight-circles__row { gap: 6px; }
+html[data-touch-controls='true'] .weight-circle { border-width: 3px; }
+html[data-touch-controls='true'] .pocket-watch [data-timer] {
+  min-width: 0;
+  padding: 2px 4px;
+  font-size: clamp(.875rem, calc(var(--visible-viewport-width) * .018), 1.125rem);
+}
+html[data-touch-controls='true'] .hands-full-notice {
+  top: calc(max(8px, env(safe-area-inset-top)) + var(--scavenge-clock-size) + 8px);
+  font-size: 1.125rem;
+}
+
 /* Touch targets do not depend on the compact-layout breakpoint. */
 @media (pointer: coarse) {
   html:root :is(button, select, input[type='checkbox'], input[type='range']) {
