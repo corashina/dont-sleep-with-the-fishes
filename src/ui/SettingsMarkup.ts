@@ -46,7 +46,6 @@ function buildAudioControl(controls: AudioControls): string {
 function buildCameraControl(controls: CameraControls): string {
   return `
     <div class="settings-menu__group">
-      <strong data-settings-copy="camera">${settingsText('camera')}</strong>
       <label class="settings-menu__slider">
         <span data-settings-copy="fov">${settingsText('fov')}</span>
         <output data-camera-fov-output>${Math.round(controls.fieldOfView)}°</output>
@@ -104,10 +103,10 @@ export function settingsMarkup(options: SettingsMarkupOptions): string {
         <div class="settings-menu__column">
           ${buildGeneralCategory(options.save)}
           <section class="settings-menu__category"><h3 data-settings-copy="sound">${settingsText('sound')}</h3>${buildAudioControl(options.audio)}</section>
+          <section class="settings-menu__category"><h3 data-settings-copy="camera">${settingsText('camera')}</h3>${buildCameraControl(options.camera)}</section>
         </div>
         <section class="settings-menu__column settings-menu__category"><h3 data-settings-copy="graphics">${settingsText('graphics')}</h3>
           <div class="settings-menu__quality" data-settings-quality></div>
-          ${buildCameraControl(options.camera)}
           ${buildPerformanceStatsControl(options.performance)}
         </section>
       </div>
