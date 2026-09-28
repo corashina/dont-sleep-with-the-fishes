@@ -1,4 +1,4 @@
-import { movementAxes, type MovementAxes } from '../player/collisions';
+import type { MovementAxes } from '../player/collisions';
 
 export class InputController {
   private readonly pressed = new Set<string>();
@@ -6,6 +6,10 @@ export class InputController {
   private lookY = 0;
   private interactQueued = false;
   private jumpQueued = false;
+  private readonly touchMovement: MovementAxes = { x: 0, z: 0 };
+  private readonly movementSample: MovementAxes = { x: 0, z: 0 };
+  private readonly lookSample = { x: 0, y: 0 };
+  private touchSprint = false;
   private disposed = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -18,11 +22,39 @@ export class InputController {
   }
 
   get movement(): MovementAxes {
-    return movementAxes(this.pressed);
+    const x = Number(this.pressed.has('KeyD')) - Number(this.pressed.has('KeyA')) + this.touchMovement.x;
+    const z = Number(this.pressed.has('KeyS')) - Number(this.pressed.has('KeyW')) + this.touchMovement.z;
+    const length = Math.hypot(x, z);
+    this.movementSample.x = length > 1 ? x / length : x;
+    this.movementSample.z = length > 1 ? z / length : z;
+    return this.movementSample;
   }
 
   get sprinting(): boolean {
-    return this.pressed.has('ShiftLeft') || this.pressed.has('ShiftRight');
+    return this.touchSprint || this.pressed.has('ShiftLeft') || this.pressed.has('ShiftRight');
+  }
+
+  setTouchMovement(x: number, z: number): void {
+    const length = Math.hypot(x, z);
+    this.touchMovement.x = length > 1 ? x / length : x;
+    this.touchMovement.z = length > 1 ? z / length : z;
+  }
+
+  addTouchLook(x: number, y: number): void {
+    this.lookX += x;
+    this.lookY += y;
+  }
+
+  queueTouchInteract(): void {
+    this.interactQueued = true;
+  }
+
+  queueTouchJump(): void {
+    this.jumpQueued = true;
+  }
+
+  setTouchSprint(active: boolean): void {
+    this.touchSprint = active;
   }
 
   get pointerLocked(): boolean {
@@ -39,10 +71,11 @@ export class InputController {
   }
 
   consumeLook(): { x: number; y: number } {
-    const look = { x: this.lookX, y: this.lookY };
+    this.lookSample.x = this.lookX;
+    this.lookSample.y = this.lookY;
     this.lookX = 0;
     this.lookY = 0;
-    return look;
+    return this.lookSample;
   }
 
   clearLook(): void {
@@ -102,8 +135,11 @@ export class InputController {
     this.clearLook();
   };
 
-  private readonly clear = (): void => {
+  readonly clear = (): void => {
     this.pressed.clear();
+    this.touchMovement.x = 0;
+    this.touchMovement.z = 0;
+    this.touchSprint = false;
     this.lookX = 0;
     this.lookY = 0;
     this.interactQueued = false;

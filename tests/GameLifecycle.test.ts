@@ -35,6 +35,7 @@ import {
 } from '../src/game/shipDanger';
 import { PlayerController } from '../src/player/PlayerController';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
+import { InputController } from '../src/input/InputController';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type {
   PostProcessingControls,
@@ -305,12 +306,27 @@ function postProcessingSceneRenderer(): SceneRenderer {
   };
 }
 
+function createScavengePhaseHarness(): ScavengePhase {
+  return Object.assign(Object.create(ScavengePhase.prototype), {
+    touchControls: {
+      setPresentation: vi.fn(),
+      setEnabled: vi.fn(),
+      dispose: vi.fn(),
+    },
+    context: {
+      mount: document.createElement('main'),
+      renderer: { domElement: document.createElement('canvas') },
+    },
+  }) as ScavengePhase;
+}
+
 function createUpdateHarness(
   session: ScavengeSession,
   input = {
     pointerLocked: true,
     consumeLook: vi.fn(),
     clearLook: vi.fn(),
+    clear: vi.fn(),
     sprinting: false,
   },
 ): {
@@ -319,6 +335,7 @@ function createUpdateHarness(
     pointerLocked: boolean;
     consumeLook: ReturnType<typeof vi.fn>;
     clearLook: ReturnType<typeof vi.fn>;
+    clear: ReturnType<typeof vi.fn>;
     sprinting: boolean;
   };
   hands: ReturnType<typeof scavengeHandsStub>;
@@ -328,7 +345,7 @@ function createUpdateHarness(
   const updateWorld = vi.fn();
   const attachPhysicsObjectsToShip = vi.fn();
   const hands = scavengeHandsStub();
-  const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+  const phase = createScavengePhaseHarness();
   Object.assign(phase, {
     disposed: false,
     elapsed: 0,
@@ -381,7 +398,7 @@ function createUpdateHarness(
 }
 
 function introHarness(elapsed = 0) {
-  const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+  const phase = createScavengePhaseHarness();
   let sessionStatus: 'idle' | 'running' | 'paused' = 'idle';
   const sessionStart = vi.fn(() => { sessionStatus = 'running'; });
   const sessionPause = vi.fn(() => {
@@ -446,6 +463,7 @@ function introHarness(elapsed = 0) {
       pointerLocked: true,
       consumeLook,
       clearLook,
+      clear: vi.fn(),
       consumeJump,
       sprinting: false,
     },
@@ -809,7 +827,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const order: string[] = [];
     const sessionStart = vi.fn();
     const introFrame = createScavengeIntroFrame();
-    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    const phase = createScavengePhaseHarness();
     Object.assign(phase, {
       presentation: 'intro',
       introBegun: false,
@@ -1212,12 +1230,13 @@ describe('ScavengePhase lifecycle integration', () => {
       pointerLocked: true,
       consumeLook: vi.fn(),
       clearLook: vi.fn(),
+      clear: vi.fn(),
       sprinting: false,
     };
     const tick = vi.fn();
     const updateFlight = vi.fn();
     const hands = scavengeHandsStub();
-    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    const phase = createScavengePhaseHarness();
     Object.assign(phase, {
       disposed: false,
       elapsed: 0,
@@ -1319,6 +1338,7 @@ describe('ScavengePhase lifecycle integration', () => {
         pointerLocked: false,
         consumeLook: vi.fn(),
         clearLook: vi.fn(),
+        clear: vi.fn(),
         sprinting: false,
       },
     );
@@ -1340,7 +1360,7 @@ describe('ScavengePhase lifecycle integration', () => {
 
   it('waits for Escape release before the next Escape resumes', () => {
     const requestPointerLock = vi.fn();
-    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    const phase = createScavengePhaseHarness();
     Object.assign(phase, {
       overlayActive: false,
       escapeResumeArmed: false,
@@ -1375,13 +1395,14 @@ describe('ScavengePhase lifecycle integration', () => {
     let status = 'running';
     const requestPointerLock = vi.fn();
     const pause = vi.fn(() => { status = 'paused'; });
-    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    const phase = createScavengePhaseHarness();
     Object.assign(phase, {
       presentation: 'playing',
       overlayActive: false,
       escapeResumeArmed: false,
       escapeKeyHeld: false,
       session: { snapshot: () => ({ status }), pause },
+      input: { clear: vi.fn() },
       requestPointerLock,
       ui: { setPaused: vi.fn() },
       hands: { hideAndReset: vi.fn() },
@@ -1613,6 +1634,60 @@ describe('ScavengePhase lifecycle integration', () => {
       }
     }
   });
+
+  // Importance: 100/100. A bubbled mouse press must request one lock on each play surface.
+  it('requests one mouse lock from canvas and one from the look surface on a coarse device', async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const phases: ScavengePhase[] = [];
+    const game = createTestGame({
+      createMenu: (_context, onComplete) => { onComplete(); return gamePhase(); },
+      createScavenge: (context, onComplete, onRestart, onReturnToMenu) => {
+        const phase = new ScavengePhase(context, onComplete, onRestart, onReturnToMenu);
+        phases.push(phase);
+        return phase;
+      },
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      physicsMode: 'off',
+      sceneRenderer: postProcessingSceneRenderer(),
+      mount,
+    });
+    await flushPhases();
+    const request = vi.spyOn(InputController.prototype, 'requestPointerLock').mockResolvedValue(true);
+    try {
+      phases[0]!.start();
+      const press = (target: Element) => {
+        const event = new Event('pointerdown', { bubbles: true });
+        Object.defineProperty(event, 'pointerType', { value: 'mouse' });
+        target.dispatchEvent(event);
+      };
+      press(mount.querySelector('canvas')!);
+      expect(request).toHaveBeenCalledTimes(1);
+      press(mount.querySelector('[data-touch-look]')!);
+      expect(request).toHaveBeenCalledTimes(2);
+      const child = document.createElement('button');
+      mount.append(child);
+      press(child);
+      expect(request).toHaveBeenCalledTimes(2);
+      phases[0]!.setOverlayActive(true);
+      press(mount.querySelector('[data-touch-look]')!);
+      press(child);
+      expect(request).toHaveBeenCalledTimes(2);
+    } finally {
+      request.mockRestore();
+      game.dispose();
+      await flushPhases();
+      mount.remove();
+      vi.unstubAllGlobals();
+    }
+  }, 10000);
 
   // Importance: 95/100. Each real run must count once, including a restart.
   it('runs the complete failure timeline and restarts scavenging once', async () => {
@@ -2076,7 +2151,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const disposeUI = vi.fn();
     const unsubscribeLanguage = vi.fn();
     const hands = scavengeHandsStub();
-    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    const phase = createScavengePhaseHarness();
     Object.assign(phase, {
       disposed: false,
       audio: scavengeAudioStub(),
@@ -2123,7 +2198,7 @@ describe('ScavengePhase lifecycle integration', () => {
       _waterHeight: (x: number, z: number) => number,
       handlers: { onLost: (item: ItemInstance) => void; },
     ) => handlers.onLost({ instanceId: 'flareGun-1', type: 'flareGun' }));
-    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    const phase = createScavengePhaseHarness();
     Object.assign(phase, {
       elapsed: 0,
       session,
@@ -2156,7 +2231,7 @@ describe('ScavengePhase lifecycle integration', () => {
     };
     const hands = scavengeHandsStub();
     const ui = { showHandsFullNotice: vi.fn() };
-    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    const phase = createScavengePhaseHarness();
     Object.assign(phase, {
       session,
       carry,

@@ -1,6 +1,8 @@
 import { menuText } from '../i18n/menuMessages';
 import { onLanguageChange } from '../i18n/language';
 import { guideText } from '../i18n/guideMessages';
+import { touchText } from '../i18n/touchMessages';
+import { touchControlsSelected } from '../input/TouchControls';
 import { GUIDE_PAGES, guideImage, type GuideSectionId } from './GuidePages';
 import { MenuPauseView } from './MenuPauseView';
 import { renderGuideDescription } from './GuideDescription';
@@ -303,7 +305,9 @@ export class MenuUI {
     const image = document.createElement('img');
     image.dataset.menuGuideImage = '';
     image.src = guideImage(key);
-    image.alt = guideText(`${key}Alt`);
+    image.alt = touchControlsSelected() && key === 'catch'
+      ? touchText('catchAlt')
+      : guideText(`${key}Alt`);
     image.width = 1280;
     image.height = 720;
     image.draggable = false;
@@ -316,7 +320,13 @@ export class MenuUI {
     const description = document.createElement('p');
     description.className = 'how-to-play-page__description ui-role-narrative';
     description.dataset.menuGuideDescription = '';
-    const text = guideText(`${key}Body`);
+    const text = touchControlsSelected() && key === 'collect'
+      ? touchText('collectGuide')
+      : touchControlsSelected() && key === 'evacuate'
+        ? touchText('evacuateGuide')
+        : touchControlsSelected() && key === 'catch'
+          ? touchText('catchGuide')
+        : guideText(`${key}Body`);
     if (this.guidePageIndex === 0) description.textContent = text;
     else renderGuideDescription(description, text);
     section.append(figure, subtitle, description);
