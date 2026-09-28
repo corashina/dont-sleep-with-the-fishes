@@ -480,6 +480,7 @@ export class SurvivalPhase implements GamePhase {
       : time;
     this.simulationTimeInitialized = true;
     this.world.update?.(this.elapsedSeconds, deltaSeconds);
+    this.syncCarlitosLabPosition();
     if (this.started) this.fishingFlow.update(deltaSeconds);
     if (this.started) this.eventFlow.update(deltaSeconds);
     const snapshot = this.session.snapshot();
@@ -915,6 +916,9 @@ export class SurvivalPhase implements GamePhase {
       else if (eventId === 'midnight-tour') this.audio.midnightTourCue(cue);
       else if (eventId === 'chest-attack') this.audio.chestAttackCue(cue);
       else if (eventId === 'swarm-of-sharks') this.audio.sharkBite();
+      else if (eventId === 'kraken') this.audio.krakenCue(cue);
+      else if (eventId === 'ghost-ship') this.audio.ghostShipCue(cue);
+      else if (eventId === 'ghosts') this.audio.ghostsCue(cue);
       else this.audio.checkBackCue(cue);
     });
     this.world.setThunderListener?.(() => this.audio.thunder());
@@ -925,8 +929,20 @@ export class SurvivalPhase implements GamePhase {
     this.wireUI();
   }
 
+  private syncCarlitosLabPosition(): void {
+    if (this.itemAnimationLab) this.ui.setCarlitosPosition?.(this.world.getCarlitosPositionForLab?.() ?? null);
+  }
+
   private wireUI(): void {
     this.ui.onAction = (action, option) => this.handleAction(action, option);
+    this.ui.onCarlitosCardChange = (open) => {
+      if (!this.disposed) this.world.setCarlitosCardOpen?.(open);
+    };
+    this.ui.onCarlitosPosition = (direction) => {
+      if (!this.itemAnimationLab || !this.canAcceptCommand() || this.session.snapshot().carlitos === null) return;
+      this.world.cycleCarlitosPositionForLab?.(direction);
+      this.syncCarlitosLabPosition();
+    };
     this.ui.onEventItem = (choiceId, instanceId) => this.handleEventItem(choiceId, instanceId);
     this.ui.onEventChoice = (choiceId) => {
       if (this.itemAnimationLab) this.itemAnimationLabFlow.choose(choiceId);

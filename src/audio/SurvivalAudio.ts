@@ -10,6 +10,9 @@ import type { PresentationWeatherId } from '../weather/presentationWeather';
 import type {
   ChestAttackAudioCue,
   CheckBackAudioCue,
+  KrakenAudioCue,
+  GhostShipAudioCue,
+  GhostsAudioCue,
   MidnightTourAudioCue,
 } from '../survival/eventPresentationCue';
 import type { AudioVoice } from './AudioBackend';
@@ -92,7 +95,13 @@ const EVENT_ITEM_SOUNDS: Readonly<Partial<Record<ItemId, SoundId>>> = Object.fre
   umbrella: 'umbrella',
 });
 
-const ROUGH_WEATHER = new Set<PresentationWeatherId>([
+const GHOST_SHIP_SOUNDS: Readonly<Record<GhostShipAudioCue, SoundId>> = Object.freeze({
+  'cannon-fire': 'cannonFire',
+  'cannon-splash': 'anchorSplash',
+  'cannon-impact': 'cannonImpact',
+});
+
+const ROUGH_WEATHER =new Set<PresentationWeatherId>([
   'squall',
   'thunderstorm',
   'waves',
@@ -103,6 +112,13 @@ const THUNDER_SOUNDS = Object.freeze([
   'thunderLightningCrack',
   'thunderLightningDry',
 ] as const satisfies readonly SoundId[]);
+
+const KRAKEN_SOUNDS: Readonly<Record<KrakenAudioCue, SoundId>> = Object.freeze({
+  surge: 'krakenSurge',
+  roar: 'krakenRoar',
+  grip: 'krakenGrip',
+  sink: 'krakenSink',
+});
 
 const CAT_MEOW_SOUNDS = Object.freeze([
   'catMeow1',
@@ -132,6 +148,7 @@ export class SurvivalAudio {
   private midnightDigRemaining = 0;
   private midnightAttackPlayed = false;
   private planeFlybyVoice: AudioVoice | null = null;
+  private readonly krakenVoices: AudioVoice[] = [];
   private rescueEngine: AudioVoice | null = null;
   private sinkingActive = false;
   private sinkingBreakVoice: AudioVoice | null = null;
@@ -391,6 +408,7 @@ export class SurvivalAudio {
       || eventId === 'drifting-chest'
       || eventId === 'flying-saucer'
       || eventId === 'something-under-us'
+      || eventId === 'kraken'
     ) return;
     if (eventId === 'bad-sleep') {
       this.scope.play('yawn');
@@ -537,9 +555,30 @@ export class SurvivalAudio {
     this.scope.play(cue === 'wood' ? 'chest' : 'midnightMonsterAttack');
   }
 
+  krakenCue(cue: KrakenAudioCue): void {
+    if (this.disposed || this.endingStopped) return;
+    const voice = this.scope.play(KRAKEN_SOUNDS[cue]);
+    if (voice === null) return;
+    this.krakenVoices.push(voice);
+    voice.onEnded(() => {
+      const index = this.krakenVoices.indexOf(voice);
+      if (index >= 0) this.krakenVoices.splice(index, 1);
+    });
+  }
+
   checkBackCue(cue: CheckBackAudioCue): void {
     if (this.disposed) return;
     this.scope.play(cue === 'fish' ? 'checkBackFish' : 'checkBackAnglerfish');
+  }
+
+  ghostShipCue(cue: GhostShipAudioCue): void {
+    if (this.disposed) return;
+    this.scope.play(GHOST_SHIP_SOUNDS[cue]);
+  }
+
+  ghostsCue(cue: GhostsAudioCue): void {
+    if (this.disposed) return;
+    this.scope.play(cue === 'turn' ? 'ghostSpiritBreath' : 'ghostRush');
   }
 
   sharkBite(): void {
@@ -565,6 +604,8 @@ export class SurvivalAudio {
     this.shadowMeowDelay = 0;
     this.planeFlybyVoice?.stop(0.08);
     this.planeFlybyVoice = null;
+    for (const voice of this.krakenVoices) voice.stop(0.3);
+    this.krakenVoices.length = 0;
     this.clearMidnightTour();
     this.scope.stopLoop('leak', 0.08);
     this.scope.stopLoop('seagulls', 0.8);

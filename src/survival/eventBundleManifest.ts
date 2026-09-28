@@ -14,7 +14,9 @@ export interface EventBundleSpec {
 }
 
 const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
-  kraken: { models: [], sounds: ['underUsPresence', 'underwaterMovement', 'tentacleMovement'] },
+  kraken: { models: [], sounds: [
+    'underUsPresence', 'underwaterMovement', 'tentacleMovement', 'krakenSurge', 'krakenRoar', 'krakenGrip', 'krakenSink',
+  ] },
   'seagull-theft': { models: [], sounds: ['seagulls'] },
   leak: { models: ['leakPlanks'], sounds: ['leak'] },
   'school-of-fish': {
@@ -29,7 +31,8 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   plane: { models: [], sounds: ['planeFlyby'] },
   'flying-saucer': { models: [], sounds: ['ufoFlyby'] },
   'something-under-us': { models: [], sounds: ['underUsPresence'] },
-  ghosts: { models: ['ghost'], sounds: ['ghostSpiritBreath'] },
+  'ghost-ship': { models: [], sounds: ['cannonFire', 'cannonImpact', 'anchorSplash'] },
+  ghosts: { models: ['ghost'], sounds: ['ghostSpiritBreath', 'ghostRush'] },
   'eerie-melody': {
     models: ['siren'],
     sounds: ['eerieMelody'],

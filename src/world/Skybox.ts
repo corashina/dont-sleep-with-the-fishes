@@ -299,7 +299,7 @@ const fragmentShader = `
     vec3 relitMoon = moonBase * reliefLighting;
     relitMoon *= 1.0 - recessedRelief * 0.94;
     relitMoon += moonBase * raisedRelief * 0.48;
-    relitMoon += uMoonColor * vec3(0.56, 0.64, 0.61)
+    relitMoon += uMoonColor * vec3(0.84, 0.92, 0.88)
       * lunarFaceStare(facePoint) * smoothstep(0.35, 0.9, uMoonFaceReveal);
     float reliefReveal = faceReveal * mix(0.84, 1.0, uMoonDread);
     moonDisc = mix(moonBase, relitMoon, reliefReveal);

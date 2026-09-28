@@ -697,6 +697,21 @@ export const uiCatalog = {
     "pl": "Pogłaszcz Carlitosa.",
     "es-AR": "Acariciá a Carlitos."
   },
+  "carlitosPosition": {
+    "en": "Position",
+    "pl": "Pozycja",
+    "es-AR": "Posición"
+  },
+  "previousPosition": {
+    "en": "Previous position",
+    "pl": "Poprzednia pozycja",
+    "es-AR": "Posición anterior"
+  },
+  "nextPosition": {
+    "en": "Next position",
+    "pl": "Następna pozycja",
+    "es-AR": "Posición siguiente"
+  },
   "feedHelp": {
     "en": "Feed Carlitos one food.",
     "pl": "Daj Carlitosowi jedną porcję jedzenia.",

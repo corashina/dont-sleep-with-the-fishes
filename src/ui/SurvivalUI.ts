@@ -43,6 +43,8 @@ const requireElement = createElementRequirement('survival UI');
 
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
+  onCarlitosPosition: (direction: -1 | 1) => void = () => undefined;
+  onCarlitosCardChange: (open: boolean) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
   onEventChoice: (choiceId: EventResponseId) => void = () => undefined;
   onRestart: () => void = () => undefined;
@@ -180,6 +182,7 @@ export class SurvivalUI {
     this.anchorView.onTouchInterrupt = this.handleTouchInterrupt;
     this.fishingView.onTouchInterrupt = this.handleTouchInterrupt;
     this.anchorView.onAction = (action, origin) => this.activateDayAction(action, origin);
+    this.anchorView.onCarlitosPosition = (direction) => this.onCarlitosPosition(direction);
     this.anchorView.onEventItem = (choiceId, instanceId) => {
       if (!this.disposed) this.onEventItem(choiceId, instanceId);
     };
@@ -196,6 +199,7 @@ export class SurvivalUI {
       if (this.disposed || this.carlitosRadioPause === open) return;
       this.carlitosRadioPause = open;
       this.syncRadioPause();
+      this.onCarlitosCardChange(open);
     };
     this.eventView.onChoice = (choiceId) => {
       if (!this.disposed) this.onEventChoice(choiceId);
@@ -316,6 +320,10 @@ export class SurvivalUI {
     this.anchorView.beginEventPresentation();
     this.eventView.begin();
     this.syncCommandState();
+  }
+
+  setCarlitosPosition(position: string | null): void {
+    if (!this.disposed) this.anchorView.setCarlitosPosition(position);
   }
 
   showItemAnimationLab(): void {
@@ -666,6 +674,8 @@ export class SurvivalUI {
       () => document.removeEventListener('click', this.handleDocumentClick, true),
       () => document.removeEventListener('keydown', this.handleKeyDown),
       () => { this.onAction = () => undefined; },
+      () => { this.onCarlitosPosition = () => undefined; },
+      () => { this.onCarlitosCardChange = () => undefined; },
       () => { this.onEventItem = () => undefined; },
       () => { this.onEventChoice = () => undefined; },
       () => { this.onRestart = () => undefined; },

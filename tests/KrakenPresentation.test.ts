@@ -18,7 +18,7 @@ function setup() {
   boat.add(display.root);
   const scene = new KrakenPresentation({
     heartDisplay: display,
-    sampleWorldWaveInto: (wave) => { wave.height = 0; }, readWorldWaveAmplitudeScale: () => 1,
+    sampleWorldWaveInto: (wave) => { wave.height = 0; }, readWorldWaveAmplitudeScale: () => 1, emitCue: vi.fn(),
   });
   scene.stage({ eventId: 'kraken', targetInstanceId: null, variantSeed: 7 });
   const dispose = () => { scene.dispose(); display.dispose(); geometry.dispose(); material.dispose(); };

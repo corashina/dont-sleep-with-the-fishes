@@ -21,6 +21,8 @@ it.each([1, 3])('takes one can from a pile of %s while feeding', async (food) =>
     const positions = pile.children.slice(0, food - 1).map((can) => can.position.toArray());
     expect(session.perform('feedCarlitos')).toMatchObject({ accepted: true, deltas: { food: -1 } });
     const feed = world.playCarlitosAction('feedCarlitos');
+    world.update(0, 1);
+    await Promise.resolve();
     const thrown = world.scene.getObjectByName('boat-supply-event:' + FOOD_SUPPLY_ACTOR_ID)!;
     expect(thrown.visible).toBe(true);
     for (let frame = 1; frame <= 9; frame += 1) {

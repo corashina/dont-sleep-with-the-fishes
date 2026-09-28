@@ -75,6 +75,7 @@ import { BoatHeartDisplay } from './BoatHeartDisplay';
 import { SIREN_SCENE_OFFSET_Z } from './SirenAppearance';
 import { BoatCameraController } from './BoatCameraController';
 import { CarlitosPresentation, CARLITOS_FEED_DURATION } from './CarlitosPresentation';
+import { CarlitosSeatPlacement } from './CarlitosSeatPlacement';
 import { ChestDisplay } from './ChestDisplay';
 import {
   DivePresentationController,
@@ -379,6 +380,10 @@ export class BoatWorld {
   private readonly supplyDisplay: BoatSupplyDisplay;
   private readonly heartDisplay: BoatHeartDisplay;
   private readonly carlitos: CarlitosPresentation;
+  private readonly carlitosPlacement: CarlitosSeatPlacement;
+  private carlitosCardOpen = false;
+  private carlitosCareActive = false;
+  private carlitosCareOperation = 0;
   private ambientCarlitosSide: EventSide = 1;
   private eventCarlitosSide: EventSide | null = null;
   private readonly chestDisplay: ChestDisplay;
@@ -607,6 +612,9 @@ export class BoatWorld {
       carlitos = new CarlitosPresentation(propModels);
       this.carlitos = carlitos;
       this.boat.add(carlitos.root);
+      this.carlitosPlacement = new CarlitosSeatPlacement(
+        carlitos.root, carlitos.modelRoot, this.boat, this.scene, camera,
+      );
 
       supplyDisplay = new BoatSupplyDisplay(
         propModels,
@@ -970,6 +978,16 @@ export class BoatWorld {
     this.cameraController.setItemAnimationLabLook(yaw, pitch);
   }
 
+  cycleCarlitosPositionForLab(direction: -1 | 1): void {
+    if (this.disposed || !this.carlitos.isAboard) return;
+    this.carlitos.root.visible = this.carlitosPlacement.cycleFrontSeat(direction);
+  }
+
+  getCarlitosPositionForLab(): string | null {
+    return this.carlitos.isAboard && this.carlitos.root.visible
+      ? this.carlitosPlacement.currentSeatId : null;
+  }
+
   setWeather(weather: WeatherId): void {
     this.setPresentationWeather(weather);
   }
@@ -1022,14 +1040,44 @@ export class BoatWorld {
     this.carlitos.sync(snapshot.carlitos);
     this.chestState = snapshot.chest.state;
     this.chestDisplay.sync(snapshot.chest);
+    this.carlitosPlacement.setPreference(this.eventCarlitosSide ?? this.ambientCarlitosSide, snapshot.seed);
+    this.updateCarlitosSeat();
+  }
+
+  setCarlitosCardOpen(open: boolean): void {
+    if (this.disposed) return;
+    this.carlitosCardOpen = open;
+    this.syncCarlitosAttention();
+  }
+
+  private syncCarlitosAttention(): void {
+    const attentive = this.carlitos.isAboard && (this.carlitosCardOpen || this.carlitosCareActive);
+    this.carlitosPlacement.setInteracting(attentive);
+    this.carlitos.setAttentive(attentive);
   }
 
   async playCarlitosAction(
     action: 'petCarlitos' | 'feedCarlitos',
     onContact?: () => void,
   ): Promise<void> {
-    if (this.disposed) return;
-    if (action === 'petCarlitos') return this.carlitos.play('pet', onContact);
+    if (this.disposed || !this.carlitos.isAboard) return;
+    const operation = ++this.carlitosCareOperation;
+    this.carlitosCareActive = true;
+    this.syncCarlitosAttention();
+    try {
+      const ready = await this.carlitosPlacement.waitUntilFacingPlayer();
+      if (!ready || this.disposed || operation !== this.carlitosCareOperation) return;
+      if (action === 'petCarlitos') await this.carlitos.play('pet', onContact);
+      else await this.feedCarlitos(onContact);
+    } finally {
+      if (operation === this.carlitosCareOperation) {
+        this.carlitosCareActive = false;
+        this.syncCarlitosAttention();
+      }
+    }
+  }
+
+  private async feedCarlitos(onContact?: () => void): Promise<void> {
     const instanceId = this.supplyDisplay.foodSupplyActorId;
     const operation = ++this.weatherEventOperation;
     const [, played] = await Promise.all([
@@ -1464,6 +1512,11 @@ export class BoatWorld {
 
   setDocumentHidden(hidden: boolean): void {
     if (this.disposed || !hidden) return;
+    this.carlitosCareOperation += 1;
+    this.carlitosCareActive = false;
+    this.carlitosCardOpen = false;
+    this.syncCarlitosAttention();
+    this.carlitos.finishAction();
     this.cameraController.settleForVisibilityChange();
     this.fishingPresentation.settleForVisibilityChange();
     this.weatherEventOperation += 1;
@@ -1679,6 +1732,7 @@ export class BoatWorld {
     this.boatRainEffects.update(time, delta);
     this.dispatchPendingThunder();
     this.ocean.follow(this.worldCameraPosition.x, this.worldCameraPosition.z);
+    this.updateCarlitosSeat(delta);
   }
 
   private syncOceanAtmosphere(): void {
@@ -1787,6 +1841,7 @@ export class BoatWorld {
       () => Object.assign(this.vortexWave, createInactiveVortexWaveState()),
       () => this.diveController.dispose(),
       () => this.carlitos.dispose(),
+      () => this.carlitosPlacement.dispose(),
       () => this.supplyDisplay.dispose(),
       () => this.heartDisplay.dispose(),
       () => this.chestDisplay.dispose(),
@@ -2016,12 +2071,20 @@ export class BoatWorld {
 
   private setCarlitosAmbientSide(side: EventSide): void {
     this.ambientCarlitosSide = side;
-    if (this.eventCarlitosSide === null) this.carlitos.setSeatSide(side);
+    if (this.eventCarlitosSide === null) this.carlitosPlacement.setPreference(side);
   }
 
   private setCarlitosEventSide(side: EventSide | null): void {
     this.eventCarlitosSide = side;
-    this.carlitos.setSeatSide(side ?? this.ambientCarlitosSide);
+    this.carlitosPlacement.setPreference(side ?? this.ambientCarlitosSide);
+  }
+
+  private updateCarlitosSeat(delta = 0): void {
+    if (!this.carlitos.isAboard) {
+      this.carlitosPlacement.setInteracting(false);
+      return;
+    }
+    this.carlitos.root.visible = this.carlitosPlacement.update(delta);
   }
 
   private isTerminalCue(cue: PresentationCue): boolean {
