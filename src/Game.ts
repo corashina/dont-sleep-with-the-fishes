@@ -175,6 +175,8 @@ export class Game {
         audio: audioSystem,
         onFatalError: (error) => this.reportFatalError(error),
       };
+      this.viewportController = new MobileViewportController(mount, () => this.handleViewportChange());
+      this.mobileSuspended = this.viewportController.isSuspended();
       const tuningState = systemTuning.get();
       this.weatherOverride = tuningState.weatherOverride;
       this.timeOfDayOverride = tuningState.phaseOverride;
@@ -277,8 +279,6 @@ export class Game {
           continueSavedRun: () => this.continueSavedRun(),
         },
       });
-      this.viewportController = new MobileViewportController(mount, () => this.handleViewportChange());
-      this.mobileSuspended = this.viewportController.isSuspended();
       if (browserPlaytest === null) {
         this.ready = this.activateMenu();
       } else {

@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 // Importance: 100/100. Rotation and interruption must stop active gameplay.
 // Importance: 95/100. Viewport changes must keep the canvas and game aligned.
+// Importance: 95/100. The gate must return keyboard focus after Resume.
+// Importance: 100/100. Gate keys must not reach controls behind the dialog.
 // Importance: 90/100. Mobile defaults must preserve each valid saved setting.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WebGLRenderer } from 'three';
@@ -99,6 +101,74 @@ describe('mobile runtime', () => {
     expect(viewport.isSuspended()).toBe(true);
     viewport.dispose();
     expect(mount.querySelector('.mobile-viewport-gate')).toBeNull();
+  });
+
+  it('moves focus into the gate and restores the prior control after Resume', () => {
+    coarsePointer();
+    setSize(844, 390);
+    const mount = document.createElement('main');
+    const prior = document.createElement('button');
+    mount.append(prior);
+    document.body.append(mount);
+    prior.focus();
+    const viewport = new MobileViewportController(mount, vi.fn());
+    try {
+      setSize(390, 844);
+      expect(document.activeElement).toBe(mount.querySelector('.mobile-viewport-gate__title'));
+      setSize(844, 390);
+      const resume = mount.querySelector<HTMLButtonElement>('.mobile-viewport-gate__resume')!;
+      expect(document.activeElement).toBe(resume);
+      resume.click();
+      expect(document.activeElement).toBe(prior);
+    } finally {
+      viewport.dispose();
+    }
+  });
+
+  it('keeps Tab inside the gate and blocks shortcuts behind it', () => {
+    coarsePointer();
+    setSize(390, 844);
+    const mount = document.createElement('main');
+    const behind = document.createElement('button');
+    const activateBehind = vi.fn();
+    behind.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') activateBehind();
+    });
+    mount.append(behind);
+    document.body.append(mount);
+    behind.focus();
+    const viewport = new MobileViewportController(mount, vi.fn());
+    const globalShortcut = vi.fn();
+    window.addEventListener('keydown', globalShortcut);
+    try {
+      const heading = mount.querySelector<HTMLElement>('.mobile-viewport-gate__title')!;
+      expect(document.activeElement).toBe(heading);
+      behind.focus();
+      for (const key of ['Tab', 'Escape', 'F2', 'Enter']) {
+        const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+        behind.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(heading);
+      }
+      expect(activateBehind).not.toHaveBeenCalled();
+      expect(globalShortcut).not.toHaveBeenCalled();
+      setSize(844, 390);
+      const resume = mount.querySelector<HTMLButtonElement>('.mobile-viewport-gate__resume')!;
+      expect(document.activeElement).toBe(resume);
+      const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+      resume.dispatchEvent(tab);
+      expect(tab.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(resume);
+      const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      resume.dispatchEvent(enter);
+      expect(enter.defaultPrevented).toBe(false);
+      expect(globalShortcut).not.toHaveBeenCalled();
+      resume.click();
+      expect(document.activeElement).toBe(behind);
+    } finally {
+      viewport.dispose();
+      window.removeEventListener('keydown', globalShortcut);
+    }
   });
 
   it('blocks a phase installed during portrait and starts it once after Resume', async () => {

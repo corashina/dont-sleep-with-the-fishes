@@ -24,6 +24,16 @@ export class MobileViewportController {
     if (document.hidden) this.interrupt();
   };
   private readonly onResume = () => this.resume();
+  private readonly onKeyEvent = (event: KeyboardEvent) => {
+    if (!this.suspended) return;
+    const resumeKey = event.target === this.resumeButton && !this.portrait
+      && (event.key === 'Enter' || event.key === ' ');
+    if (!resumeKey) {
+      event.preventDefault();
+      (this.portrait ? this.title : this.resumeButton).focus({ preventScroll: true });
+    }
+    event.stopImmediatePropagation();
+  };
   private readonly onPointerDown = (event: PointerEvent) => {
     if (event.pointerType !== 'touch' || this.touchDevice) return;
     this.touchDevice = true;
@@ -39,6 +49,9 @@ export class MobileViewportController {
   private portrait: boolean;
   private suspended: boolean;
   private readonly priorTouchControls: string | undefined;
+  private priorFocus: HTMLElement | null = null;
+  private gateVisible = false;
+  private shownPortrait = false;
 
   constructor(mount: HTMLElement, onChange: () => void) {
     this.onChange = onChange;
@@ -55,6 +68,9 @@ export class MobileViewportController {
     content.className = 'mobile-viewport-gate__content';
     this.title = document.createElement('h1');
     this.title.className = 'mobile-viewport-gate__title';
+    this.title.id = 'mobile-viewport-gate-title';
+    this.title.tabIndex = -1;
+    this.overlay.setAttribute('aria-labelledby', this.title.id);
     this.detail = document.createElement('p');
     this.detail.className = 'mobile-viewport-gate__detail';
     this.resumeButton = document.createElement('button');
@@ -68,6 +84,8 @@ export class MobileViewportController {
     window.addEventListener('resize', this.onViewportEvent);
     window.addEventListener('blur', this.onInterrupt);
     window.addEventListener('pointerdown', this.onPointerDown, true);
+    window.addEventListener('keydown', this.onKeyEvent, true);
+    window.addEventListener('keyup', this.onKeyEvent, true);
     window.visualViewport?.addEventListener('resize', this.onViewportEvent);
     window.visualViewport?.addEventListener('scroll', this.onViewportEvent);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
@@ -81,12 +99,15 @@ export class MobileViewportController {
     window.removeEventListener('resize', this.onViewportEvent);
     window.removeEventListener('blur', this.onInterrupt);
     window.removeEventListener('pointerdown', this.onPointerDown, true);
+    window.removeEventListener('keydown', this.onKeyEvent, true);
+    window.removeEventListener('keyup', this.onKeyEvent, true);
     window.visualViewport?.removeEventListener('resize', this.onViewportEvent);
     window.visualViewport?.removeEventListener('scroll', this.onViewportEvent);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.resumeButton.removeEventListener('click', this.onResume);
     this.stopLanguage();
     this.overlay.remove();
+    this.restoreFocus();
     if (this.priorTouchControls === undefined) delete document.documentElement.dataset.touchControls;
     else document.documentElement.dataset.touchControls = this.priorTouchControls;
   }
@@ -141,5 +162,27 @@ export class MobileViewportController {
     this.detail.textContent = mobileViewportText(this.portrait ? 'rotateDetail' : 'resumeDetail');
     this.resumeButton.textContent = mobileViewportText('resume');
     this.resumeButton.hidden = this.portrait;
+    this.updateFocus();
+  }
+
+  private updateFocus(): void {
+    const becameVisible = this.suspended && !this.gateVisible;
+    const focusChanged = this.suspended && this.gateVisible && this.portrait !== this.shownPortrait;
+    const becameHidden = !this.suspended && this.gateVisible;
+    if (becameVisible) {
+      const active = document.activeElement;
+      this.priorFocus = active instanceof HTMLElement ? active : null;
+    }
+    if (becameVisible || focusChanged) {
+      (this.portrait ? this.title : this.resumeButton).focus({ preventScroll: true });
+    }
+    if (becameHidden) this.restoreFocus();
+    this.gateVisible = this.suspended;
+    this.shownPortrait = this.portrait;
+  }
+
+  private restoreFocus(): void {
+    if (this.priorFocus?.isConnected) this.priorFocus.focus({ preventScroll: true });
+    this.priorFocus = null;
   }
 }
