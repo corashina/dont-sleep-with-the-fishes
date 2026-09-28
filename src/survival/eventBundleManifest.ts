@@ -31,6 +31,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   plane: { models: [], sounds: ['planeFlyby'] },
   'flying-saucer': { models: [], sounds: ['ufoFlyby'] },
   'something-under-us': { models: [], sounds: ['underUsPresence'] },
+  'ghost-ship': { models: [], sounds: ['cannonFire', 'cannonImpact', 'anchorSplash'] },
   ghosts: { models: ['ghost'], sounds: ['ghostSpiritBreath', 'ghostRush'] },
   'eerie-melody': {
     models: ['siren'],

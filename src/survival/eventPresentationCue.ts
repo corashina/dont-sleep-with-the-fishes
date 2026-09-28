@@ -28,6 +28,14 @@ export const KRAKEN_AUDIO_CUES = Object.freeze([
 
 export type KrakenAudioCue = typeof KRAKEN_AUDIO_CUES[number];
 
+export const GHOST_SHIP_AUDIO_CUES = Object.freeze([
+  'cannon-fire',
+  'cannon-splash',
+  'cannon-impact',
+] as const);
+
+export type GhostShipAudioCue = typeof GHOST_SHIP_AUDIO_CUES[number];
+
 export const GHOSTS_AUDIO_CUES = Object.freeze([
   'turn',
   'rush',
@@ -55,4 +63,8 @@ export type EventPresentationCue =
   | Readonly<{
       eventId: 'kraken';
       cue: KrakenAudioCue;
+    }>
+  | Readonly<{
+      eventId: 'ghost-ship';
+      cue: GhostShipAudioCue;
     }>;

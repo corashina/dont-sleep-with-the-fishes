@@ -385,6 +385,8 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | krakenRoar | `krakenRoar.wav` | Original synthesized Kraken beast roar. Generated with `scripts/generate-kraken-audio.mjs`; no external samples. |
 | krakenGrip | `krakenGrip.wav` | Original synthesized Kraken wet grip and wood creak. Generated with `scripts/generate-kraken-audio.mjs`; no external samples. |
 | krakenSink | `krakenSink.wav` | Original synthesized Kraken sinking gurgles and groan. Generated with `scripts/generate-kraken-audio.mjs`; no external samples. |
+| cannonFire | `cannonFire.wav` | Original synthesized distant cannon shot. Generated with `scripts/generate-cannon-audio.mjs`; no external samples. |
+| cannonImpact | `cannonImpact.wav` | Original synthesized cannonball strike and wood crack. Generated with `scripts/generate-cannon-audio.mjs`; no external samples. |
 | chest | `chest.mp3` | [Wooden Chest Open / The_Frisbee_of_Peace](https://freesound.org/people/The_Frisbee_of_Peace/sounds/573654/) |
 | rescueEnding | `rescueEnding.mp3` | [Rescue Vessel Engine / Lydmakeren](https://freesound.org/people/Lydmakeren/sounds/510907/) |
 | rescueHorn | `rescueHorn.mp3` | [horn.wav / chrobi](https://freesound.org/people/chrobi/sounds/118644/) (CC0 1.0) |

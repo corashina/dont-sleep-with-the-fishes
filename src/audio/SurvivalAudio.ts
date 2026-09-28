@@ -11,6 +11,7 @@ import type {
   ChestAttackAudioCue,
   CheckBackAudioCue,
   KrakenAudioCue,
+  GhostShipAudioCue,
   GhostsAudioCue,
   MidnightTourAudioCue,
 } from '../survival/eventPresentationCue';
@@ -94,7 +95,13 @@ const EVENT_ITEM_SOUNDS: Readonly<Partial<Record<ItemId, SoundId>>> = Object.fre
   umbrella: 'umbrella',
 });
 
-const ROUGH_WEATHER = new Set<PresentationWeatherId>([
+const GHOST_SHIP_SOUNDS: Readonly<Record<GhostShipAudioCue, SoundId>> = Object.freeze({
+  'cannon-fire': 'cannonFire',
+  'cannon-splash': 'anchorSplash',
+  'cannon-impact': 'cannonImpact',
+});
+
+const ROUGH_WEATHER =new Set<PresentationWeatherId>([
   'squall',
   'thunderstorm',
   'waves',
@@ -562,6 +569,11 @@ export class SurvivalAudio {
   checkBackCue(cue: CheckBackAudioCue): void {
     if (this.disposed) return;
     this.scope.play(cue === 'fish' ? 'checkBackFish' : 'checkBackAnglerfish');
+  }
+
+  ghostShipCue(cue: GhostShipAudioCue): void {
+    if (this.disposed) return;
+    this.scope.play(GHOST_SHIP_SOUNDS[cue]);
   }
 
   ghostsCue(cue: GhostsAudioCue): void {

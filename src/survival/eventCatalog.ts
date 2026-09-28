@@ -702,8 +702,10 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'ghost-ship-signaled',
     )),
     choice('shotgun', 'ghostShipShotgunChoice', 'shotgun', outcome(
-      1, 'ghostShipSignaled', effects([subtract('health', 20), add('pressure', 1)], [consume('shotgun')]),
-      'ghost-ship-signaled',
+      1, 'ghostShipCannons', effects([
+        subtract('hull', { min: 15, max: 25 }), subtract('health', 20), add('pressure', 1),
+      ], [consume('shotgun')]),
+      'ghost-ship-cannons',
     )),
     contextualChoice('sleep', 'ghostShipSilentChoice', outcome(1, 'ghostShipPassed', {}, 'ghost-ship-pass')),
   ], undefined, { minimumPressure: 1, maximumAppearances: 2 }),
