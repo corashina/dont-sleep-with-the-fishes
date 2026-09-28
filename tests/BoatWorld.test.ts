@@ -934,6 +934,8 @@ describe('BoatWorld helpers', () => {
       for (let replay = 0; replay < 2; replay += 1) {
         const meow = vi.fn();
         const feed = world.playCarlitosAction('feedCarlitos', meow);
+        world.update(0, 1);
+        await Promise.resolve();
         expect(borrow).toHaveBeenCalledTimes(replay + 1);
         const actor = borrow.mock.results.at(-1)!.value as BorrowedSupplyActor;
         expect(play.mock.lastCall?.[0]).toMatchObject({
