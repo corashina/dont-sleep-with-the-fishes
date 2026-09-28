@@ -1,7 +1,7 @@
 # Mobile support design
 
 Date: 2026-09-28
-Status: Written design awaiting review. Implementation has not started.
+Status: Implemented. Automated checks and code review passed. Physical device validation remains pending.
 
 ## Intent and approved scope
 
@@ -204,5 +204,5 @@ Report validated behavior, device measurements, and remaining device test limits
 ## Review state
 
 The user approved the landscape choice and the conversational design.
-This document is the next review artifact.
-Written-spec approval permits implementation planning, as required by the requested brainstorming skill.
+The user approved this document and requested implementation with multiple agents.
+Validation evidence and remaining limits are recorded in `docs/mobile-support-validation.md`.
