@@ -20,7 +20,7 @@ import { PRACTICAL_LIGHT_MODEL_IDS, PRACTICAL_LIGHT_MODEL_SPECS } from '../src/w
 import type { RuntimeModelSpec } from '../src/world/itemModelManifest';
 import { normalizeLongestDimensionTemplate } from '../src/world/modelValidation';
 import { PropModelLibrary } from '../src/world/PropModelLibrary';
-import { createLifeboat } from '../src/world/Lifeboat';
+import { createLifeboat, lifeboatHullHalfWidthAt } from '../src/world/Lifeboat';
 import { LifeboatAssets } from '../src/world/LifeboatAssets';
 
 function fixture(aspect = 16 / 9) {
@@ -267,6 +267,41 @@ async function productionModels(): Promise<PropModelLibrary> {
   const chest = await productionTemplate('events/mysteryChest', EVENT_MODEL_SPECS.chestClosed);
   return PropModelLibrary.fromTemplatesForTest(templates, equipment, lights, animations, new Map([['chestClosed', chest]]));
 }
+
+// Importance: 95/100. The real sitting pose needs rear support after the inward adjustment.
+it('moves rim seats inside the hull edge and supports the rear at the near seats', async () => {
+  const models = await productionModels();
+  const { scene, boat, camera, cat: dummy } = fixture();
+  dummy.removeFromParent();
+  const cat = new CarlitosPresentation(models);
+  boat.add(cat.root);
+  cat.sync(createCarlitosState({}));
+  cat.update(0.17);
+  const placement = new CarlitosSeatPlacement(cat.root, cat.modelRoot, boat, scene, camera);
+  try {
+    const visited = new Set<string>();
+    const supportedNearSeats = new Set<string>();
+    while (placement.cycleFrontSeat(1) && !visited.has(placement.currentSeatId!)) {
+      const id = placement.currentSeatId!;
+      visited.add(id);
+      expectInView(cat.modelRoot, camera);
+      if (/^rim--?\d/.test(id)) {
+        expect(Math.abs(cat.root.position.x)).toBeLessThan(lifeboatHullHalfWidthAt(cat.root.position.z)!);
+      }
+      if (!id.startsWith('rim-near-')) continue;
+      for (const name of ['PawL_32', 'PawR_35', 'Butt_12']) {
+        const joint = cat.modelRoot.getObjectByName(name)!;
+        const origin = joint.getWorldPosition(new Vector3());
+        origin.y = 0.6;
+        const hits = new Raycaster(origin, new Vector3(0, -1, 0), 0, 0.16).intersectObject(boat, true);
+        expect(hits.some(hit => hit.object.name === 'lifeboat-outer-gunwale'), `${id}: ${name}`).toBe(true);
+      }
+      supportedNearSeats.add(id);
+    }
+    expect(supportedNearSeats.size).toBe(2);
+    expect(visited.size).toBeGreaterThan(4);
+  } finally { cat.dispose(); models.dispose(); }
+});
 
 async function productionTemplate(path: string, spec: RuntimeModelSpec): Promise<Group> {
   const bytes = await readFile(`src/assets/models/${path}.glb`);

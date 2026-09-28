@@ -39,6 +39,7 @@ const UP = new Vector3(0, 1, 0);
 const VIEW_MARGIN = 0.94;
 const SUPPORT_GAP = 0.008;
 const TURN_STEP = Math.PI / 18;
+const SEAT_INSET = 0.04;
 
 function angleDifference(target: number, current: number): number {
   return Math.atan2(Math.sin(target - current), Math.cos(target - current));
@@ -53,7 +54,12 @@ function supportedSeats(boat: Object3D): readonly Seat[] {
   const inverse = boat.matrixWorld.clone().invert();
   const ray = new Raycaster();
   const down = new Vector3(0, -1, 0).transformDirection(boat.matrixWorld);
-  return SEATS.flatMap(seat => {
+  return SEATS.flatMap(candidate => {
+    // Move toward the centerline without sliding sideways along the curved rail.
+    const seat = { ...candidate,
+      x: candidate.x - Math.sign(candidate.x) * Math.min(SEAT_INSET, Math.abs(candidate.x)),
+      z: candidate.x === 0 ? candidate.z - Math.sign(candidate.z) * SEAT_INSET : candidate.z,
+    };
     ray.set(new Vector3(seat.x, seat.surfaceY + 0.04, seat.z).applyMatrix4(boat.matrixWorld), down);
     ray.far = 0.1;
     const hit = ray.intersectObject(boat, true).find(({ object }) => (

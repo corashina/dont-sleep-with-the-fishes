@@ -1,6 +1,6 @@
 import type { BoatInteractionAnchor } from '../survival/BoatInteraction';
 
-/** Keeps the label beside its model without covering another interaction target. */
+/** Prefers clear space; an active hover label stays visible in a crowded viewport. */
 export class CarlitosTooltipPlacement {
   x = 0;
   y = 0;
@@ -8,10 +8,14 @@ export class CarlitosTooltipPlacement {
   place(
     cat: BoatInteractionAnchor, anchors: ReadonlyMap<string, BoatInteractionAnchor>,
     width: number, height: number, viewportWidth: number, viewportHeight: number,
+    active = false,
   ): boolean {
     if (!this.fitsViewport(width, height, viewportWidth, viewportHeight)) return false;
-    const halfWidth = (cat.hitArea?.width ?? 54) / 2;
-    const halfHeight = (cat.hitArea?.height ?? 54) / 2;
+    const halfWidth = cat.hitArea === undefined ? 27 : cat.hitArea.width / 2;
+    const halfHeight = cat.hitArea === undefined ? 27 : cat.hitArea.height / 2;
+    let bestOverlap = Infinity;
+    let bestX = 0;
+    let bestY = 0;
     for (let ring = 0; ring < 6; ring++) {
       const gap = 10 + ring * 24;
       for (let side = 0; side < 4; side++) {
@@ -24,24 +28,33 @@ export class CarlitosTooltipPlacement {
         }
         this.x = Math.round(Math.max(12, Math.min(viewportWidth - width - 12, this.x)));
         this.y = Math.round(Math.max(12, Math.min(viewportHeight - height - 12, this.y)));
-        if (this.isClear(anchors, width, height)) return true;
+        const overlap = this.overlapArea(anchors, width, height);
+        if (overlap === 0) return true;
+        if (overlap < bestOverlap) {
+          bestOverlap = overlap;
+          bestX = this.x;
+          bestY = this.y;
+        }
       }
     }
-    return false;
+    this.x = bestX;
+    this.y = bestY;
+    return active;
   }
 
   private fitsViewport(width: number, height: number, viewportWidth: number, viewportHeight: number): boolean {
     return width > 0 && height > 0 && width <= viewportWidth - 24 && height <= viewportHeight - 24;
   }
 
-  private isClear(anchors: ReadonlyMap<string, BoatInteractionAnchor>, width: number, height: number): boolean {
+  private overlapArea(anchors: ReadonlyMap<string, BoatInteractionAnchor>, width: number, height: number): number {
+    let area = 0;
     for (const anchor of anchors.values()) {
       if (!anchor.visible) continue;
       const halfWidth = (anchor.hitArea?.width ?? 54) / 2 + 6;
       const halfHeight = (anchor.hitArea?.height ?? 54) / 2 + 6;
-      if (this.x < anchor.x + halfWidth && this.x + width > anchor.x - halfWidth
-        && this.y < anchor.y + halfHeight && this.y + height > anchor.y - halfHeight) return false;
+      area += Math.max(0, Math.min(this.x + width, anchor.x + halfWidth) - Math.max(this.x, anchor.x - halfWidth))
+        * Math.max(0, Math.min(this.y + height, anchor.y + halfHeight) - Math.max(this.y, anchor.y - halfHeight));
     }
-    return true;
+    return area;
   }
 }

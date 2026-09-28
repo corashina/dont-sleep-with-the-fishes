@@ -786,7 +786,7 @@ export class BoatAnchorView {
     const visibleLabel = this.visibleAnchorLabel(anchor, anchoredChoice, itemLabel, quantity, state);
     const energyCost = this.tooltipEnergyCost(eventItemEligible, anchoredChoice, preview);
     const energyIndicator = this.energyIndicator(anchoredChoice, energyCost, reason);
-    this.updateTooltipNodes(button, anchor, visibleLabel, energyIndicator, anchoredChoice);
+    this.updateTooltipNodes(button, visibleLabel, energyIndicator, anchoredChoice);
     this.updateAnchorDataset(button, anchor, backingInstanceId, item?.condition);
     this.updateAnchorAria(button, visibleLabel, action, preview, itemLabel, itemDescription, state, reason, anchoredChoice, energyCost);
   }
@@ -938,14 +938,12 @@ export class BoatAnchorView {
 
   private updateTooltipNodes(
     button: HTMLButtonElement,
-    anchor: BoatInteractionAnchor,
     visibleLabel: string,
     energyIndicator: string,
     anchoredChoice: EventContextChoice | undefined,
   ): void {
     const nodes = this.anchorTooltipNodes.get(button);
     if (nodes === undefined) return;
-    nodes.tooltip.hidden = this.itemAnimationLab && anchor.companionId === 'carlitos';
     if (nodes.label.data !== visibleLabel) nodes.label.data = visibleLabel;
     const separator = energyIndicator === '' ? '' : anchoredChoice === undefined ? ' ' : ' — ';
     if (nodes.separator.data !== separator) nodes.separator.data = separator;
@@ -1201,7 +1199,8 @@ export class BoatAnchorView {
       this.tooltipRevision = this.contentRevision;
     }
     const layout = this.carlitosTooltipPlacement;
-    if (!layout.place(anchor, this.anchors, this.tooltipWidth, this.tooltipHeight, this.viewportWidth, this.viewportHeight)) return false;
+    const active = (this.hoveredAnchorId ?? this.focusedAnchorId) === anchor.id;
+    if (!layout.place(anchor, this.anchors, this.tooltipWidth, this.tooltipHeight, this.viewportWidth, this.viewportHeight, active)) return false;
     const hitArea = anchor.hitArea ?? DEFAULT_ANCHOR_HIT_AREA;
     const left = layout.x - anchor.x + hitArea.width / 2;
     const top = layout.y - anchor.y + hitArea.height / 2;
@@ -1384,6 +1383,7 @@ export class BoatAnchorView {
 
   private isHighlightableAnchor(anchor: BoatInteractionAnchor): boolean {
     return anchor.itemType !== null
+      || anchor.companionId === 'carlitos'
       || anchor.toolId === 'fishingRod'
       || anchor.toolId === 'repairTools'
       || anchor.toolId === 'pillow'

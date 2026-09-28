@@ -38,4 +38,17 @@ describe('Carlitos tooltip placement', () => {
     expect(result.place(cat, new Map([['item', obstacle]]), 140, 40, 400, 400)).toBe(false);
     expect(result.place(cat, new Map(), 500, 40, 400, 400)).toBe(false);
   });
+
+  it('keeps an active label onscreen when every nearby position overlaps a large item target', () => {
+    const result = new CarlitosTooltipPlacement();
+    const cat = anchor('carlitos', 200, 200);
+    const item = { ...anchor('item', 200, 200), hitArea: { width: 400, height: 400, depth: 1 } };
+    const anchors = new Map([['item', item]]);
+    expect(result.place(cat, anchors, 140, 40, 400, 400, true)).toBe(true);
+    expect(result.x).toBeGreaterThanOrEqual(12);
+    expect(result.y).toBeGreaterThanOrEqual(12);
+    expect(result.x + 140).toBeLessThanOrEqual(388);
+    expect(result.y + 40).toBeLessThanOrEqual(388);
+    expect(result.place(cat, anchors, 500, 40, 400, 400, true)).toBe(false);
+  });
 });
