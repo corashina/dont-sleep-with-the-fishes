@@ -12,7 +12,7 @@ export class KrakenCollection {
   private readonly center = new Vector3();
   private readonly base = new Vector3();
   private readonly scratch = new Vector3();
-  private taken = false;
+  taken = false;
 
   constructor(private readonly geometry: KrakenGeometry, private readonly display: BoatHeartDisplay) {
     this.carrier.name = 'kraken-grip';
@@ -25,9 +25,9 @@ export class KrakenCollection {
   }
 
   update(seconds: number): void {
-    this.geometry.root.updateWorldMatrix(true, false);
-    this.home.set(3.7, 0.1, 3);
-    this.geometry.root.localToWorld(this.home);
+    this.geometry.head.updateWorldMatrix(true, false);
+    this.home.set(5.2, 0.4, 7.5);
+    this.geometry.head.localToWorld(this.home);
     const progress = Math.min(1, Math.max(0, seconds / KRAKEN_COLLECTION_SECONDS));
     if (!this.taken) this.display.root.getWorldPosition(this.pickup);
     this.target.copy(this.pickup);
@@ -66,14 +66,14 @@ export class KrakenCollection {
 
   private poseArm(reach: number, close: number): void {
     const arm = this.geometry.collector;
-    const root = this.geometry.root;
+    const root = this.geometry.head;
     const points = arm.points;
-    points[0]!.set(3.7, -1.1, -0.4);
-    points[1]!.set(5.3, -0.55, 1.5);
+    points[0]!.set(4.2, -2.8, 3);
+    points[1]!.set(6.2, -1.1, 6.2);
     this.base.copy(points[1]!);
     root.localToWorld(this.base);
     this.scratch.lerpVectors(this.base, this.center, 0.52);
-    this.scratch.y += reach;
+    this.scratch.y += reach * 3.2;
     points[2]!.copy(this.scratch);
     root.worldToLocal(points[2]!);
     points[3]!.copy(this.center).add(this.scratch.set(0.02, 0.45, -0.55));

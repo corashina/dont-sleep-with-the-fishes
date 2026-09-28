@@ -381,6 +381,10 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | tentacleMovement | `tentacleMovement.mp3` | [Slimy flesh / iampagan](https://freesound.org/people/iampagan/sounds/177017/) |
 | eerieMelody | `eerieMelody.mp3` | [woman humming cathedral / Pennywind](https://freesound.org/people/Pennywind/sounds/816687/) |
 | underUsPresence | `underUsPresence.wav` | Original synthesized underwater groans. Generated with `scripts/generate-under-us-audio.mjs`; no external samples. |
+| krakenSurge | `krakenSurge.wav` | Original synthesized Kraken water surge and run-off. Generated with `scripts/generate-kraken-audio.mjs`; no external samples. |
+| krakenRoar | `krakenRoar.wav` | Original synthesized Kraken beast roar. Generated with `scripts/generate-kraken-audio.mjs`; no external samples. |
+| krakenGrip | `krakenGrip.wav` | Original synthesized Kraken wet grip and wood creak. Generated with `scripts/generate-kraken-audio.mjs`; no external samples. |
+| krakenSink | `krakenSink.wav` | Original synthesized Kraken sinking gurgles and groan. Generated with `scripts/generate-kraken-audio.mjs`; no external samples. |
 | chest | `chest.mp3` | [Wooden Chest Open / The_Frisbee_of_Peace](https://freesound.org/people/The_Frisbee_of_Peace/sounds/573654/) |
 | rescueEnding | `rescueEnding.mp3` | [Rescue Vessel Engine / Lydmakeren](https://freesound.org/people/Lydmakeren/sounds/510907/) |
 | rescueHorn | `rescueHorn.mp3` | [horn.wav / chrobi](https://freesound.org/people/chrobi/sounds/118644/) (CC0 1.0) |
