@@ -19,6 +19,14 @@ export const CHECK_BACK_AUDIO_CUES = Object.freeze([
 
 export type CheckBackAudioCue = typeof CHECK_BACK_AUDIO_CUES[number];
 
+export const GHOST_SHIP_AUDIO_CUES = Object.freeze([
+  'cannon-fire',
+  'cannon-splash',
+  'cannon-impact',
+] as const);
+
+export type GhostShipAudioCue = typeof GHOST_SHIP_AUDIO_CUES[number];
+
 export type EventPresentationCue =
   | Readonly<{ eventId: 'swarm-of-sharks'; cue: 'bite' }>
   | Readonly<{ eventId: 'monster-in-the-fog'; cue: 'bite' }>
@@ -34,4 +42,8 @@ export type EventPresentationCue =
   | Readonly<{
       eventId: 'check-the-back';
       cue: CheckBackAudioCue;
+    }>
+  | Readonly<{
+      eventId: 'ghost-ship';
+      cue: GhostShipAudioCue;
     }>;

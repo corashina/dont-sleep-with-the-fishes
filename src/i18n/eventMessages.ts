@@ -31,6 +31,7 @@ const EVENT_TEXT = {
   ghostShipShotgunChoice: { en: 'Fire the Shotgun to be heard', pl: 'Wystrzel ze strzelby, aby cię usłyszano', 'es-AR': 'Dispará la escopeta para que te escuchen' },
   ghostShipSilentChoice: { en: 'Stay silent', pl: 'Zachowaj ciszę', 'es-AR': 'Quedate en silencio' },
   ghostShipSignaled: { en: 'The ship keeps sailing. Green light passes through you like ice. It knows you are here.', pl: 'Statek płynie dalej. Zielone światło przenika cię lodowatym chłodem. Wie, że tu jesteś.', 'es-AR': 'El barco sigue navegando. Una luz verde te atraviesa como hielo. Sabe que estás acá.' },
+  ghostShipCannons: { en: 'Green fire flashes along its hull. The ship answers with cannons, and a ball smashes into your boat.', pl: 'Wzdłuż kadłuba błyska zielony ogień. Statek odpowiada z dział, a kula roztrzaskuje burtę twojej łodzi.', 'es-AR': 'Un fuego verde destella a lo largo del casco. El barco responde con sus cañones y una bala destroza tu bote.' },
   ghostShipPassed: { en: 'You stay silent. The empty ship glides past and dissolves into the dark.', pl: 'Zachowujesz ciszę. Pusty statek przepływa obok i rozpływa się w ciemności.', 'es-AR': 'Te quedás en silencio. El barco vacío pasa de largo y se disuelve en la oscuridad.' },
   seagullTheftTitle: { en: 'Seagull Theft', pl: 'Mewia kradzież', 'es-AR': 'Robo de gaviota' },
   seagullTheftReveal: { en: 'Small black wings cross the distant sky.', pl: 'Małe czarne skrzydła przecinają odległe niebo.', 'es-AR': 'Unas alas negras cruzan el cielo a lo lejos.' },
