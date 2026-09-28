@@ -1,6 +1,12 @@
 import { defineMessages } from './messages';
 
 export const systemText = defineMessages({
+  pcRequired: { en: 'PC required', pl: 'Wymagany komputer', 'es-AR': 'Necesitás una PC' },
+  pcGuidance: {
+    en: 'Open this game on a computer with a keyboard and mouse.',
+    pl: 'Otwórz tę grę na komputerze z klawiaturą i myszą.',
+    'es-AR': 'Abrí este juego en una computadora con teclado y mouse.',
+  },
   retryGuidance: { en: 'Refresh the page to try again.', pl: 'Odśwież stronę, aby spróbować ponownie.', 'es-AR': "Actualizá la página para volver a intentar." },
   webglGuidance: { en: 'Enable hardware acceleration in your browser, then refresh the page.', pl: 'Włącz przyspieszenie sprzętowe w przeglądarce, a następnie odśwież stronę.', 'es-AR': "Activá la aceleración por hardware en el navegador. Después, actualizá la página." },
   webgl: {"en":"WEBGL UNAVAILABLE","pl":"WEBGL NIEDOSTĘPNE", 'es-AR': "WEBGL NO DISPONIBLE"},

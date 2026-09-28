@@ -5,7 +5,7 @@ import type { LoadingProgress } from '../app/LoadingProgress';
 export type SystemScreenDescription = {
   readonly kind: 'loading';
 } | {
-  readonly kind: 'error';
+  readonly kind: 'error' | 'unsupported';
   readonly kicker: string;
   readonly title: string;
   readonly lead: string;

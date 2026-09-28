@@ -1,17 +1,12 @@
 import './styles/fonts.css';
 import './styles/main.css';
 import './styles/settings.css';
-import './styles/mobile.css';
-import { launchGame } from './app/launchGame';
+import { startApplication } from './app/startApplication';
 import { initializeLanguage } from './i18n/language';
-import { initializeAnalytics } from './browser/GoogleAnalytics';
 
 initializeLanguage();
-initializeAnalytics();
 
 const mount = document.querySelector<HTMLElement>('#app');
 if (!mount) throw new Error('Missing #app mount element');
 
-const launch = launchGame(mount);
-window.addEventListener('pagehide', () => launch.cancel(), { once: true });
-void launch.completion;
+void startApplication(mount);

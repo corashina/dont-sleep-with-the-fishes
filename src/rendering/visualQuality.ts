@@ -4,7 +4,6 @@ import {
   type PreferenceStorage,
   type StoredPreference,
 } from '../browser/storage';
-import { prefersTouchControls } from '../browser/deviceCapabilities';
 
 export type VisualQuality = 'low' | 'high';
 
@@ -14,21 +13,20 @@ export const VISUAL_QUALITY_STORAGE_KEY =
 
 export interface VisualQualityPreference extends StoredPreference<VisualQuality> {}
 
-export function parseVisualQuality(value: unknown, fallback = DEFAULT_VISUAL_QUALITY): VisualQuality {
+export function parseVisualQuality(value: unknown): VisualQuality {
   return value === 'low' || value === 'high'
     ? value
-    : fallback;
+    : DEFAULT_VISUAL_QUALITY;
 }
 
 export function createVisualQualityPreference(
   apply: (value: VisualQuality) => void = () => undefined,
   storage: PreferenceStorage | null = browserStorage(),
 ): VisualQualityPreference {
-  const initial: VisualQuality = prefersTouchControls() ? 'low' : DEFAULT_VISUAL_QUALITY;
   return createStoredPreference(
-    initial,
+    DEFAULT_VISUAL_QUALITY,
     VISUAL_QUALITY_STORAGE_KEY,
-    (value) => parseVisualQuality(value, initial),
+    parseVisualQuality,
     apply,
     storage,
   );

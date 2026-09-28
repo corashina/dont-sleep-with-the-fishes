@@ -49,8 +49,6 @@ import {
 } from '../game/shipDanger';
 import { getSinkingState } from '../game/sinking';
 import { InputController } from '../input/InputController';
-import { selectMouseControls, selectTouchControls, touchControlsSelected, TouchControls } from '../input/TouchControls';
-import { prefersTouchControls } from '../browser/deviceCapabilities';
 import { CarryController } from '../interaction/CarryController';
 import {
   chooseContextAction,
@@ -124,7 +122,6 @@ export class ScavengePhase implements GamePhase {
   private readonly session: ScavengeSession;
   private readonly world: World;
   private readonly input: InputController;
-  private readonly touchControls: TouchControls;
   private readonly player: PlayerController;
   private readonly hands: ScavengeHands;
   private readonly interaction: InteractionSystem;
@@ -169,8 +166,6 @@ export class ScavengePhase implements GamePhase {
   private viewportWidth = 1;
   private viewportHeight = 1;
   private overlayActive = false;
-  private touchMode = touchControlsSelected();
-  private mobileSuspended = false;
   private escapeResumeArmed = false;
   private escapeKeyHeld = false;
   private presentationWeather: PresentationWeatherId = 'calm';
@@ -212,11 +207,6 @@ export class ScavengePhase implements GamePhase {
       instance,
     ]));
     this.input = new InputController(context.renderer.domElement);
-    this.touchControls = new TouchControls(context.mount, this.input, {
-      interrupted: () => this.pauseForTouch(),
-      pause: () => this.pauseForTouch(),
-      skipIntro: () => this.completeIntro(),
-    });
     this.player = new PlayerController(
       context.camera,
       this.world.ship,
@@ -253,13 +243,11 @@ export class ScavengePhase implements GamePhase {
     );
 
     this.ui.onResume = () => {
-      if (this.touchMode) this.resumeTouchSession();
-      else void this.requestPointerLock();
+      void this.requestPointerLock();
     };
     this.ui.onRestart = this.onRestart;
     this.ui.onEndingShown = () => this.audio.endingPopup();
     this.ui.onReturnToMenu = this.onReturnToMenu;
-    this.ui.setTouchMode(this.touchMode);
     this.ui.setPresentation('intro');
     this.ui.setIntroFadeProgress(1);
   }
@@ -272,7 +260,6 @@ export class ScavengePhase implements GamePhase {
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     document.addEventListener('keydown', this.onKeyDown);
     document.addEventListener('keyup', this.onKeyUp);
-    this.context.mount.addEventListener('pointerdown', this.onPointerInput, true);
     this.world.revealPhysicsObjects();
     this.audio.start();
     if (this.phaseStart === 'ending-preview') {
@@ -280,9 +267,7 @@ export class ScavengePhase implements GamePhase {
       return;
     }
     trackGameStart();
-    if (this.touchMode) {
-      this.beginIntro();
-    } else if (this.input.pointerLocked) {
+    if (this.input.pointerLocked) {
       this.beginIntro();
     } else {
       void this.requestPointerLock();
@@ -338,27 +323,21 @@ export class ScavengePhase implements GamePhase {
   }
 
   private hasDirectControl(snapshot: ScavengeSnapshot): boolean {
-    return this.hasActiveSession(snapshot) && this.hasControlCapture();
-  }
-
-  private hasControlCapture(): boolean {
-    return this.touchMode || this.input.pointerLocked;
+    return this.hasActiveSession(snapshot) && this.input.pointerLocked;
   }
 
   private hasActiveSession(snapshot: ScavengeSnapshot): boolean {
     return this.ending.stage === 'playing'
       && snapshot.status === 'running'
       && !this.overlayActive
-      && !this.mobileSuspended
       && !document.hidden;
   }
 
   private hasActiveIntro(introFrameStarted: boolean): boolean {
     return introFrameStarted
       && !this.introPaused
-      && this.hasControlCapture()
+      && this.input.pointerLocked
       && !this.overlayActive
-      && !this.mobileSuspended
       && !document.hidden;
   }
 
@@ -367,7 +346,7 @@ export class ScavengePhase implements GamePhase {
     introFrameStarted: boolean,
     introActive: boolean,
   ): number {
-    return this.overlayActive || this.mobileSuspended || (introFrameStarted && !introActive) || this.pausedIntroExitCarry
+    return this.overlayActive || (introFrameStarted && !introActive) || this.pausedIntroExitCarry
       ? 0
       : deltaSeconds;
   }
@@ -377,7 +356,7 @@ export class ScavengePhase implements GamePhase {
     introActive: boolean,
     directControlActive: boolean,
   ): void {
-    if (this.overlayActive || this.mobileSuspended) return;
+    if (this.overlayActive) return;
     if (
       introActive
       || directControlActive
@@ -467,7 +446,6 @@ export class ScavengePhase implements GamePhase {
 
   private startSinking(): void {
     this.endingStarted = true;
-    this.touchControls.setPresentation('hidden');
     this.input.clear();
     this.hands.hideAndReset();
     this.audio.sink();
@@ -563,9 +541,8 @@ export class ScavengePhase implements GamePhase {
   private isVisibleSession(snapshot: ScavengeSnapshot): boolean {
     return this.ending.stage === 'playing'
       && snapshot.status === 'running'
-      && this.hasControlCapture()
+      && this.input.pointerLocked
       && !this.overlayActive
-      && !this.mobileSuspended
       && !document.hidden;
   }
 
@@ -592,7 +569,6 @@ export class ScavengePhase implements GamePhase {
     this.overlayActive = active;
     if (active) this.prepareOpenOverlay();
     else this.input.clear();
-    this.updateTouchControls();
     const snapshot = this.session.snapshot();
     this.audio.setPaused(this.overlayPausesAudio(active, snapshot));
     if (this.shouldRestoreOverlayControl(active, snapshot)) void this.requestPointerLock();
@@ -609,7 +585,6 @@ export class ScavengePhase implements GamePhase {
     return active
       || (snapshot.status !== 'running' && this.ending.stage !== 'sinking')
       || document.hidden
-      || this.mobileSuspended
       || (this.presentation === 'intro' && this.introPaused);
   }
 
@@ -618,101 +593,9 @@ export class ScavengePhase implements GamePhase {
     snapshot: ScavengeSnapshot,
   ): boolean {
     return !active
-      && !this.touchMode
-      && !this.mobileSuspended
       && (snapshot.status === 'running' || this.presentation === 'intro')
       && !this.input.pointerLocked
       && !document.hidden;
-  }
-
-  setMobileSuspended(suspended: boolean): void {
-    if (this.disposed || this.mobileSuspended === suspended) return;
-    this.mobileSuspended = suspended;
-    if (suspended) {
-      this.input.clear();
-      this.touchControls.setEnabled(false);
-      this.audio.setPaused(true);
-      return;
-    }
-    this.input.clear();
-    this.updateTouchControls();
-    this.audio.setPaused(this.overlayPausesAudio(this.overlayActive, this.session.snapshot()));
-  }
-
-  private updateTouchControls(): void {
-    if (!this.touchMode) {
-      this.touchControls.setPresentation('hidden');
-      return;
-    }
-    const stage = this.ending.stage === 'playing' ? this.presentation : 'hidden';
-    this.touchControls.setPresentation(stage);
-    const running = stage === 'intro'
-      ? !this.introPaused
-      : stage === 'playing' && this.session.snapshot().status === 'running';
-    this.touchControls.setEnabled(
-      running && !this.mobileSuspended && !this.overlayActive && !document.hidden,
-    );
-  }
-
-  private pauseForTouch(): void {
-    if (this.disposed || this.mobileSuspended || this.overlayActive) return;
-    this.input.clear();
-    this.touchControls.setEnabled(false);
-    if (this.presentation === 'intro') this.introPaused = true;
-    else if (this.session.snapshot().status === 'running') this.session.pause();
-    else return;
-    this.ui.setPaused(true);
-    this.hands.hideAndReset();
-    this.audio.setPaused(true);
-  }
-
-  private resumeTouchSession(): void {
-    if (this.disposed || this.mobileSuspended || this.overlayActive || document.hidden) return;
-    if (this.presentation === 'intro') this.introPaused = false;
-    else if (this.session.snapshot().status === 'paused') {
-      this.session.resume();
-      this.pausedIntroExitCarry = false;
-    } else return;
-    this.input.clear();
-    this.ui.clearPointerLockError();
-    this.ui.setPaused(false);
-    this.audio.setPaused(false);
-    this.updateTouchControls();
-  }
-
-  private readonly onPointerInput = (event: PointerEvent): void => this.handlePointerInput(event);
-
-  private handlePointerInput(event: PointerEvent): void {
-    if (this.disposed || this.mobileSuspended || this.overlayActive) return;
-    if (event.pointerType === 'mouse') {
-      this.handleMousePointer(event);
-      return;
-    }
-    if (event.pointerType !== 'touch' || this.touchMode) return;
-    selectTouchControls();
-    this.touchMode = true;
-    this.ui.setTouchMode(true);
-    this.input.clear();
-    if (this.input.pointerLocked) document.exitPointerLock?.();
-    if (this.presentation === 'intro' && !this.introBegun) this.beginIntro();
-    this.updateTouchControls();
-  }
-
-  private handleMousePointer(event: PointerEvent): void {
-    if (!this.touchMode || (
-      event.target !== this.context.renderer.domElement
-      && !this.touchControls.isLookSurface(event.target)
-    )) return;
-    if (prefersTouchControls()) {
-      void this.requestPointerLock(true);
-      return;
-    }
-    selectMouseControls();
-    this.touchMode = false;
-    this.ui.setTouchMode(false);
-    this.touchControls.setPresentation('hidden');
-    this.input.clear();
-    void this.requestPointerLock();
   }
 
   setWeatherOverride(id: PresentationWeatherId | null): void {
@@ -794,12 +677,10 @@ export class ScavengePhase implements GamePhase {
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     document.removeEventListener('keydown', this.onKeyDown);
     document.removeEventListener('keyup', this.onKeyUp);
-    this.context.mount.removeEventListener('pointerdown', this.onPointerInput, true);
     if (this.input.pointerLocked) document.exitPointerLock?.();
     this.carry.reset();
     this.audio.dispose();
     this.input.dispose();
-    this.touchControls.dispose();
     this.hands.dispose();
     this.itemHoverOutline.dispose();
     this.world.dispose();
@@ -938,7 +819,6 @@ export class ScavengePhase implements GamePhase {
     this.input.consumeJump();
     this.presentation = 'intro';
     this.ui.setPresentation('intro');
-    this.updateTouchControls();
     this.ui.clearPointerLockError();
     this.introPaused = false;
     sampleScavengeIntroFrameInto(
@@ -1008,11 +888,9 @@ export class ScavengePhase implements GamePhase {
       this.pausedIntroExitCarry = true;
       this.session.pause();
     }
-    this.updateTouchControls();
   }
 
   private handlePointerLockChange(locked: boolean): void {
-    if (this.touchMode || this.mobileSuspended) return;
     if (this.overlayActive && !locked) return;
     if (this.presentation === 'intro') {
       if (locked && !this.introBegun) this.beginIntro();
@@ -1051,12 +929,6 @@ export class ScavengePhase implements GamePhase {
   private handleVisibilityChange(): void {
     if (!document.hidden) return;
     this.input.clear();
-    this.touchControls.setEnabled(false);
-    if (this.touchMode) {
-      this.audio.setPaused(true);
-      if (document.pointerLockElement) document.exitPointerLock?.();
-      return;
-    }
     if (this.presentation === 'intro') {
       this.introPaused = true;
       this.ui.setPaused(true);
@@ -1074,32 +946,12 @@ export class ScavengePhase implements GamePhase {
   private readonly onVisibilityChange = (): void => this.handleVisibilityChange();
 
   private handleKeyDown(event: KeyboardEvent): void {
-    if (this.mobileSuspended) return;
-    if (this.touchMode && event.key === 'Escape') {
-      this.handleTouchEscape(event);
+    if (event.key === 'Escape' && !event.repeat) this.escapeKeyHeld = true;
+    if (this.presentation === 'intro' && event.code === 'Space' && !event.repeat) {
+      event.preventDefault();
+      this.completeIntro();
       return;
     }
-    if (event.key === 'Escape' && !event.repeat) this.escapeKeyHeld = true;
-    if (this.skipIntroFromKeyboard(event)) return;
-    this.resumeDesktopFromKeyboard(event);
-  }
-
-  private handleTouchEscape(event: KeyboardEvent): void {
-    if (event.repeat) return;
-    if (this.presentation === 'intro' && !this.introPaused) this.pauseForTouch();
-    else if (this.session.snapshot().status === 'running') this.pauseForTouch();
-    else this.resumeTouchSession();
-    event.preventDefault();
-  }
-
-  private skipIntroFromKeyboard(event: KeyboardEvent): boolean {
-    if (this.presentation !== 'intro' || event.code !== 'Space' || event.repeat) return false;
-    event.preventDefault();
-    this.completeIntro();
-    return true;
-  }
-
-  private resumeDesktopFromKeyboard(event: KeyboardEvent): void {
     if (
       event.key !== 'Escape'
       || event.repeat
@@ -1129,15 +981,10 @@ export class ScavengePhase implements GamePhase {
 
   private readonly onKeyUp = (event: KeyboardEvent): void => this.handleKeyUp(event);
 
-  private async requestPointerLock(allowTouchMode = false): Promise<void> {
-    if ((this.touchMode && !allowTouchMode) || this.mobileSuspended || this.overlayActive || this.disposed) return;
+  private async requestPointerLock(): Promise<void> {
+    if (this.overlayActive || this.disposed) return;
     const acquired = await this.input.requestPointerLock();
     if (acquired || this.disposed) return;
-    if (this.touchMode) return;
-    this.handlePointerLockFailure();
-  }
-
-  private handlePointerLockFailure(): void {
     this.ui.showPointerLockError();
     this.audio.deny();
     if (this.presentation === 'intro') {

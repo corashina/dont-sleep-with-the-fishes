@@ -305,20 +305,6 @@ function postProcessingSceneRenderer(): SceneRenderer {
   };
 }
 
-function createScavengePhaseHarness(): ScavengePhase {
-  return Object.assign(Object.create(ScavengePhase.prototype), {
-    touchControls: {
-      setPresentation: vi.fn(),
-      setEnabled: vi.fn(),
-      dispose: vi.fn(),
-    },
-    context: {
-      mount: document.createElement('main'),
-      renderer: { domElement: document.createElement('canvas') },
-    },
-  }) as ScavengePhase;
-}
-
 function createUpdateHarness(
   session: ScavengeSession,
   input = {
@@ -344,7 +330,7 @@ function createUpdateHarness(
   const updateWorld = vi.fn();
   const attachPhysicsObjectsToShip = vi.fn();
   const hands = scavengeHandsStub();
-  const phase = createScavengePhaseHarness();
+  const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
   Object.assign(phase, {
     disposed: false,
     elapsed: 0,
@@ -397,7 +383,7 @@ function createUpdateHarness(
 }
 
 function introHarness(elapsed = 0) {
-  const phase = createScavengePhaseHarness();
+  const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
   let sessionStatus: 'idle' | 'running' | 'paused' = 'idle';
   const sessionStart = vi.fn(() => { sessionStatus = 'running'; });
   const sessionPause = vi.fn(() => {
@@ -826,7 +812,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const order: string[] = [];
     const sessionStart = vi.fn();
     const introFrame = createScavengeIntroFrame();
-    const phase = createScavengePhaseHarness();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       presentation: 'intro',
       introBegun: false,
@@ -1235,7 +1221,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const tick = vi.fn();
     const updateFlight = vi.fn();
     const hands = scavengeHandsStub();
-    const phase = createScavengePhaseHarness();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       disposed: false,
       elapsed: 0,
@@ -1359,7 +1345,7 @@ describe('ScavengePhase lifecycle integration', () => {
 
   it('waits for Escape release before the next Escape resumes', () => {
     const requestPointerLock = vi.fn();
-    const phase = createScavengePhaseHarness();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       overlayActive: false,
       escapeResumeArmed: false,
@@ -1394,7 +1380,7 @@ describe('ScavengePhase lifecycle integration', () => {
     let status = 'running';
     const requestPointerLock = vi.fn();
     const pause = vi.fn(() => { status = 'paused'; });
-    const phase = createScavengePhaseHarness();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       presentation: 'playing',
       overlayActive: false,
@@ -2096,7 +2082,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const disposeUI = vi.fn();
     const unsubscribeLanguage = vi.fn();
     const hands = scavengeHandsStub();
-    const phase = createScavengePhaseHarness();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       disposed: false,
       audio: scavengeAudioStub(),
@@ -2143,7 +2129,7 @@ describe('ScavengePhase lifecycle integration', () => {
       _waterHeight: (x: number, z: number) => number,
       handlers: { onLost: (item: ItemInstance) => void; },
     ) => handlers.onLost({ instanceId: 'flareGun-1', type: 'flareGun' }));
-    const phase = createScavengePhaseHarness();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       elapsed: 0,
       session,
@@ -2176,7 +2162,7 @@ describe('ScavengePhase lifecycle integration', () => {
     };
     const hands = scavengeHandsStub();
     const ui = { showHandsFullNotice: vi.fn() };
-    const phase = createScavengePhaseHarness();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       session,
       carry,

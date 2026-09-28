@@ -1,6 +1,4 @@
 import { uiDynamic } from '../i18n/uiDynamicMessages';
-import { mobileUiText } from '../i18n/mobileUiMessages';
-import { prefersTouchControls } from '../browser/deviceCapabilities';
 import { onLanguageChange } from '../i18n/language';
 import { refreshUiText } from './translatedText';
 import { uiText } from '../i18n/uiMessages';
@@ -164,7 +162,6 @@ const DEFAULT_ANCHOR_HIT_AREA = Object.freeze({
 const requireElement = createElementRequirement('boat anchor view');
 
 export class BoatAnchorView {
-  onTouchInterrupt: () => void = () => undefined;
   readonly anchorLayer: HTMLElement;
   readonly carlitosCard: HTMLElement;
   readonly roots: readonly [HTMLElement, HTMLElement];
@@ -183,7 +180,6 @@ export class BoatAnchorView {
   private readonly carlitosPositionButtons: HTMLButtonElement[];
 
   private readonly carlitosPet: HTMLButtonElement;
-  private readonly touchSurface: HTMLElement;
   private readonly carlitosHungerLabel: HTMLElement;
   private readonly carlitosHappiness: HTMLElement;
   private readonly carlitosRestStatus: HTMLElement;
@@ -222,13 +218,6 @@ export class BoatAnchorView {
   private focusedAnchorId: string | null = null;
   private publishedAnchorId: string | null = null;
   private cycledAnchorId: string | null = null;
-  private touchSelectedAnchorId: string | null = null;
-  private readonly touchStarts = new Map<number, { x: number; y: number }>();
-  private seenTouch = false;
-  private lastTouchX = 0;
-  private lastTouchY = 0;
-  private lastTouchTime = 0;
-  private lastTouchTarget: EventTarget | null = null;
   private carlitosReturnTarget: HTMLButtonElement | null = null;
   private busy = false;
   private paused = false;
@@ -244,7 +233,6 @@ export class BoatAnchorView {
   private disposed = false;
 
   constructor(private readonly host: HTMLElement) {
-    this.touchSurface = host.parentElement ?? host;
     const template = document.createElement('template');
     template.innerHTML = `
       <div class="boat-anchors" data-boat-anchors data-ui-aria="boatPoints" aria-label="${uiText('boatPoints')}"></div>
@@ -305,11 +293,6 @@ export class BoatAnchorView {
       );
     });
     this.anchorLayer.addEventListener('click', this.handleAnchorClick);
-    this.touchSurface.addEventListener('pointerdown', this.handleTouchDown, true);
-    this.touchSurface.addEventListener('pointerup', this.handleTouchUp, true);
-    this.touchSurface.addEventListener('pointercancel', this.handleTouchCancel, true);
-    this.touchSurface.addEventListener('lostpointercapture', this.handleTouchCancel, true);
-    this.touchSurface.addEventListener('click', this.handleTouchClick, true);
     this.carlitosCard.addEventListener('click', this.handleCarlitosClick);
     this.anchorLayer.addEventListener('pointerover', this.handleAnchorPointerOver);
     this.anchorLayer.addEventListener('pointermove', this.handleAnchorPointerOver);
@@ -320,8 +303,6 @@ export class BoatAnchorView {
     this.anchorLayer.addEventListener('wheel', this.handleAnchorWheel, { passive: false });
     document.addEventListener('click', this.handleDocumentClick);
     window.addEventListener('resize', this.handleWindowResize);
-    window.visualViewport?.addEventListener('resize', this.handleWindowResize);
-    window.visualViewport?.addEventListener('scroll', this.handleWindowResize);
     this.refreshViewport();
     this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
     this.refreshLanguage();
@@ -362,9 +343,6 @@ export class BoatAnchorView {
       this.positionCarlitosCard(companionAnchor);
     }
     if (highlightInvalidated) this.publishAnchorHighlight();
-    if (this.touchSelectedAnchorId !== null && !this.isTouchCandidate(this.touchSelectedAnchorId)) {
-      this.clearTouchSelection();
-    }
     if (this.pointerAnchorId !== null) this.updatePointerHighlight();
     this.syncCommandState();
   }
@@ -433,10 +411,6 @@ export class BoatAnchorView {
     layout.targetKind = targetKind;
     layout.width = Math.round(hitArea.width);
     layout.height = Math.round(hitArea.height);
-    if (this.touchControls()) {
-      layout.width = Math.max(48, layout.width);
-      layout.height = Math.max(48, layout.height);
-    }
     layout.zIndex = this.anchorZIndex(anchor, 'ordinary', depthZIndex);
     layout.depleted = anchor.depleted;
     return layout;
@@ -495,10 +469,7 @@ export class BoatAnchorView {
 
   setPaused(paused: boolean): void {
     if (this.disposed || this.paused === paused) return;
-    if (paused) {
-      this.closeCarlitosCard(true);
-      this.clearTouchInput();
-    }
+    if (paused) this.closeCarlitosCard(true);
     this.paused = paused;
     this.syncCarlitosActions();
   }
@@ -506,7 +477,6 @@ export class BoatAnchorView {
   setModalOpen(open: boolean): void {
     if (this.disposed || this.modalOpen === open) return;
     this.modalOpen = open;
-    if (open) this.clearTouchInput();
     this.syncCarlitosActions();
   }
 
@@ -688,7 +658,6 @@ export class BoatAnchorView {
   }
 
   clearHighlight(): void {
-    this.clearTouchSelection();
     if (this.pointerAnchorId !== null) {
       this.anchorButtons.get(this.pointerAnchorId)?.classList.remove('is-pointer-hit');
       this.pointerAnchorId = null;
@@ -720,13 +689,6 @@ export class BoatAnchorView {
     clean(() => this.carlitosCard.classList.remove('is-visible'));
     clean(() => { this.carlitosReturnTarget = null; });
     clean(() => this.anchorLayer.removeEventListener('click', this.handleAnchorClick));
-    clean(() => this.touchSurface.removeEventListener('pointerdown', this.handleTouchDown, true));
-    clean(() => this.touchSurface.removeEventListener('pointerup', this.handleTouchUp, true));
-    clean(() => this.touchSurface.removeEventListener('pointercancel', this.handleTouchCancel, true));
-    clean(() => this.touchSurface.removeEventListener('lostpointercapture', this.handleTouchCancel, true));
-    this.clearTouchInput();
-    this.onTouchInterrupt = () => undefined;
-    clean(() => this.touchSurface.removeEventListener('click', this.handleTouchClick, true));
     clean(() => this.carlitosCard.removeEventListener('click', this.handleCarlitosClick));
     clean(() => this.anchorLayer.removeEventListener('pointerover', this.handleAnchorPointerOver));
     clean(() => this.anchorLayer.removeEventListener('pointermove', this.handleAnchorPointerOver));
@@ -737,8 +699,6 @@ export class BoatAnchorView {
     clean(() => this.anchorLayer.removeEventListener('wheel', this.handleAnchorWheel));
     clean(() => document.removeEventListener('click', this.handleDocumentClick));
     clean(() => window.removeEventListener('resize', this.handleWindowResize));
-    clean(() => window.visualViewport?.removeEventListener('resize', this.handleWindowResize));
-    clean(() => window.visualViewport?.removeEventListener('scroll', this.handleWindowResize));
     clean(() => { this.onAction = () => undefined; });
     clean(() => { this.onUnavailableAction = () => undefined; });
     clean(() => { this.onEventItem = () => undefined; });
@@ -768,7 +728,6 @@ export class BoatAnchorView {
       const reason = document.createElement('small');
       reason.className = 'boat-tooltip__reason';
       reason.hidden = true;
-      tooltip.dataset.touchHint = mobileUiText('tapAgain');
       tooltip.append(label, separator, energy, reason);
       button.append(tooltip);
       this.anchorTooltipNodes.set(button, { tooltip, label, separator, energy, reason });
@@ -989,7 +948,6 @@ export class BoatAnchorView {
     const separator = energyIndicator === '' ? '' : anchoredChoice === undefined ? ' ' : ' — ';
     if (nodes.separator.data !== separator) nodes.separator.data = separator;
     if (nodes.energy.textContent !== energyIndicator) nodes.energy.textContent = energyIndicator;
-    nodes.tooltip.dataset.touchHint = mobileUiText('tapAgain');
     const reason = (anchoredChoice?.usesCarlitos ? anchoredChoice.unavailableReason : null) ?? '';
     nodes.reason.hidden = !reason;
     if (nodes.reason.textContent !== reason) nodes.reason.textContent = reason;
@@ -1658,146 +1616,6 @@ export class BoatAnchorView {
     return hitTest(this.pointerX, this.pointerY);
   }
 
-  private touchControls(): boolean {
-    return this.seenTouch || prefersTouchControls();
-  }
-
-  private isTouchCandidate(id: string): boolean {
-    const anchor = this.anchors.get(id);
-    const button = this.anchorButtons.get(id);
-    return anchor?.visible === true
-      && button !== undefined
-      && this.isHighlightableAnchor(anchor)
-      && this.isFocusableCommand(button)
-      && button.dataset.eventState !== 'locked';
-  }
-
-  clearTouchInput(): void {
-    this.touchStarts.clear();
-    this.clearTouchSelection();
-  }
-
-  private clearTouchSelection(): void {
-    if (this.touchSelectedAnchorId === null) return;
-    this.anchorButtons.get(this.touchSelectedAnchorId)?.classList.remove('is-touch-selected');
-    this.touchSelectedAnchorId = null;
-  }
-
-  private touchTarget(x: number, y: number): HTMLButtonElement | null {
-    let best: HTMLButtonElement | null = null;
-    let bestScore = -Infinity;
-    for (const [id, anchor] of this.anchors) {
-      if (!this.isTouchCandidate(id)) continue;
-      const hit = this.touchHit(anchor, x, y);
-      if (hit === null) continue;
-      const button = this.anchorButtons.get(id)!;
-      const score = (hit.direct ? 1e10 : 0) - hit.distance
-        + Number(button.style.zIndex) / 1e6;
-      if (score <= bestScore) continue;
-      best = button;
-      bestScore = score;
-    }
-    return best;
-  }
-
-  private touchHit(anchor: BoatInteractionAnchor, x: number, y: number): {
-    direct: boolean; distance: number;
-  } | null {
-    const area = anchor.hitArea ?? DEFAULT_ANCHOR_HIT_AREA;
-    const dx = x - anchor.x;
-    const dy = y - anchor.y;
-    if (Math.abs(dx) > Math.max(48, area.width) / 2
-      || Math.abs(dy) > Math.max(48, area.height) / 2) return null;
-    const touchHit = anchor.touchHitTest?.(x, y);
-    if (anchor.touchHitTest !== undefined) {
-      return touchHit === null ? null : { direct: touchHit === 'direct', distance: dx * dx + dy * dy };
-    }
-    const direct = anchor.hitTest?.(x, y) ?? (
-      Math.abs(dx) <= area.width / 2 && Math.abs(dy) <= area.height / 2
-    );
-    // A failed raycast can mean that solid boat geometry hides the target.
-    if (anchor.hitTest !== undefined && !direct) return null;
-    return { direct, distance: dx * dx + dy * dy };
-  }
-
-  private readonly handleTouchDown = (event: PointerEvent): void => {
-    if (event.pointerType !== 'touch') {
-      this.lastTouchTime = 0;
-      this.lastTouchTarget = null;
-      return;
-    }
-    if (this.disposed || this.paused || this.modalOpen || !this.isTouchSurfaceTarget(event.target)) return;
-    this.touchStarts.set(event.pointerId, { x: event.clientX, y: event.clientY });
-  };
-
-  private readonly handleTouchCancel = (event: PointerEvent): void => {
-    if (event.pointerType !== 'touch' || !this.touchStarts.has(event.pointerId)) return;
-    this.clearTouchInput();
-    this.onTouchInterrupt();
-  };
-
-  private readonly handleTouchUp = (event: PointerEvent): void => {
-    const start = this.touchStarts.get(event.pointerId);
-    this.touchStarts.delete(event.pointerId);
-    if (this.disposed || event.pointerType !== 'touch' || !this.isTouchSurfaceTarget(event.target)) return;
-    this.lastTouchX = event.clientX;
-    this.lastTouchY = event.clientY;
-    this.lastTouchTime = Date.now();
-    this.lastTouchTarget = event.target;
-    if (start === undefined || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 12) return;
-    this.seenTouch = true;
-    const bounds = this.host.getBoundingClientRect();
-    const button = this.modalOpen || this.paused
-      ? null : this.touchTarget(event.clientX - bounds.left, event.clientY - bounds.top);
-    event.preventDefault();
-    this.useTouchButton(button);
-  };
-
-  private isTouchSurfaceTarget(target: EventTarget | null): boolean {
-    if (!(target instanceof Element)) return false;
-    if (!this.host.contains(target) && !(target instanceof HTMLCanvasElement)) return false;
-    if (target.closest('.event-caption, .settings-menu, .journal-book, .carlitos-card, .fishing-layer') !== null) return false;
-    return target.closest('.boat-anchor') !== null
-      || target.closest('button, [role="dialog"], [inert]') === null;
-  }
-
-  private useTouchButton(button: HTMLButtonElement | null): void {
-    if (button === null) {
-      this.clearTouchSelection();
-      return;
-    }
-    if (button.querySelector('.boat-tooltip') === null
-      || this.touchSelectedAnchorId === button.dataset.anchorId) {
-      this.clearTouchSelection();
-      button.click();
-      return;
-    }
-    this.clearTouchSelection();
-    this.touchSelectedAnchorId = button.dataset.anchorId ?? null;
-    button.classList.add('is-touch-selected');
-    button.focus({ preventScroll: true });
-    for (const anchor of this.anchors.values()) {
-      const anchorButton = this.anchorButtons.get(anchor.id);
-      if (anchorButton !== undefined) this.updateAnchorLayout(anchorButton, anchor);
-    }
-  }
-
-  private readonly handleTouchClick = (event: MouseEvent): void => {
-    if (event.detail === 0 || Date.now() - this.lastTouchTime > 700) return;
-    if (Math.hypot(event.clientX - this.lastTouchX, event.clientY - this.lastTouchY) > 30) return;
-    const source = event as MouseEvent & {
-      pointerType?: string;
-      sourceCapabilities?: { firesTouchEvents?: boolean };
-    };
-    const touchClick = source.pointerType === 'touch'
-      || source.sourceCapabilities?.firesTouchEvents === true;
-    if (!touchClick && event.target !== this.lastTouchTarget) return;
-    this.lastTouchTime = 0;
-    this.lastTouchTarget = null;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  };
-
   private updatePointerHighlight(): void {
     const id = this.pointerAnchorId;
     const anchor = id === null ? undefined : this.anchors.get(id);
@@ -1824,7 +1642,6 @@ export class BoatAnchorView {
   };
 
   private readonly handleAnchorPointerOver = (event: MouseEvent): void => {
-    if ((event as PointerEvent).pointerType === 'touch') return;
     const id = this.highlightAnchorId(event.target);
     if (this.pointerAnchorId !== id && this.pointerAnchorId !== null) {
       this.anchorButtons.get(this.pointerAnchorId)?.classList.remove('is-pointer-hit');

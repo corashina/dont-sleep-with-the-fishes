@@ -6,10 +6,8 @@ export class InputController {
   private lookY = 0;
   private interactQueued = false;
   private jumpQueued = false;
-  private readonly touchMovement: MovementAxes = { x: 0, z: 0 };
   private readonly movementSample: MovementAxes = { x: 0, z: 0 };
   private readonly lookSample = { x: 0, y: 0 };
-  private touchSprint = false;
   private disposed = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -22,8 +20,8 @@ export class InputController {
   }
 
   get movement(): MovementAxes {
-    const x = Number(this.pressed.has('KeyD')) - Number(this.pressed.has('KeyA')) + this.touchMovement.x;
-    const z = Number(this.pressed.has('KeyS')) - Number(this.pressed.has('KeyW')) + this.touchMovement.z;
+    const x = Number(this.pressed.has('KeyD')) - Number(this.pressed.has('KeyA'));
+    const z = Number(this.pressed.has('KeyS')) - Number(this.pressed.has('KeyW'));
     const length = Math.hypot(x, z);
     this.movementSample.x = length > 1 ? x / length : x;
     this.movementSample.z = length > 1 ? z / length : z;
@@ -31,30 +29,7 @@ export class InputController {
   }
 
   get sprinting(): boolean {
-    return this.touchSprint || this.pressed.has('ShiftLeft') || this.pressed.has('ShiftRight');
-  }
-
-  setTouchMovement(x: number, z: number): void {
-    const length = Math.hypot(x, z);
-    this.touchMovement.x = length > 1 ? x / length : x;
-    this.touchMovement.z = length > 1 ? z / length : z;
-  }
-
-  addTouchLook(x: number, y: number): void {
-    this.lookX += x;
-    this.lookY += y;
-  }
-
-  queueTouchInteract(): void {
-    this.interactQueued = true;
-  }
-
-  queueTouchJump(): void {
-    this.jumpQueued = true;
-  }
-
-  setTouchSprint(active: boolean): void {
-    this.touchSprint = active;
+    return this.pressed.has('ShiftLeft') || this.pressed.has('ShiftRight');
   }
 
   get pointerLocked(): boolean {
@@ -137,9 +112,6 @@ export class InputController {
 
   readonly clear = (): void => {
     this.pressed.clear();
-    this.touchMovement.x = 0;
-    this.touchMovement.z = 0;
-    this.touchSprint = false;
     this.lookX = 0;
     this.lookY = 0;
     this.interactQueued = false;

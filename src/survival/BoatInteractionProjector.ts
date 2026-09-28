@@ -15,7 +15,6 @@ import {
   projectCachedBoatObjectBoundsInto,
   type BoatInteractionAnchor,
   type BoatInteractionHitArea,
-  type BoatTouchHit,
   type BoatObjectBoundsCache,
   type ProjectedBoatBounds,
 } from './BoatInteraction';
@@ -176,7 +175,6 @@ export class BoatInteractionProjector {
     this.heartBasketCache = createBoatObjectBoundsCache(roots.heartBasketRoot);
     this.heartBasketAnchor = {
       id: 'heart-basket',
-      touchHitTest: (x, y) => this.touchHit(roots.heartBasketRoot, this.heartBasketAnchor, x, y),
       get label() { return roots.heartBasketLabel(); },
       description: '',
       tooltipOnly: true,
@@ -195,7 +193,6 @@ export class BoatInteractionProjector {
       const itemType = record.groupId;
       const anchor: MutableAnchor = {
         id: `supply:${record.groupId}`,
-        touchHitTest: (x, y) => this.touchHit(record.root, anchor, x, y),
         itemType,
         supplyGroupId: record.groupId,
         toolId: null,
@@ -225,7 +222,6 @@ export class BoatInteractionProjector {
     this.carlitosCache = createBoatObjectBoundsCache(roots.carlitosInteractionRoot);
     this.fishingAnchor = {
       id: 'fishing-tools',
-      touchHitTest: (x, y) => this.touchHit(roots.fishingRoot, this.fishingAnchor, x, y),
       hitTest: (x: number, y: number) => !this.disposed && this.pointerRaycast.hits(
         roots.fishingRoot, x, y, this.viewportWidth, this.viewportHeight, FISHING_POINTER_PADDING,
       ),
@@ -245,7 +241,6 @@ export class BoatInteractionProjector {
     };
     this.repairAnchor = {
       id: 'repair-tools',
-      touchHitTest: (x, y) => this.touchHit(roots.repairRoot, this.repairAnchor, x, y),
       itemType: null,
       toolId: 'repairTools',
       action: 'repair',
@@ -262,7 +257,6 @@ export class BoatInteractionProjector {
     };
     this.pillowAnchor = {
       id: 'end-day-pillow',
-      touchHitTest: (x, y) => this.touchHit(roots.pillowRoot, this.pillowAnchor, x, y),
       itemType: null,
       toolId: 'pillow',
       action: 'endDay',
@@ -279,7 +273,6 @@ export class BoatInteractionProjector {
     };
     this.chestAnchor = {
       id: 'persistent-chest',
-      touchHitTest: (x, y) => this.touchHit(roots.chestRoot, this.chestAnchor, x, y),
       get label() { return presentationUiText('open'); },
       get description() { return presentationUiText('chestDescription'); },
       itemType: null,
@@ -298,7 +291,6 @@ export class BoatInteractionProjector {
     };
     this.carlitosAnchor = {
       id: 'carlitos',
-      touchHitTest: (x, y) => this.touchHit(roots.carlitosInteractionRoot, this.carlitosAnchor, x, y),
       companionId: 'carlitos',
       label: 'CARLITOS',
       get description() { return presentationUiText('carlitosDescription'); },
@@ -319,10 +311,6 @@ export class BoatInteractionProjector {
     this.featuredEntries = FEATURED_EVENT_IDS.map((eventId) => {
       const anchor: MutableAnchor = {
         id: `event:${eventId}`,
-        touchHitTest: (x, y) => {
-          const root = this.eventHost.interactionRoot(eventId);
-          return root === null ? null : this.touchHit(root, anchor, x, y);
-        },
         get label() { return featuredAnchorLabel(eventId); },
         get description() { return featuredAnchorDescription(eventId); },
         itemType: null,
@@ -357,7 +345,6 @@ export class BoatInteractionProjector {
     const entries = targets.map((target): FocusedProjectionEntry => {
       const anchor: MutableAnchor = {
         id: target.id,
-        touchHitTest: (x, y) => this.touchHit(target.root, anchor, x, y),
         ...(target.preciseHitTest ? {
           hitTest: (x: number, y: number) => !this.disposed && this.pointerRaycast.hits(
             target.root, x, y, this.viewportWidth, this.viewportHeight,
@@ -642,33 +629,6 @@ export class BoatInteractionProjector {
       && this.eventHost.activeEventId() !== null
       && width > 0
       && height > 0;
-  }
-
-  private touchHit(root: Object3D, anchor: BoatInteractionAnchor, x: number, y: number): BoatTouchHit {
-    if (this.disposed || !anchor.visible) return null;
-    if (this.hitAt(root, x, y)) return 'direct';
-    return this.hitAround(root, anchor, x, y) ? 'expanded' : null;
-  }
-
-  private hitAt(root: Object3D, x: number, y: number): boolean {
-    return this.pointerRaycast.hits(root, x, y, this.viewportWidth, this.viewportHeight);
-  }
-
-  private hitAround(root: Object3D, anchor: BoatInteractionAnchor, x: number, y: number): boolean {
-    const width = anchor.hitArea?.width ?? 0;
-    const height = anchor.hitArea?.height ?? 0;
-    return this.clearExpandedHit(root, x, y, anchor.x, anchor.y)
-      || this.clearExpandedHit(root, x, y, anchor.x - width * .25, anchor.y)
-      || this.clearExpandedHit(root, x, y, anchor.x + width * .25, anchor.y)
-      || this.clearExpandedHit(root, x, y, anchor.x, anchor.y - height * .25)
-      || this.clearExpandedHit(root, x, y, anchor.x, anchor.y + height * .25);
-  }
-
-  private clearExpandedHit(root: Object3D, x: number, y: number, sampleX: number, sampleY: number): boolean {
-    return this.hitAt(root, sampleX, sampleY)
-      && !this.pointerRaycast.blocksBeforeVisibleTarget(
-        root, x, y, sampleX, sampleY, this.viewportWidth, this.viewportHeight,
-      );
   }
 
   private featuredEntry(eventId: FeaturedEventId): FeaturedProjectionEntry | null {

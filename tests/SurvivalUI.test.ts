@@ -880,25 +880,17 @@ describe('SurvivalUI', () => {
     const acceptedResults = [false, true];
     const cast = vi.fn(() => acceptedResults.shift() ?? true);
     ui.onFishingCast = cast;
-    const layer = mount.querySelector<HTMLElement>('[data-fishing]')!;
-    vi.spyOn(layer, 'getBoundingClientRect').mockReturnValue({
+    vi.spyOn(mount, 'getBoundingClientRect').mockReturnValue({
       x: 20, y: 30, left: 20, top: 30, right: 820, bottom: 630,
       width: 800, height: 600,
       toJSON: () => ({}),
     });
-
+    const layer = mount.querySelector<HTMLElement>('[data-fishing]')!;
     ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
 
-    const tap = (x: number, y: number): void => {
-      for (const type of ['pointerdown', 'pointerup']) {
-        const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y });
-        Object.defineProperty(event, 'pointerId', { value: 1 });
-        layer.dispatchEvent(event);
-      }
-    };
-    tap(80, 90);
-    tap(180, 190);
-    tap(280, 290);
+    layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 80, clientY: 90 }));
+    layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 180, clientY: 190 }));
+    layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 280, clientY: 290 }));
 
     expect(cast.mock.calls).toEqual([
       [{ x: 60, y: 60 }],
@@ -956,7 +948,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-fishing-live]')?.getAttribute('aria-live')).toBe('assertive');
     expect(bite.style.transform).toBe('translate(160px, 90px)');
     expect(bite.style.width).toBe('60px');
-    expect(bite.style.height).toBe('48px');
+    expect(bite.style.height).toBe('44px');
 
     Object.assign(target, { x: 220, y: 130, width: 72, height: 48, depth: 2 });
     ui.updateFishingBiteTarget(target);

@@ -11,7 +11,6 @@ import {
   type PreferenceStorage,
   type StoredPreference,
 } from '../browser/storage';
-import { prefersTouchControls } from '../browser/deviceCapabilities';
 
 export type ShadowQuality = 'low' | 'high';
 
@@ -22,8 +21,8 @@ export const SHADOW_QUALITY_STORAGE_KEY =
 export interface ShadowQualityPreference
   extends StoredPreference<ShadowQuality> {}
 
-export function parseShadowQuality(value: unknown, fallback = DEFAULT_SHADOW_QUALITY): ShadowQuality {
-  return value === 'low' || value === 'high' ? value : fallback;
+export function parseShadowQuality(value: unknown): ShadowQuality {
+  return value === 'low' || value === 'high' ? value : DEFAULT_SHADOW_QUALITY;
 }
 
 export function applyShadowQuality(
@@ -55,11 +54,10 @@ export function createShadowQualityPreference(
   apply: (value: ShadowQuality) => void = () => undefined,
   storage: PreferenceStorage | null = browserStorage(),
 ): ShadowQualityPreference {
-  const initial: ShadowQuality = prefersTouchControls() ? 'low' : DEFAULT_SHADOW_QUALITY;
   return createStoredPreference(
-    initial,
+    DEFAULT_SHADOW_QUALITY,
     SHADOW_QUALITY_STORAGE_KEY,
-    (value) => parseShadowQuality(value, initial),
+    parseShadowQuality,
     apply,
     storage,
   );

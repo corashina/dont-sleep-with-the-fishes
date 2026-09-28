@@ -2,6 +2,9 @@
 
 A desktop-browser survival game built with TypeScript and Three.js. Scavenge a sinking ship under a one-minute deadline, launch with only the supplies you saved, and then manage a lifeboat through changing weather, day and night events, and an uncertain wait for rescue.
 
+Phones and tablets cannot run the game. They show a PC-only message before game loading starts.
+Use a computer with a keyboard and mouse. Touchscreen PCs use the same desktop controls.
+
 ## Visual identity
 
 The game uses an authored illustrated style: darkly comic, melancholic, and

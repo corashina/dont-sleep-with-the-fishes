@@ -68,7 +68,6 @@ export class GameUI {
   }
 
   private disposed = false;
-  private touchMode = false;
   private restartHandled = false;
   private endingStage: ScavengeEndingStage = 'playing';
   private renderedEndingRecord: Extract<EndingRecord, { id: 'dorothy' }> | null = null;
@@ -176,12 +175,7 @@ export class GameUI {
   setPresentation(presentation: ScavengePresentation): void {
     this.root.dataset.presentation = presentation;
     this.hud.hidden = presentation !== 'playing';
-    this.introSkip.hidden = presentation !== 'intro' || this.touchMode;
-  }
-
-  setTouchMode(active: boolean): void {
-    this.touchMode = active;
-    this.introSkip.hidden = active || this.root.dataset.presentation !== 'intro';
+    this.introSkip.hidden = presentation !== 'intro';
   }
 
   setIntroFadeProgress(progress: number): void {
