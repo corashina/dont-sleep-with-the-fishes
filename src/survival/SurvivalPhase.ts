@@ -1,5 +1,6 @@
 import { COMPLETE_HEART } from './heartOfTheSea';
 import { trackGameEnding } from '../browser/GoogleAnalytics';
+import { prefersTouchControls } from '../browser/deviceCapabilities';
 import type { EventReactionPreviewRequest } from './EventReactionPreview';
 import { playEventReactionPreview, type EventReactionPreviewPorts } from './EventReactionPreviewPlayer';
 import { PerspectiveCamera } from 'three';
@@ -230,6 +231,7 @@ export class SurvivalPhase implements GamePhase {
   };
   private busy = false;
   private paused = false;
+  private mobileSuspended = false;
   private overlayActive = false;
   private visibilityPauseActive = false;
   private disposed = false;
@@ -633,6 +635,17 @@ export class SurvivalPhase implements GamePhase {
     if (!this.gameplayPaused()) this.visibilityController?.releaseResumeWaiters();
   }
 
+  setMobileSuspended(suspended: boolean): void {
+    if (this.disposed || (!suspended && this.documentIsHidden())) return;
+    if (this.mobileSuspended === suspended) return;
+    this.mobileSuspended = suspended;
+    if (!suspended && this.visibilityPauseActive) this.setPaused(false);
+    this.audio.setPaused(this.gameplayPaused());
+    this.itemAnimationLabCameraControls?.setEnabled(!this.gameplayPaused());
+    this.syncCameraTurnControl(this.session.snapshot());
+    if (!this.gameplayPaused()) this.visibilityController?.releaseResumeWaiters();
+  }
+
   setOverlayActive(active: boolean): void {
     if (this.disposed || this.overlayActive === active) return;
     this.overlayActive = active;
@@ -841,7 +854,7 @@ export class SurvivalPhase implements GamePhase {
         eventId === null ? null : presentationWeatherForEvent(eventId),
       ),
       isVisibilityBlocked: () => (
-        this.visibilityPauseActive || this.documentIsHidden()
+        this.visibilityPauseActive || this.mobileSuspended || this.documentIsHidden()
       ),
       waitForVisibilityResume: (generation) => this.waitForVisibilityResume(generation),
       getViewportWidth: () => this.viewportWidth,
@@ -1192,7 +1205,7 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private gameplayPaused(): boolean {
-    return this.paused || this.overlayActive;
+    return this.paused || this.overlayActive || this.mobileSuspended;
   }
 
   private readonly handleDocumentHidden = (): void => {
@@ -1200,6 +1213,10 @@ export class SurvivalPhase implements GamePhase {
       () => this.dayActionFlow.settleForVisibilityChange(),
       () => this.ui.settleForVisibilityChange?.(),
       () => {
+        if (prefersTouchControls()) {
+          this.setMobileSuspended(true);
+          return;
+        }
         if (this.paused) return;
         this.visibilityPauseActive = true;
         this.setPaused(true);
@@ -1212,7 +1229,7 @@ export class SurvivalPhase implements GamePhase {
   };
 
   private readonly handleDocumentVisible = (): void => {
-    if (this.visibilityPauseActive) this.setPaused(false);
+    if (this.visibilityPauseActive && !this.mobileSuspended) this.setPaused(false);
     this.world.setDocumentHidden?.(false);
   };
 

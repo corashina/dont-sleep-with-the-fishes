@@ -1,4 +1,7 @@
 import { onLanguageChange } from '../i18n/language';
+import { mobileUiText } from '../i18n/mobileUiMessages';
+import { flowText } from '../i18n/flowMessages';
+import { prefersTouchControls } from '../browser/deviceCapabilities';
 import { refreshUiText } from './translatedText';
 import { uiText } from '../i18n/uiMessages';
 import { uiDynamic } from '../i18n/uiDynamicMessages';
@@ -59,6 +62,7 @@ export class SurvivalFishingView {
 
   private readonly live: HTMLElement;
   private readonly visibleMessage: HTMLElement;
+  private readonly biteLabel: HTMLElement;
   private readonly resultItems: HTMLElement;
   private readonly resultMessage: HTMLElement;
   private currentMode: FishingUiMode = 'hidden';
@@ -76,7 +80,12 @@ export class SurvivalFishingView {
   private hasTarget = false;
   private castIssued = false;
   private reelIssued = false;
-  private suppressClick = false;
+  private readonly pointerStarts = new Map<number, { x: number; y: number }>();
+  private pointerCastTime = 0;
+  private pointerCastX = 0;
+  private pointerCastY = 0;
+  private pointerCastTarget: EventTarget | null = null;
+  private seenTouch = false;
   private paused = false;
   private announcementVersion = 0;
   private pendingFade: PendingFade | null = null;
@@ -84,6 +93,7 @@ export class SurvivalFishingView {
   private readonly unsubscribeLanguage: () => void;
   private refreshLanguage(): void {
     refreshUiText(...this.roots);
+    this.biteLabel.textContent = mobileUiText('reel');
     if (this.currentState !== null) this.applyStateMessage(this.currentState);
     if (this.currentResult !== null) this.renderResult(this.currentResult);
   }
@@ -98,7 +108,7 @@ export class SurvivalFishingView {
       <section class="fishing-layer" data-fishing role="region" data-ui-aria="fishingInteraction" aria-label="${uiText('fishingInteraction')}" aria-hidden="true" inert tabindex="-1">
         <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
         <p class="fishing-instruction ui-role-context" data-fishing-message hidden></p>
-        <button type="button" class="fishing-bite-target" data-fishing-bite data-ui-aria="biteReel" aria-label="${uiText('biteReel')}" hidden></button>
+        <button type="button" class="fishing-bite-target" data-fishing-bite data-ui-aria="biteReel" aria-label="${uiText('biteReel')}" hidden><span data-mobile-reel>${mobileUiText('reel')}</span></button>
         <button type="button" class="fishing-view-exit ui-role-context" data-fishing-view-exit data-ui-aria="returnBoatView" aria-label="${uiText('returnBoatView')}" hidden>
           ${returnArrowArtwork('fishing-view-exit__arrow')}
         </button>
@@ -122,12 +132,15 @@ export class SurvivalFishingView {
     this.live = requireElement(this.interactionRoot, '[data-fishing-live]');
     this.visibleMessage = requireElement(this.interactionRoot, '[data-fishing-message]');
     this.biteButton = requireElement(this.interactionRoot, '[data-fishing-bite]');
+    this.biteLabel = requireElement(this.biteButton, '[data-mobile-reel]');
     this.exitButton = requireElement(this.interactionRoot, '[data-fishing-view-exit]');
     this.resultItems = requireElement(this.resultRoot, '[data-fishing-result-items]');
     this.resultMessage = requireElement(this.resultRoot, '[data-fishing-result-message]');
     this.resultClose = requireElement(this.resultRoot, '[data-fishing-result-close]');
     this.interactionRoot.addEventListener('click', this.handleInteractionClick);
+    this.interactionRoot.addEventListener('pointerdown', this.handlePointerDown);
     this.interactionRoot.addEventListener('pointerup', this.handlePointerUp);
+    this.interactionRoot.addEventListener('pointercancel', this.handlePointerCancel);
     this.resultRoot.addEventListener('click', this.handleResultClick);
     this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
     this.refreshLanguage();
@@ -160,18 +173,23 @@ export class SurvivalFishingView {
   private resetModeInput(): void {
     this.castIssued = false;
     this.reelIssued = false;
-    this.suppressClick = false;
+    this.pointerStarts.clear();
+    this.pointerCastTime = 0;
+    this.pointerCastTarget = null;
   }
 
   private applyStateMessage(state: FishingUiState): void {
     this.message = state.message;
-    this.visibleMessage.textContent = state.message;
+    const touch = this.seenTouch || prefersTouchControls();
+    this.visibleMessage.textContent = touch && state.mode === 'aiming'
+      ? state.message === flowText('netCast') ? mobileUiText('netCast') : mobileUiText('cast')
+      : state.message;
     this.visibleMessage.hidden = state.mode === 'hidden'
       || state.mode === 'result'
       || state.message.length === 0;
     this.live.setAttribute('aria-live', state.mode === 'bite' ? 'assertive' : 'polite');
     if (state.mode === 'hidden') this.cancelAnnouncement();
-    else this.publishAnnouncement(state.message);
+    else this.publishAnnouncement(this.visibleMessage.textContent ?? '');
   }
 
   setPaused(paused: boolean): void {
@@ -315,7 +333,9 @@ export class SurvivalFishingView {
   removeListenersForDispose(): void {
     throwCleanupFailure(runCleanupSteps([
       () => this.interactionRoot.removeEventListener('click', this.handleInteractionClick),
+      () => this.interactionRoot.removeEventListener('pointerdown', this.handlePointerDown),
       () => this.interactionRoot.removeEventListener('pointerup', this.handlePointerUp),
+      () => this.interactionRoot.removeEventListener('pointercancel', this.handlePointerCancel),
       () => this.resultRoot.removeEventListener('click', this.handleResultClick),
     ]));
   }
@@ -371,8 +391,8 @@ export class SurvivalFishingView {
     const visible = this.currentMode === 'bite' && this.hasTarget && this.target.visible;
     this.biteButton.hidden = !visible;
     if (!visible) return;
-    const width = Math.max(44, Math.round(this.target.width));
-    const height = Math.max(44, Math.round(this.target.height));
+    const width = Math.max(48, Math.round(this.target.width));
+    const height = Math.max(48, Math.round(this.target.height));
     this.biteButton.style.transform = `translate(${Math.round(this.target.x)}px, ${Math.round(this.target.y)}px)`;
     this.biteButton.style.width = `${width}px`;
     this.biteButton.style.height = `${height}px`;
@@ -425,27 +445,58 @@ export class SurvivalFishingView {
       this.issueReel();
       return;
     }
-    if (this.suppressClick) {
-      this.suppressClick = false;
-      return;
-    }
+    if (this.ignoreGeneratedCastClick(event)) return;
     this.issueCast(event.clientX, event.clientY);
   };
 
+  private ignoreGeneratedCastClick(event: MouseEvent): boolean {
+    const source = event as MouseEvent & {
+      pointerType?: string;
+      sourceCapabilities?: { firesTouchEvents?: boolean };
+    };
+    if (source.pointerType === 'touch' || source.sourceCapabilities?.firesTouchEvents === true) return true;
+    if (this.pointerCastTime === 0
+      || Date.now() - this.pointerCastTime >= 700
+      || event.target !== this.pointerCastTarget
+      || Math.hypot(event.clientX - this.pointerCastX, event.clientY - this.pointerCastY) >= 30) return false;
+    this.pointerCastTime = 0;
+    this.pointerCastTarget = null;
+    return true;
+  }
+
+  private readonly handlePointerDown = (event: PointerEvent): void => {
+    this.pointerStarts.delete(event.pointerId);
+    if (this.currentMode !== 'aiming' || event.target !== this.interactionRoot) return;
+    this.pointerCastTime = 0;
+    this.pointerCastTarget = null;
+    this.pointerStarts.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  };
+
+  private readonly handlePointerCancel = (event: PointerEvent): void => {
+    this.pointerStarts.delete(event.pointerId);
+  };
+
   private readonly handlePointerUp = (event: PointerEvent): void => {
+    const start = this.pointerStarts.get(event.pointerId);
+    this.pointerStarts.delete(event.pointerId);
+    this.pointerCastTime = Date.now();
+    this.pointerCastX = event.clientX;
+    this.pointerCastY = event.clientY;
+    this.pointerCastTarget = event.target;
     const target = event.target;
     if (
       this.disposed
-      || !(target instanceof Element)
-      || !this.interactionRoot.contains(target)
-      || target.closest('[data-fishing-bite]') !== null
-      || target.closest('[data-fishing-view-exit]') !== null
+      || target !== this.interactionRoot
       || !this.canUseInteraction()
       || this.currentMode !== 'aiming'
+      || start === undefined
+      || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 12
     ) return;
-    this.suppressClick = true;
+    if (event.pointerType === 'touch') {
+      this.seenTouch = true;
+      if (this.currentState !== null) this.applyStateMessage(this.currentState);
+    }
     this.issueCast(event.clientX, event.clientY);
-    queueMicrotask(() => { this.suppressClick = false; });
   };
 
   private readonly handleResultClick = (event: MouseEvent): void => {

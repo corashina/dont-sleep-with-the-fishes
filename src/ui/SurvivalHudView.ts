@@ -1,5 +1,6 @@
 import { uiDynamic } from '../i18n/uiDynamicMessages';
 import { onLanguageChange } from '../i18n/language';
+import { mobileUiText } from '../i18n/mobileUiMessages';
 import { refreshUiText } from './translatedText';
 import { uiText } from '../i18n/uiMessages';
 import { SURVIVAL_BALANCE } from '../survival/survivalBalance';
@@ -125,10 +126,12 @@ export class SurvivalHudView {
   readonly roots: readonly [HTMLElement, HTMLElement, HTMLButtonElement];
 
   onJournal: () => void = () => undefined;
+  onPause: () => void = () => undefined;
   onCameraTurn: () => void = () => undefined;
 
   private readonly day: HTMLElement;
   private readonly journalMarker: HTMLButtonElement;
+  private readonly mobilePause: HTMLButtonElement;
   private readonly journalUnread: HTMLElement;
   private readonly cameraTurnTooltip: HTMLElement;
   private readonly meterElements = new Map<MeterId, HTMLElement>();
@@ -142,6 +145,8 @@ export class SurvivalHudView {
   private readonly unsubscribeLanguage: () => void;
   private refreshLanguage(): void {
     refreshUiText(...this.roots);
+    this.mobilePause.textContent = mobileUiText('pause');
+    this.mobilePause.setAttribute('aria-label', mobileUiText('pause'));
     this.setJournalUnread(!this.journalUnread.hidden);
     this.setCameraTurnState(!this.cameraTurn.hidden, this.cameraTurn.getAttribute('aria-pressed') === 'true');
     METERS.forEach(({ id, label }) => this.meterElements.get(id)!.setAttribute('aria-label', label));
@@ -155,6 +160,7 @@ export class SurvivalHudView {
     template.innerHTML = `
       <div class="survival-top" data-survival-top>
         <div class="survival-top__status-row">
+          <button type="button" class="survival-mobile-pause ui-role-context" data-mobile-pause aria-label="${mobileUiText('pause')}">${mobileUiText('pause')}</button>
           <button type="button" class="journal-marker" data-journal-open data-ui-aria="openJournal" aria-label="${uiText('openJournal')}">
             ${uiArtwork('journal', 'journal-marker__art')}
             <span class="journal-marker__unread ui-role-context" data-journal-unread hidden data-ui-text="newEntry">${uiText('newEntry')}</span>
@@ -181,6 +187,7 @@ export class SurvivalHudView {
     this.roots = [this.topControls, this.meters, this.cameraReturn];
     this.day = requireElement(this.topControls, '[data-day]');
     this.journalMarker = requireElement(this.topControls, '[data-journal-open]');
+    this.mobilePause = requireElement(this.topControls, '[data-mobile-pause]');
     this.journalUnread = requireElement(this.topControls, '[data-journal-unread]');
     this.cameraTurn = requireElement(this.topControls, '[data-camera-turn]');
     this.cameraTurnTooltip = requireElement(this.topControls, '[data-camera-turn-tooltip]');
@@ -267,6 +274,7 @@ export class SurvivalHudView {
     clean(() => this.topControls.removeEventListener('click', this.handleClick));
     clean(() => this.cameraReturn.removeEventListener('click', this.handleClick));
     clean(() => { this.onJournal = () => undefined; });
+    clean(() => { this.onPause = () => undefined; });
     clean(() => { this.onCameraTurn = () => undefined; });
     if (failed) throw firstError;
   }
@@ -321,6 +329,10 @@ export class SurvivalHudView {
   };
 
   private handleHudButton(button: HTMLButtonElement): void {
+    if (button === this.mobilePause) {
+      if (!this.paused && !this.modalOpen) this.onPause();
+      return;
+    }
     if (button === this.journalMarker) {
       if (this.journalAvailable) this.onJournal();
       return;

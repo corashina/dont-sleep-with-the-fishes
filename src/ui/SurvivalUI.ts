@@ -171,6 +171,9 @@ export class SurvivalUI {
     this.hudView.onJournal = () => {
       if (!this.disposed) this.onJournalOpen();
     };
+    this.hudView.onPause = () => {
+      if (!this.disposed) this.onPauseChange(true);
+    };
     this.hudView.onCameraTurn = () => {
       if (!this.disposed) this.onCameraTurn?.();
     };

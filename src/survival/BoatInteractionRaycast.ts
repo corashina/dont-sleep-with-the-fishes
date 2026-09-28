@@ -19,6 +19,26 @@ export class BoatInteractionRaycast {
     return Number.isFinite(targetDistance) && targetDistance < this.distanceTo(this.boat, target);
   }
 
+  blocksBeforeVisibleTarget(
+    target: Object3D,
+    x: number,
+    y: number,
+    sampleX: number,
+    sampleY: number,
+    width: number,
+    height: number,
+  ): boolean {
+    if (width <= 0 || height <= 0 || !this.isVisible(target)) return true;
+    this.camera.updateWorldMatrix(true, false);
+    this.pointer.set(sampleX / width * 2 - 1, 1 - sampleY / height * 2);
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const targetDistance = this.distanceTo(target);
+    if (!Number.isFinite(targetDistance)) return true;
+    this.pointer.set(x / width * 2 - 1, 1 - y / height * 2);
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    return this.distanceTo(this.boat, target) < targetDistance;
+  }
+
   private distanceTo(root: Object3D, excludedRoot?: Object3D): number {
     if (!this.isVisible(root)) return Infinity;
     root.updateWorldMatrix(true, true);

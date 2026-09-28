@@ -1,6 +1,7 @@
 import './styles/fonts.css';
 import './styles/main.css';
 import './styles/settings.css';
+import './styles/mobile.css';
 import { launchGame } from './app/launchGame';
 import { initializeLanguage } from './i18n/language';
 import { initializeAnalytics } from './browser/GoogleAnalytics';
