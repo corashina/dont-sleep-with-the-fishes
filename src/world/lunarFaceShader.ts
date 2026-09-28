@@ -1,4 +1,4 @@
-// Sloping brow ridges and a clenched snarl keep the threat readable at sea distance.
+// A calm, too-wide grin under dead eyes reads as a person, not a mask, at sea distance.
 export const lunarFaceShader = `
   float softReliefEllipse(
     vec2 point, vec2 center, vec2 radius, float angle, float softness
@@ -10,87 +10,97 @@ export const lunarFaceShader = `
     return 1.0 - smoothstep(1.0 - softness, 1.0 + softness, length(rotated / radius));
   }
 
+  // The grin curve rises to the cheeks, far past where a human mouth ends.
+  float lunarGrinCenter(float x) {
+    return -0.2 + 1.35 * x * x;
+  }
+
   float lunarFaceRelief(vec2 facePoint, float moonTextureLuma) {
     vec2 wear = vec2(
       cloudValueNoise3D(vec3(facePoint * 13.0, 4.7)),
       cloudValueNoise3D(vec3(facePoint.yx * 17.0, 8.3))
     ) - 0.5;
-    vec2 p = facePoint + wear * 0.025;
+    vec2 p = facePoint + wear * 0.02;
 
+    // Unequal sockets: the left one sags lower and wider.
     float sockets = max(
-      softReliefEllipse(p, vec2(-0.178, 0.12), vec2(0.134, 0.074), 0.48, 0.18),
-      softReliefEllipse(p, vec2(0.177, 0.115), vec2(0.127, 0.079), -0.43, 0.18)
-    ) * (1.0 - smoothstep(0.064, 0.083, p.y - abs(p.x) * 0.48));
-    float brows = max(
-      softReliefEllipse(p, vec2(-0.18, 0.223), vec2(0.171, 0.054), 0.48, 0.35),
-      softReliefEllipse(p, vec2(0.18, 0.215), vec2(0.159, 0.058), -0.43, 0.35)
+      softReliefEllipse(p, vec2(-0.172, 0.128), vec2(0.118, 0.092), -0.12, 0.3),
+      softReliefEllipse(p, vec2(0.165, 0.14), vec2(0.105, 0.082), 0.08, 0.3)
     );
-    float browFurrow = max(
-      softReliefEllipse(p, vec2(-0.016, 0.237), vec2(0.009, 0.06), -0.22, 0.4),
-      softReliefEllipse(p, vec2(0.018, 0.25), vec2(0.007, 0.05), 0.27, 0.4)
+    float lids = max(
+      softReliefEllipse(p, vec2(-0.172, 0.2), vec2(0.13, 0.034), -0.1, 0.5),
+      softReliefEllipse(p, vec2(0.165, 0.206), vec2(0.116, 0.03), 0.1, 0.5)
     );
-    float cheekbones = max(
-      softReliefEllipse(p, vec2(-0.285, -0.055), vec2(0.055, 0.128), -0.48, 0.5),
-      softReliefEllipse(p, vec2(0.282, -0.077), vec2(0.049, 0.119), 0.36, 0.5)
+    // Raised cheeks push up under the eyes, as in a real smile.
+    float cheeks = max(
+      softReliefEllipse(p, vec2(-0.21, -0.02), vec2(0.12, 0.075), 0.35, 0.7),
+      softReliefEllipse(p, vec2(0.205, -0.01), vec2(0.115, 0.072), -0.35, 0.7)
     );
-    float hollowCheeks = max(
-      softReliefEllipse(p, vec2(-0.245, -0.135), vec2(0.071, 0.118), -0.3, 0.6),
-      softReliefEllipse(p, vec2(0.246, -0.15), vec2(0.062, 0.132), 0.29, 0.6)
+    float nostrils = max(
+      softReliefEllipse(p, vec2(-0.022, -0.055), vec2(0.007, 0.026), 0.45, 0.35),
+      softReliefEllipse(p, vec2(0.02, -0.053), vec2(0.006, 0.024), -0.45, 0.35)
     );
-    float noseBridge = softReliefEllipse(
-      p, vec2(-0.018, 0.018), vec2(0.03, 0.12), -0.08, 0.5
-    );
-    float noseCavity = softReliefEllipse(
-      p, vec2(0.008, -0.07), vec2(0.031, 0.059), 0.12, 0.23
-    );
+    float noseTip = softReliefEllipse(p, vec2(0.0, -0.025), vec2(0.045, 0.05), 0.0, 0.7);
 
-    // The upper lip arches over clenched fangs; low corners remove the skull's grin.
-    vec2 mouth = p;
-    mouth.y += 0.215 + 0.8 * p.x * p.x + p.x * 0.045;
-    float jawDepth = mix(0.073, 0.104, uMoonDread);
-    float mouthDistance = length(mouth / vec2(0.303, jawDepth));
-    float mouthCavity = 1.0 - smoothstep(0.84, 1.08, mouthDistance);
-    float mouthRim = smoothstep(0.8, 1.0, mouthDistance)
-      * (1.0 - smoothstep(1.0, 1.2, mouthDistance));
+    // Dark stains run down from the lower lids and thin toward the grin.
+    float stainWander = cloudValueNoise3D(vec3(p.y * 11.0, p.x * 2.0, 6.1)) - 0.5;
+    float stainX = min(
+      abs(p.x + 0.19 + stainWander * 0.06),
+      abs(p.x - 0.142 + stainWander * 0.06)
+    );
+    float stainWidth = mix(0.003, 0.011, smoothstep(-0.16, 0.06, p.y));
+    float stains = (1.0 - smoothstep(stainWidth, stainWidth + 0.008, stainX))
+      * smoothstep(-0.17, 0.02, p.y) * (1.0 - smoothstep(0.03, 0.07, p.y));
 
-    // Unequal chipped teeth grow from both edges, with a dark gap between them.
-    float toothIndex = floor((p.x + 0.3) / 0.074);
-    float toothSeed = hash21(vec2(toothIndex, 7.3));
-    float toothX = abs(fract((p.x + 0.3) / 0.074) - 0.5);
-    float canine = 1.0 - smoothstep(0.025, 0.058, abs(abs(p.x) - 0.19));
-    float toothLength = mix(0.043, 0.093, toothSeed) + canine * 0.05;
-    float toothWidth = mix(0.33, 0.43, toothSeed)
-      * mix(0.22, 1.0, smoothstep(jawDepth - toothLength, jawDepth, mouth.y));
-    float upperTeeth = (1.0 - smoothstep(toothWidth - 0.07, toothWidth, toothX))
-      * smoothstep(jawDepth - toothLength, jawDepth - toothLength + 0.017, mouth.y);
-    float lowerWidth = mix(0.12, 0.39, 1.0 - smoothstep(-jawDepth, -jawDepth + toothLength * 0.6, mouth.y));
-    float lowerTeeth = (1.0 - smoothstep(lowerWidth - 0.07, lowerWidth, abs(fract((p.x + 0.335) / 0.074) - 0.5)))
-      * (1.0 - smoothstep(-jawDepth + toothLength * 0.52, -jawDepth + toothLength * 0.52 + 0.014, mouth.y));
-    float teeth = max(upperTeeth, lowerTeeth) * mouthCavity
-      * (1.0 - smoothstep(0.22, 0.28, abs(p.x)));
+    // The lips part further as dread grows.
+    float grinReach = 0.36;
+    float grinSlope = 2.0 * 1.35 * p.x;
+    float grinOffset = (p.y - lunarGrinCenter(p.x)) / sqrt(1.0 + grinSlope * grinSlope);
+    float grinSpan = max(0.0, 1.0 - pow(abs(p.x) / grinReach, 2.0));
+    float grinOpening = mix(0.022, 0.05, uMoonDread) * pow(grinSpan, 0.6);
+    float mouthCavity = (1.0 - smoothstep(grinOpening - 0.005, grinOpening + 0.003, abs(grinOffset)))
+      * step(abs(p.x), grinReach);
+    float lips = (1.0 - smoothstep(0.004, 0.018, abs(abs(grinOffset) - grinOpening - 0.012)))
+      * grinSpan;
 
-    // Eroded streaks tie the sockets to the cheek hollows.
-    float fissureX = abs(p.x + 0.012) - (0.18 + (0.1 - p.y) * 0.13);
-    float fissures = (1.0 - smoothstep(0.003, 0.014, abs(fissureX + wear.x * 0.016)))
-      * smoothstep(-0.23, -0.13, p.y) * (1.0 - smoothstep(0.05, 0.14, p.y));
+    // Many narrow, pointed teeth fill the grin to its corners.
+    float toothCell = (p.x + 0.4) / 0.03;
+    float toothSeed = hash21(vec2(floor(toothCell), 3.1));
+    float toothX = abs(fract(toothCell) - 0.5);
+    float upperTip = clamp(
+      (grinOpening - grinOffset) / (grinOpening * mix(0.95, 1.25, toothSeed)), 0.0, 1.0
+    );
+    float lowerTip = clamp(
+      (grinOffset + grinOpening) / (grinOpening * mix(0.7, 0.95, 1.0 - toothSeed)), 0.0, 1.0
+    );
+    float upperTeeth = (1.0 - smoothstep(0.0, 0.08, toothX - mix(0.4, 0.04, upperTip)))
+      * (1.0 - step(1.0, upperTip));
+    float lowerTeeth = (1.0 - smoothstep(0.0, 0.08, toothX - mix(0.38, 0.04, lowerTip)))
+      * (1.0 - step(1.0, lowerTip));
+    float teeth = max(upperTeeth, lowerTeeth) * mouthCavity;
+
+    float chin = softReliefEllipse(p, vec2(0.0, -0.33), vec2(0.13, 0.05), 0.0, 0.8);
     float surfaceWear = mix(0.87, 1.07, cloudValueNoise3D(vec3(p * 29.0, 12.6)))
       * mix(0.94, 1.06, moonTextureLuma);
     return (
-      brows * 0.38 + cheekbones * 0.2 + noseBridge * 0.18 + mouthRim * 0.16
-      + teeth * 1.2 - sockets * 0.95 - hollowCheeks * 0.25 - browFurrow * 0.32
-      - noseCavity * 0.57 - mouthCavity * 0.94 - fissures * 0.21
+      lids * 0.3 + cheeks * 0.34 + noseTip * 0.16 + lips * 0.22 + chin * 0.12
+      + teeth * 1.05 - sockets * 1.1 - nostrils * 0.7
+      - stains * 0.28 - mouthCavity * 1.05
     ) * surfaceWear;
   }
 
+  // Small pale irises drift, then settle on the viewer.
   float lunarFaceStare(vec2 p) {
-    float eyes = max(
-      softReliefEllipse(p, vec2(-0.174, 0.123), vec2(0.048, 0.015), 0.48, 0.2),
-      softReliefEllipse(p, vec2(0.173, 0.119), vec2(0.043, 0.014), -0.43, 0.2)
+    vec2 drift = vec2(sin(uStarTime * 0.23), sin(uStarTime * 0.17 + 1.3))
+      * vec2(0.012, 0.006) * (1.0 - uMoonDread);
+    float irises = max(
+      softReliefEllipse(p, vec2(-0.166, 0.118) + drift, vec2(0.015, 0.015), 0.0, 0.25),
+      softReliefEllipse(p, vec2(0.16, 0.13) + drift, vec2(0.013, 0.013), 0.0, 0.25)
     );
     float pupils = max(
-      softReliefEllipse(p, vec2(-0.164, 0.119), vec2(0.006, 0.019), 0.0, 0.2),
-      softReliefEllipse(p, vec2(0.163, 0.115), vec2(0.006, 0.018), 0.0, 0.2)
+      softReliefEllipse(p, vec2(-0.166, 0.118) + drift, vec2(0.0035, 0.0035), 0.0, 0.3),
+      softReliefEllipse(p, vec2(0.16, 0.13) + drift, vec2(0.003, 0.003), 0.0, 0.3)
     );
-    return eyes * (1.0 - pupils);
+    return irises * (1.0 - pupils);
   }
 `;
