@@ -44,14 +44,21 @@ export interface SupernaturalReactionSample {
   ghostVisibility: number;
   ghostAdvance: number;
   flareFlash: number;
-  sirenLunge: number;
+  sirenRear: number;
+  sirenDive: number;
+  sirenSwim: number;
+  sirenBurst: number;
   sirenStrike: number;
+  sirenFall: number;
+  sirenFocus: number;
 }
 
 const REVEAL_DURATIONS: Readonly<Record<SupernaturalAnimationEventId, number>> = Object.freeze({
   ghosts: 6.4,
   'eerie-melody': 4.4,
 });
+
+export const SIREN_ATTACK_DURATION = 3.4;
 
 const ITEM_DURATIONS = Object.freeze({
   ghosts: Object.freeze({ flareGun: 1.2, flashlight: GHOST_FLASHLIGHT_BASE_DURATION }),
@@ -219,8 +226,13 @@ function resetReaction(output: SupernaturalReactionSample): void {
   output.ghostVisibility = 0;
   output.ghostAdvance = 0;
   output.flareFlash = 0;
-  output.sirenLunge = 0;
+  output.sirenRear = 0;
+  output.sirenDive = 0;
+  output.sirenSwim = 0;
+  output.sirenBurst = 0;
   output.sirenStrike = 0;
+  output.sirenFall = 0;
+  output.sirenFocus = 0;
 }
 
 export function supernaturalRevealDuration(eventId: string): number | null {
@@ -351,19 +363,34 @@ function sampleGhostReaction(
   output.cameraRoll = wrongChoice ? 0.1 * pulse(t, 0.22, 0.48, 0.82) : 0;
 }
 
+// The siren hisses, dives off her rock, swims under the surface, bursts out
+// in front of the player, strikes, and falls back into the sea.
+function sampleSirenAttack(t: number, output: SupernaturalReactionSample): void {
+  output.sirenRear = smoothstep(t / 0.14);
+  output.sirenDive = smoothstep((t - 0.14) / 0.14);
+  output.sirenSwim = smoothstep((t - 0.28) / 0.22);
+  output.sirenBurst = smoothstep((t - 0.5) / 0.08);
+  output.sirenStrike = pulse(t, 0.56, 0.6, 0.7);
+  output.sirenFall = smoothstep((t - 0.7) / 0.2);
+  output.sirenFocus = smoothstep(t / 0.1) * (1 - smoothstep((t - 0.88) / 0.12));
+  output.cameraPitch = 0.1 * output.sirenStrike;
+  output.cameraRoll = 0.12 * output.sirenStrike;
+}
+
 function sampleSirenReaction(
   attack: boolean,
   t: number,
   output: SupernaturalReactionSample,
 ): void {
   if (attack) {
-    output.sirenLunge = pulse(t, 0.14, 0.48, 0.88);
-    output.sirenStrike = pulse(t, 0.36, 0.52, 0.72);
-    output.cameraZ = 0.18 * output.sirenLunge;
-    output.cameraRoll = 0.09 * output.sirenStrike;
+    sampleSirenAttack(t, output);
     return;
   }
   output.cameraPitch = -0.06 * pulse(t, 0.08, 0.48, 0.92);
+}
+
+export function sirenAttacks(outcome: SupernaturalReactionOutcome): boolean {
+  return (outcome.deltas.hull ?? 0) < 0 || (outcome.deltas.health ?? 0) < 0;
 }
 
 function applyReactionEnvelope(
@@ -379,8 +406,6 @@ function applyReactionEnvelope(
   output.ghostVisibility *= envelope;
   output.ghostAdvance *= envelope;
   output.flareFlash *= envelope;
-  output.sirenLunge *= envelope;
-  output.sirenStrike *= envelope;
 }
 
 export function sampleSupernaturalReaction(
@@ -395,16 +420,14 @@ export function sampleSupernaturalReaction(
 
   const t = clamp01(progress);
   if (t === 0 || t === 1) return true;
-  const hullDamage = Math.min(0, outcome.deltas.hull ?? 0);
-  const healthDamage = Math.min(0, outcome.deltas.health ?? 0);
-  const attack = hullDamage < 0 || healthDamage < 0;
-  const envelope = smoothstep(t / 0.12) * (1 - smoothstep((t - 0.76) / 0.24));
-
+  const attack = eventId === 'eerie-melody' && sirenAttacks(outcome);
   if (eventId === 'ghosts') {
     sampleGhostReaction(response?.choiceId, t, output);
   } else {
     sampleSirenReaction(attack, t, output);
   }
-  applyReactionEnvelope(output, envelope);
+  // The attack keeps its own timeline and settles its camera by the end.
+  if (attack) return true;
+  applyReactionEnvelope(output, smoothstep(t / 0.12) * (1 - smoothstep((t - 0.76) / 0.24)));
   return true;
 }

@@ -50,12 +50,14 @@ import { createSirenReef, createSirenRock } from './SirenReef';
 import type { ActionOutcome } from './survivalTypes';
 import { StationaryEventCamera } from './StationaryEventCamera';
 import {
+  SIREN_ATTACK_DURATION,
   createGhostFloatPaths,
   createGhostFloatPose,
   sampleGhostFloatPathInto,
   sampleSupernaturalItemUse,
   sampleSupernaturalReaction,
   sampleSupernaturalReveal,
+  sirenAttacks,
   supernaturalItemUseDuration,
   supernaturalRevealDuration,
   type SupernaturalItemSample,
@@ -102,6 +104,15 @@ function isGhostBait(eventId: string, response: EventPhysicalResponsePresentatio
   return eventId === 'ghosts' && response?.choiceId === 'baitTin';
 }
 
+function isSirenAttack(eventId: string, outcome: ActionOutcome): boolean {
+  return eventId === 'eerie-melody' && sirenAttacks(outcome);
+}
+
+function reactionDuration(ghostBait: boolean, sirenAttack: boolean): number {
+  if (ghostBait) return GHOST_BAIT_REACTION_DURATION;
+  return sirenAttack ? SIREN_ATTACK_DURATION : REACTION_DURATION;
+}
+
 function wrapAngle(angle: number): number {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
@@ -119,6 +130,17 @@ const SIREN_ROCK_Z = -12.2 + SIREN_SCENE_OFFSET_Z;
 const SIREN_WATERLINE_Y = 0;
 const SIREN_ROCK_SUBMERGENCE = 0.28;
 const SIREN_BODY_SETTLE = 0.7;
+// The face's place inside the siren asset's bounds, per axis. The asset faces positive x.
+const SIREN_FACE_BOUNDS = [0.9, 0.93, 0.27] as const;
+const SIREN_STRIKE_GAP = 1.6;
+const SIREN_DIVE_REACH = 3.2;
+const SIREN_DIVE_ARC = 1.4;
+const SIREN_EMERGE_GAP = 4.5;
+const SIREN_BURST_ARC = 0.5;
+const SIREN_FALL_REACH = 5;
+const SIREN_FALL_ARC = 1.2;
+const SIREN_SUBMERGE_CLEARANCE = 0.3;
+const SIREN_LOOK_DROP = 0.5;
 const GHOST_FOG_OPACITY = 0.18;
 const GHOST_FOG_SCALE = [4.5, 5.2, 1.8] as const;
 const GHOST_FOG_X = 18;
@@ -232,8 +254,13 @@ export class SupernaturalEventAnimator {
     ghostVisibility: 0,
     ghostAdvance: 0,
     flareFlash: 0,
-    sirenLunge: 0,
+    sirenRear: 0,
+    sirenDive: 0,
+    sirenSwim: 0,
+    sirenBurst: 0,
     sirenStrike: 0,
+    sirenFall: 0,
+    sirenFocus: 0,
   };
   private readonly physicalResponsePose: EventPhysicalResponsePose = {
     x: 0,
@@ -274,6 +301,20 @@ export class SupernaturalEventAnimator {
   private readonly sirenRock: Group;
   private readonly sirenTableau = new Group();
   private readonly sirenFacingAnchor = new Group();
+  // The face while she sits; during the attack, the camera's view point.
+  private readonly sirenLookTarget = new Group();
+  private readonly sirenFace = new Vector3();
+  private readonly sirenFaceOffset = new Vector3();
+  private readonly sirenFaceStart = new Vector3();
+  private readonly sirenPlayer = new Vector3();
+  private readonly sirenDiveEntry = new Vector3();
+  private readonly sirenEmerge = new Vector3();
+  private readonly sirenStrikePoint = new Vector3();
+  private readonly sirenFallPoint = new Vector3();
+  private readonly sirenAttackDirection = new Vector3();
+  private sirenAttackYaw = 0;
+  private sirenModelSpan = 0;
+  private sirenGone = false;
   private readonly sirenKeyLight = new PointLight(0xe1e9d2, 18, 30, 1.3);
   private readonly sirenFillLight = new PointLight(0x94bbcf, 12, 35, 1.15);
   private readonly fogCurtain = new SeaMistCurtain('supernatural-sea-mist');
@@ -349,6 +390,12 @@ export class SupernaturalEventAnimator {
     this.sirenFacingAnchor.name = 'siren-facing-anchor';
     const sirenBounds = new Box3().setFromObject(this.siren);
     const sirenMinimumY = Number.isFinite(sirenBounds.min.y) ? sirenBounds.min.y : 0;
+    if (!sirenBounds.isEmpty()) {
+      sirenBounds.getSize(this.sirenFace)
+        .multiply(this.sirenFaceOffset.fromArray(SIREN_FACE_BOUNDS))
+        .add(sirenBounds.min);
+      this.sirenModelSpan = sirenBounds.getSize(this.sirenFaceOffset).length();
+    }
     this.sirenFacingAnchor.position.set(
       -0.12,
       rockMaximumY - sirenMinimumY - SIREN_BODY_SETTLE,
@@ -362,7 +409,9 @@ export class SupernaturalEventAnimator {
     this.sirenFacingAnchor.userData.modelForwardAxis = 'positive-x';
     this.sirenFacingAnchor.userData.facesPlayer = true;
     this.sirenFacingAnchor.userData.pose = 'seated';
-    this.sirenFacingAnchor.add(this.siren);
+    this.sirenLookTarget.name = 'siren-item-aim-target';
+    this.sirenLookTarget.position.copy(this.sirenFace);
+    this.sirenFacingAnchor.add(this.siren, this.sirenLookTarget);
     this.sirenKeyLight.name = 'siren-tableau-key-light';
     this.sirenKeyLight.position.set(1.8, 6, 3.2);
     this.sirenKeyLight.castShadow = false;
@@ -409,6 +458,7 @@ export class SupernaturalEventAnimator {
     this.stagedEventId = supernaturalRevealDuration(eventId) === null ? null : eventId;
     if (eventId === 'ghosts') this.ghostFloatPaths = createGhostFloatPaths(variantSeed);
     this.ghostsRepelled = false;
+    this.sirenGone = false;
     this.ghostFloatTime = 0;
     this.ghostLoopVisible = eventId === 'ghosts';
     this.rememberCameraBase();
@@ -423,7 +473,7 @@ export class SupernaturalEventAnimator {
   itemAimTarget(eventId: string): Object3D | null {
     if (this.disposed || this.stagedEventId !== eventId) return null;
     if (eventId === 'ghosts') return this.ghostAimTarget;
-    if (eventId === 'eerie-melody') return this.sirenTableau;
+    if (eventId === 'eerie-melody') return this.sirenLookTarget;
     return null;
   }
 
@@ -507,6 +557,9 @@ export class SupernaturalEventAnimator {
     }
     const ghostBait = isGhostBait(eventId, sceneResponse);
     if (ghostBait) this.startGhostBait();
+    const sirenAttack = isSirenAttack(eventId, outcome);
+    if (sirenAttack) this.planSirenAttack();
+    const duration = reactionDuration(ghostBait, sirenAttack);
     return new Promise((resolve) => {
       this.active = {
         kind: 'react',
@@ -514,7 +567,7 @@ export class SupernaturalEventAnimator {
         outcome,
         response: sceneResponse,
         elapsed: 0,
-        duration: ghostBait ? GHOST_BAIT_REACTION_DURATION : REACTION_DURATION,
+        duration,
         resolve,
       };
     });
@@ -687,6 +740,12 @@ export class SupernaturalEventAnimator {
     )) return;
     const sample = this.reactionSample;
     this.applyPhysicalResponse(eventId, response, progress);
+    if (isSirenAttack(eventId, outcome)) {
+      this.sirenTableau.visible = true;
+      this.poseSirenAttack(sample);
+      this.lookAtSirenAttack(sample);
+      return;
+    }
     this.applyCameraPose(
       sample.cameraX,
       sample.cameraY,
@@ -708,9 +767,88 @@ export class SupernaturalEventAnimator {
     }
 
     this.sirenTableau.visible = true;
-    this.siren.position.z = this.sirenBasePosition.z + sample.sirenLunge * 3.6;
-    this.siren.position.y = this.sirenBasePosition.y + sample.sirenStrike * 0.24;
-    this.siren.rotation.z = this.sirenBaseRotation.z - sample.sirenStrike * 0.34;
+  }
+
+  // Plan the face's path in the facing anchor's space, toward the player's current view.
+  private planSirenAttack(): void {
+    const player = this.sirenPlayer;
+    if (this.viewCamera === undefined) {
+      this.worldRoot.updateWorldMatrix(true, false);
+      this.worldRoot.localToWorld(player.fromArray(FALLBACK_PLAYER_POSITION));
+    } else {
+      this.viewCamera.updateWorldMatrix(true, false);
+      this.viewCamera.getWorldPosition(player);
+    }
+    this.sirenFacingAnchor.updateWorldMatrix(true, false);
+    this.sirenFacingAnchor.worldToLocal(player);
+    this.sirenFaceStart.copy(this.sirenBasePosition).add(this.sirenFace);
+    const direction = this.sirenAttackDirection;
+    direction.set(player.x - this.sirenFaceStart.x, 0, player.z - this.sirenFaceStart.z);
+    if (direction.lengthSq() < 1e-6) direction.set(1, 0, 0);
+    direction.normalize();
+    this.sirenAttackYaw = Math.atan2(-direction.z, direction.x);
+    const waterY = SIREN_WATERLINE_Y - this.sirenTableauBaseY - this.sirenFacingAnchor.position.y;
+    // Deep enough to hide the whole body in any pose.
+    const submergedY = waterY - this.sirenModelSpan - SIREN_SUBMERGE_CLEARANCE;
+    this.sirenStrikePoint.copy(player).addScaledVector(direction, -SIREN_STRIKE_GAP);
+    this.sirenDiveEntry.copy(this.sirenFaceStart).addScaledVector(direction, SIREN_DIVE_REACH);
+    this.sirenDiveEntry.y = submergedY;
+    this.sirenEmerge.copy(this.sirenStrikePoint).addScaledVector(direction, -SIREN_EMERGE_GAP);
+    this.sirenEmerge.y = submergedY;
+    this.sirenFallPoint.copy(this.sirenStrikePoint).addScaledVector(direction, -SIREN_FALL_REACH);
+    this.sirenFallPoint.y = submergedY;
+  }
+
+  // Move the face along its path and turn the body around it.
+  private poseSirenAttack(sample: SupernaturalReactionSample): void {
+    const face = this.sirenLookTarget.position;
+    const lean = this.placeSirenFace(sample, face);
+    this.siren.rotation.set(
+      this.sirenBaseRotation.x,
+      this.sirenBaseRotation.y + this.sirenAttackYaw * sample.sirenRear,
+      this.sirenBaseRotation.z + lean,
+    );
+    this.sirenFaceOffset.copy(this.sirenFace).applyEuler(this.siren.rotation);
+    this.siren.position.copy(face).sub(this.sirenFaceOffset);
+    // Under the surface, the camera watches the water ahead near eye level.
+    face.y = Math.max(face.y, this.sirenPlayer.y - SIREN_LOOK_DROP);
+    // Stay hidden under the surface between the dive and the burst.
+    this.siren.visible = sample.sirenFall < 1
+      && (sample.sirenSwim === 0 || sample.sirenBurst > 0);
+  }
+
+  // Place the face for the current phase and return the body's lean.
+  private placeSirenFace(sample: SupernaturalReactionSample, face: Vector3): number {
+    if (sample.sirenFall > 0) {
+      // Clear the bow before dropping, so she never sinks through the deck.
+      const fall = sample.sirenFall;
+      face.lerpVectors(this.sirenStrikePoint, this.sirenFallPoint, 1 - (1 - fall) ** 2);
+      face.y = this.sirenStrikePoint.y + (this.sirenFallPoint.y - this.sirenStrikePoint.y) * fall ** 3
+        + Math.sin(Math.PI * fall) * SIREN_FALL_ARC;
+      return 0.3 + 1.5 * fall;
+    }
+    if (sample.sirenBurst > 0) {
+      const rise = 1 - (1 - sample.sirenBurst) ** 2;
+      face.lerpVectors(this.sirenEmerge, this.sirenStrikePoint, sample.sirenBurst);
+      face.y = this.sirenEmerge.y + (this.sirenStrikePoint.y - this.sirenEmerge.y) * rise
+        + Math.sin(Math.PI * sample.sirenBurst) * SIREN_BURST_ARC;
+      return 0.5 * (1 - sample.sirenBurst) - 0.45 * sample.sirenStrike;
+    }
+    if (sample.sirenSwim > 0) {
+      face.lerpVectors(this.sirenDiveEntry, this.sirenEmerge, sample.sirenSwim);
+      return -1.3;
+    }
+    face.lerpVectors(this.sirenFaceStart, this.sirenDiveEntry, sample.sirenDive);
+    face.y += Math.sin(Math.PI * sample.sirenDive) * SIREN_DIVE_ARC;
+    return 0.3 * sample.sirenRear - 1.6 * sample.sirenDive;
+  }
+
+  private lookAtSirenAttack(sample: SupernaturalReactionSample): void {
+    const camera = this.viewCamera;
+    if (this.cameraLook === null || camera === undefined) return;
+    this.cameraLook.applyLookAt(this.sirenLookTarget, sample.sirenFocus);
+    camera.rotateX(sample.cameraPitch);
+    camera.rotateZ(sample.cameraRoll);
   }
 
   private applyPhysicalResponse(
@@ -856,6 +994,8 @@ export class SupernaturalEventAnimator {
     this.sirenTableau.rotation.set(0, 0, 0);
     this.siren.position.copy(this.sirenBasePosition);
     this.siren.rotation.copy(this.sirenBaseRotation);
+    this.sirenLookTarget.position.copy(this.sirenBasePosition).add(this.sirenFace);
+    this.siren.visible = !this.sirenGone;
     if (this.stagedEventId === 'ghosts') {
       if (!this.ghostsRepelled) this.showGhostLoop(0.42);
       this.showGhostFog();
@@ -936,7 +1076,7 @@ export class SupernaturalEventAnimator {
   }
 
   private finishReaction(active: ActiveSupernaturalReaction): void {
-    this.settleReaction(active.eventId, active.response);
+    this.settleReaction(active.eventId, active.outcome, active.response);
     const actor = active.response?.actors[0];
     if (actor?.condition === 'lost' || actor?.condition === 'consumed') {
       this.supplyDisplay.releaseEventActorOnNextSync();
@@ -949,9 +1089,16 @@ export class SupernaturalEventAnimator {
 
   private settleReaction(
     eventId: string,
+    outcome: ActionOutcome,
     response: EventPhysicalResponsePresentation | null,
   ): void {
     this.hideAll();
+    // The rock stays in view; the siren stays in the sea after her attack.
+    if (eventId === 'eerie-melody') {
+      this.sirenGone = sirenAttacks(outcome);
+      this.restoreStage();
+      return;
+    }
     // The ghosts stay gone after contact with the player.
     if (isGhostBait(eventId, response)) this.ghostsRepelled = true;
     if (eventId === 'ghosts' && !this.ghostsRepelled && response?.choiceId !== 'flareGun') {
