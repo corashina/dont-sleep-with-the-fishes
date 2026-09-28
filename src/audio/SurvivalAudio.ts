@@ -10,6 +10,7 @@ import type { PresentationWeatherId } from '../weather/presentationWeather';
 import type {
   ChestAttackAudioCue,
   CheckBackAudioCue,
+  GhostsAudioCue,
   MidnightTourAudioCue,
 } from '../survival/eventPresentationCue';
 import type { AudioVoice } from './AudioBackend';
@@ -540,6 +541,11 @@ export class SurvivalAudio {
   checkBackCue(cue: CheckBackAudioCue): void {
     if (this.disposed) return;
     this.scope.play(cue === 'fish' ? 'checkBackFish' : 'checkBackAnglerfish');
+  }
+
+  ghostsCue(cue: GhostsAudioCue): void {
+    if (this.disposed) return;
+    this.scope.play(cue === 'turn' ? 'ghostSpiritBreath' : 'ghostRush');
   }
 
   sharkBite(): void {

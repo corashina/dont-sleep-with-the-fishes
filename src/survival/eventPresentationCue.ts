@@ -19,10 +19,18 @@ export const CHECK_BACK_AUDIO_CUES = Object.freeze([
 
 export type CheckBackAudioCue = typeof CHECK_BACK_AUDIO_CUES[number];
 
+export const GHOSTS_AUDIO_CUES = Object.freeze([
+  'turn',
+  'rush',
+] as const);
+
+export type GhostsAudioCue = typeof GHOSTS_AUDIO_CUES[number];
+
 export type EventPresentationCue =
   | Readonly<{ eventId: 'swarm-of-sharks'; cue: 'bite' }>
   | Readonly<{ eventId: 'monster-in-the-fog'; cue: 'bite' }>
   | Readonly<{ eventId: 'seagull-theft'; cue: 'grab' }>
+  | Readonly<{ eventId: 'ghosts'; cue: GhostsAudioCue }>
   | Readonly<{
       eventId: 'midnight-tour';
       cue: MidnightTourAudioCue;
