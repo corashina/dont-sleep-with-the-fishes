@@ -11,6 +11,7 @@ import type {
   ChestAttackAudioCue,
   CheckBackAudioCue,
   GhostShipAudioCue,
+  GhostsAudioCue,
   MidnightTourAudioCue,
 } from '../survival/eventPresentationCue';
 import type { AudioVoice } from './AudioBackend';
@@ -552,6 +553,11 @@ export class SurvivalAudio {
   ghostShipCue(cue: GhostShipAudioCue): void {
     if (this.disposed) return;
     this.scope.play(GHOST_SHIP_SOUNDS[cue]);
+  }
+
+  ghostsCue(cue: GhostsAudioCue): void {
+    if (this.disposed) return;
+    this.scope.play(cue === 'turn' ? 'ghostSpiritBreath' : 'ghostRush');
   }
 
   sharkBite(): void {
