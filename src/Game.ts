@@ -32,6 +32,7 @@ import {
 import type { PresentationWeatherId } from './weather/presentationWeather';
 import type { SkyPhase } from './world/skyPalette';
 import { SurvivalSaveStore } from './browser/SurvivalSaveStore';
+import { MobileViewportController, type VisibleViewport } from './browser/MobileViewportController';
 import type {
   SurvivalCheckpointChange,
   SurvivalPhaseStart,
@@ -72,6 +73,7 @@ export class Game {
   private context: PhaseContext;
   private factories: GameFactories;
   private activePhase: GamePhase | null = null;
+  private activePhaseStarted = false;
   private activeLease: ResourceLease<unknown> | null = null;
   private pendingPreparation: Promise<void> | null = null;
   private transitionScreen: HTMLElement | null = null;
@@ -92,14 +94,18 @@ export class Game {
   private createSeed: () => number;
   private onFatalError: (error: unknown) => void;
   private fatalErrorReported = false;
-  private onResize: () => void;
+  private viewportController: MobileViewportController | null = null;
+  private mobileSuspended = false;
+  private renderedWidth = 0;
+  private renderedHeight = 0;
+  private renderedPixelRatio = 0;
   private animate: () => void;
 
   start(): void {
     if (this.disposed || this.started) return;
     this.started = true;
     this.clock.start();
-    if (!this.preparing) this.activePhase?.start();
+    if (!this.preparing && !this.mobileSuspended) this.startActivePhase();
     this.animationFrame = requestAnimationFrame(this.animate);
   }
 
@@ -112,7 +118,8 @@ export class Game {
     if (this.disposed) return;
     this.disposed = true;
     if (this.animationFrame !== 0) cancelAnimationFrame(this.animationFrame);
-    window.removeEventListener('resize', this.onResize);
+    this.viewportController?.dispose();
+    this.viewportController = null;
     const outgoing = this.detachActivePhase();
     this.exitPointerLock();
     const performanceStats = this.performanceStats;
@@ -146,9 +153,7 @@ export class Game {
     this.factories = factories;
     this.createSeed = createSeed;
     this.onFatalError = onFatalError;
-    this.onResize = () => this.handleResize();
     this.animate = () => this.handleAnimationFrame();
-    let resizeListenerRegistered = false;
     try {
       const audioSystem = resources.audio;
       const physicsMode = resources.physicsMode;
@@ -170,6 +175,8 @@ export class Game {
         audio: audioSystem,
         onFatalError: (error) => this.reportFatalError(error),
       };
+      this.viewportController = new MobileViewportController(mount, () => this.handleViewportChange());
+      this.mobileSuspended = this.viewportController.isSuspended();
       const tuningState = systemTuning.get();
       this.weatherOverride = tuningState.weatherOverride;
       this.timeOfDayOverride = tuningState.phaseOverride;
@@ -272,8 +279,6 @@ export class Game {
           continueSavedRun: () => this.continueSavedRun(),
         },
       });
-      window.addEventListener('resize', this.onResize);
-      resizeListenerRegistered = true;
       if (browserPlaytest === null) {
         this.ready = this.activateMenu();
       } else {
@@ -285,17 +290,17 @@ export class Game {
           scavengeElapsedSeconds: 0,
         }));
       }
-      this.onResize();
+      this.handleResize();
     } catch (error) {
       try {
-        this.rollbackConstruction(resizeListenerRegistered);
+        this.rollbackConstruction();
       } finally {
         throw error;
       }
     }
   }
 
-  private rollbackConstruction(resizeListenerRegistered: boolean): void {
+  private rollbackConstruction(): void {
     this.disposed = true;
     const activePhase = this.detachActivePhase();
     const performanceStats = this.performanceStats;
@@ -303,9 +308,7 @@ export class Game {
     const postProcessingConsole = this.postProcessingConsole;
     this.postProcessingConsole = null;
     runCleanupSteps([
-      () => {
-        if (resizeListenerRegistered) window.removeEventListener('resize', this.onResize);
-      },
+      () => { this.viewportController?.dispose(); this.viewportController = null; },
       () => activePhase?.dispose(),
       () => postProcessingConsole?.dispose(),
       () => { this.settingsMenu?.dispose(); this.settingsMenu = null; },
@@ -403,10 +406,12 @@ export class Game {
       await this.preparePhasePresentation(phase, generation);
       if (!this.ownsGeneration(generation)) { const stale = phase; phase = null; stale.dispose(); return; }
       this.activePhase = phase;
+      this.activePhaseStarted = false;
       this.activeLease = lease;
       transferred = true;
       this.synchronizePresentationControls();
-      if (this.started && this.ownsGeneration(generation)) phase.start();
+      phase.setMobileSuspended?.(this.mobileSuspended);
+      this.startActivePhaseIfAllowed();
       this.reportLoadingProgress(generation, { stage: 'sceneReady' });
     } catch (error) {
       if (!transferred) {
@@ -422,13 +427,17 @@ export class Game {
     if (!this.ownsGeneration(generation)) return;
     this.applyPresentationOverrides(phase);
     if (!this.ownsGeneration(generation)) return;
-    phase.resize(window.innerWidth, window.innerHeight);
+    const viewport = this.currentViewport();
+    phase.resize(viewport.width, viewport.height);
     if (phase.prepare === undefined) return;
     await new Promise<void>(resolve => setTimeout(resolve, 0));
     if (!this.ownsGeneration(generation)) return;
     await phase.prepare(status => this.reportLoadingProgress(generation, status));
     // A resize can arrive while shader compilation runs.
-    if (this.ownsGeneration(generation)) phase.resize(window.innerWidth, window.innerHeight);
+    if (this.ownsGeneration(generation)) {
+      const current = this.currentViewport();
+      phase.resize(current.width, current.height);
+    }
   }
 
   private reportLoadingProgress(generation: number, status: LoadingProgress): void {
@@ -577,6 +586,7 @@ export class Game {
     const phase = this.activePhase;
     const lease = this.activeLease;
     this.activePhase = null;
+    this.activePhaseStarted = false;
     this.activeLease = null;
     if (phase === null && lease === null) return null;
     return { dispose: () => runCleanupSteps([() => phase?.dispose(), () => lease?.dispose()]) };
@@ -674,15 +684,48 @@ export class Game {
     );
   }
 
+  private startActivePhase(): void {
+    if (this.activePhase === null || this.activePhaseStarted) return;
+    this.activePhaseStarted = true;
+    this.activePhase.start();
+  }
+
+  private startActivePhaseIfAllowed(): void {
+    if (this.started && !this.mobileSuspended) this.startActivePhase();
+  }
+
+  private handleViewportChange(): void {
+    const suspended = this.viewportController?.isSuspended() ?? false;
+    if (suspended !== this.mobileSuspended) {
+      this.mobileSuspended = suspended;
+      this.activePhase?.setMobileSuspended?.(suspended);
+      if (!suspended && this.started && !this.preparing) this.startActivePhase();
+    }
+    this.handleResize();
+  }
+
+  private currentViewport(): VisibleViewport {
+    return this.viewportController?.getViewport() ?? {
+      width: window.innerWidth, height: window.innerHeight, left: 0, top: 0,
+    };
+  }
+
   private handleResize(): void {
     if (this.disposed) return;
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const pixelRatio = Math.min(window.devicePixelRatio, 2);
-    this.renderer.setPixelRatio(pixelRatio);
-    this.renderer.setSize(width, height, false);
-    this.sceneRenderer.resize(width, height, pixelRatio);
-    this.activePhase?.resize(width, height);
+    const viewport = this.currentViewport();
+    const { width, height } = viewport;
+    const ratioCap = this.viewportController?.coarsePrimaryPointer ? 1 : 2;
+    const pixelRatio = Math.min(Math.max(window.devicePixelRatio || 1, 1), ratioCap);
+    const sizeChanged = width !== this.renderedWidth || height !== this.renderedHeight;
+    if (sizeChanged || pixelRatio !== this.renderedPixelRatio) {
+      if (pixelRatio !== this.renderedPixelRatio) this.renderer.setPixelRatio(pixelRatio);
+      this.renderer.setSize(width, height, false);
+      this.sceneRenderer.resize(width, height, pixelRatio);
+      this.renderedWidth = width;
+      this.renderedHeight = height;
+      this.renderedPixelRatio = pixelRatio;
+    }
+    if (sizeChanged) this.activePhase?.resize(width, height);
   }
 
   private handleAnimationFrame(): void {
@@ -690,9 +733,9 @@ export class Game {
     const rawDeltaSeconds = this.clock.getDelta();
     this.performanceStats?.recordFrame(rawDeltaSeconds);
     const deltaSeconds = Math.min(rawDeltaSeconds, 0.05);
-    this.elapsed += deltaSeconds;
+    if (!this.mobileSuspended) this.elapsed += deltaSeconds;
     if (!this.preparing) {
-      this.activePhase?.update(this.elapsed, deltaSeconds);
+      if (!this.mobileSuspended) this.activePhase?.update(this.elapsed, deltaSeconds);
       this.synchronizePresentationControls();
       this.activePhase?.render();
     }

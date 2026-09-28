@@ -104,6 +104,43 @@ function createFixture(): ProjectorFixture {
 }
 
 describe('BoatInteractionProjector', () => {
+  // Importance: 95/100. Expanded touch targets must not pass through solid boat parts.
+  it('allows an expanded supply tap only while its mesh is visible', () => {
+    const { projector, roots, supplyRecord } = createFixture();
+    roots.boatRoot.add(supplyRecord.root);
+    const anchor = projector.projectAnchors(1280, 720).find(({ id }) => id === 'supply:cannedFood')!;
+    const expandedX = anchor.x + 20;
+    expect(anchor.touchHitTest?.(anchor.x, anchor.y)).toBe('direct');
+    expect(anchor.touchHitTest?.(expandedX, anchor.y)).toBe('expanded');
+
+    const wood = meshRoot('wooden-side', -1.1, 0, -3);
+    wood.scale.x = 10;
+    roots.boatRoot.add(wood);
+    expect(anchor.touchHitTest?.(expandedX, anchor.y)).toBeNull();
+    wood.visible = false;
+    expect(anchor.touchHitTest?.(expandedX, anchor.y)).toBe('expanded');
+    projector.dispose();
+    expect(anchor.touchHitTest?.(expandedX, anchor.y)).toBeNull();
+  });
+
+  // Importance: 97/100. A visible part must not expand through nearby wood.
+  it('rejects a partly occluded expanded tap but accepts clear water beside the same supply', () => {
+    const { projector, roots, supplyRecord } = createFixture();
+    roots.boatRoot.add(supplyRecord.root);
+    const anchor = projector.projectAnchors(1280, 720).find(({ id }) => id === 'supply:cannedFood')!;
+    const clearX = anchor.x - 20;
+    const blockedX = anchor.x + 20;
+    expect(anchor.touchHitTest?.(blockedX, anchor.y)).toBe('expanded');
+    const plank = meshRoot('near-plank', -0.5, 0, -3);
+    roots.boatRoot.add(plank);
+    expect(anchor.touchHitTest?.(anchor.x, anchor.y)).toBe('direct');
+    expect(anchor.touchHitTest?.(blockedX, anchor.y)).toBeNull();
+    expect(anchor.touchHitTest?.(clearX, anchor.y)).toBe('expanded');
+    plank.position.z = -7;
+    expect(anchor.touchHitTest?.(blockedX, anchor.y)).toBe('expanded');
+    projector.dispose();
+  });
+
   // Importance: 95/100. The rod needs a forgiving target while wood still blocks selection.
   it('accepts nearby exposed fishing rod geometry but rejects covered or distant targets', () => {
     const { projector, roots } = createFixture();

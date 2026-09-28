@@ -1,10 +1,58 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MenuUI } from '../src/menu/MenuUI';
+import { setLanguage } from '../src/i18n/language';
 
 describe('MenuUI how-to-play popup', () => {
   afterEach(() => {
     document.body.replaceChildren();
+    delete document.documentElement.dataset.touchControls;
+    setLanguage('en');
+  });
+
+  it('shows touch instructions in the current language', () => {
+    document.documentElement.dataset.touchControls = 'true';
+    const ui = new MenuUI(document.body);
+    try {
+      ui.openGuide();
+      const description = document.querySelector<HTMLElement>(
+        '[data-menu-guide-section="collect"] [data-menu-guide-description]',
+      )!;
+      expect(description.textContent).toContain('left stick');
+      expect(description.textContent).not.toContain('WASD');
+      setLanguage('pl');
+      expect(document.querySelector<HTMLElement>(
+        '[data-menu-guide-section="collect"] [data-menu-guide-description]',
+      )?.textContent).toContain('lewym drążkiem');
+    } finally { ui.dispose(); }
+  });
+
+  // Importance: 95/100. The guide must name the touch action in each supported language.
+  it('describes touch fishing and the existing guide image in all three languages', () => {
+    document.documentElement.dataset.touchControls = 'true';
+    const ui = new MenuUI(document.body);
+    try {
+      ui.openGuide();
+      document.querySelector<HTMLButtonElement>('[data-menu-guide-next]')!.click();
+      const description = () => document.querySelector<HTMLElement>(
+        '[data-menu-guide-section="catch"] [data-menu-guide-description]',
+      )?.textContent;
+      const image = () => document.querySelector<HTMLImageElement>(
+        '[data-menu-guide-section="catch"] img',
+      )?.alt;
+      expect(description()).toContain('Reel');
+      expect(description()).not.toContain('click the bubbles');
+      expect(image()).toContain('Bubbles');
+      expect(image()).not.toContain('Reel');
+      setLanguage('pl');
+      expect(description()).toContain('Zwiń');
+      expect(image()).toContain('Bąbelki');
+      expect(image()).not.toContain('Zwiń');
+      setLanguage('es-AR');
+      expect(description()).toContain('Recogé');
+      expect(image()).toContain('burbujas');
+      expect(image()).not.toContain('Recogé');
+    } finally { ui.dispose(); }
   });
 
   it('keeps the scroll region keyboard accessible and traps focus inside the dialog', () => {

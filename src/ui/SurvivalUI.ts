@@ -106,7 +106,7 @@ export class SurvivalUI {
     this.coverView = new SurvivalCoverView();
     this.hudView = new SurvivalHudView();
     this.anchorView = new BoatAnchorView(this.root);
-    this.fishingView = new SurvivalFishingView(mount);
+    this.fishingView = new SurvivalFishingView();
     this.focusedEventView = new FocusedEventView(this.root);
     this.journalView = new SurvivalJournalView();
     this.modalViews = new SurvivalModalViews();
@@ -173,9 +173,14 @@ export class SurvivalUI {
     this.hudView.onJournal = () => {
       if (!this.disposed) this.onJournalOpen();
     };
+    this.hudView.onPause = () => {
+      if (!this.disposed) this.onPauseChange(true);
+    };
     this.hudView.onCameraTurn = () => {
       if (!this.disposed) this.onCameraTurn?.();
     };
+    this.anchorView.onTouchInterrupt = this.handleTouchInterrupt;
+    this.fishingView.onTouchInterrupt = this.handleTouchInterrupt;
     this.anchorView.onAction = (action, origin) => this.activateDayAction(action, origin);
     this.anchorView.onCarlitosPosition = (direction) => this.onCarlitosPosition(direction);
     this.anchorView.onEventItem = (choiceId, instanceId) => {
@@ -559,6 +564,17 @@ export class SurvivalUI {
     }
   }
 
+  clearTouchInput(): void {
+    this.anchorView.clearTouchInput();
+    this.fishingView.clearTouchInput();
+  }
+
+  private readonly handleTouchInterrupt = (): void => {
+    if (this.disposed) return;
+    this.clearTouchInput();
+    this.onPauseChange(true);
+  };
+
   setPaused(paused: boolean): void {
     if (this.disposed || paused === this.paused) return;
     this.modalViews.resetPauseActions();
@@ -726,6 +742,7 @@ export class SurvivalUI {
   private syncViewModalState(): void {
     const topmost = this.modalFocus.topmostModal();
     const open = topmost !== null;
+    if (topmost !== this.fishingView.interactionRoot) this.fishingView.clearTouchInput();
     this.hudView.setModalOpen(open, !open || topmost === this.fishingView.interactionRoot);
     this.anchorView.setModalOpen(open);
     this.eventView.setModalOpen(open);

@@ -67,6 +67,7 @@ export interface GamePhase {
   resize(width: number, height: number): void;
   render(): void;
   setOverlayActive?(active: boolean): void;
+  setMobileSuspended?(suspended: boolean): void;
   setWaterQuality?(value: WaterQuality): void;
   setWeatherOverride?(id: PresentationWeatherId | null): void;
   getPresentationWeather?(): PresentationWeatherId;

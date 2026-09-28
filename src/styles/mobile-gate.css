@@ -1,0 +1,26 @@
+.mobile-viewport-gate {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+    max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  background: #101b20f5;
+  color: var(--ink-bone);
+  text-align: center;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.mobile-viewport-gate[hidden] { display: none; }
+.mobile-viewport-gate__content { max-width: 420px; }
+.mobile-viewport-gate__title {
+  margin: 0 0 12px;
+  color: var(--ink-bone);
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 6vw, 2.6rem);
+  line-height: 1.1;
+}
+.mobile-viewport-gate__detail { margin: 0 0 20px; font-family: var(--font-narrative); }
+.mobile-viewport-gate__resume { min-width: 160px; min-height: 48px; }
+.mobile-viewport-gate__resume[hidden] { display: none; }

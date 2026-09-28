@@ -11,6 +11,7 @@ import { UnderwaterMenuAnimator } from '../menu/UnderwaterMenuAnimator';
 import { UnderwaterMenuWorld } from '../menu/UnderwaterMenuWorld';
 import type { MenuSandAssets } from '../menu/MenuSandAssets';
 import type { MenuVisualState } from '../rendering/SceneRenderer';
+import { selectMouseControls, selectTouchControls, touchControlsSelected } from '../input/TouchControls';
 import {
   ignoreCleanupError as attemptCleanup,
   runCleanupSteps,
@@ -96,6 +97,7 @@ export class MainMenuPhase implements GamePhase {
   private completed = false;
   private started = false;
   private disposed = false;
+  private mobileSuspended = false;
   private pointerLockListenerRegistered = false;
   private pointerAction: MenuSignAction | null = null;
   private startKeyboardFocused = false;
@@ -105,6 +107,8 @@ export class MainMenuPhase implements GamePhase {
       this.disposed
       || !this.transitioning
       || this.completed
+      || this.mobileSuspended
+      || touchControlsSelected()
       || document.pointerLockElement === this.context.renderer.domElement
     ) {
       return;
@@ -164,13 +168,15 @@ export class MainMenuPhase implements GamePhase {
     canvas.addEventListener('pointermove', this.handleMenuPointerMove);
     canvas.addEventListener('pointerleave', this.handleMenuPointerLeave);
     canvas.addEventListener('click', this.handleMenuClick);
+    canvas.addEventListener('pointerdown', this.handlePointerDown);
+    this.context.mount.addEventListener('pointerdown', this.handlePointerDown, true);
     this.ui.setTransitioning(false);
     this.ui.setFadeProgress(0);
     this.audio.startLoop('menuAmbient');
   }
 
   update(_time: number, deltaSeconds: number): void {
-    if (this.disposed || !this.started) return;
+    if (this.disposed || !this.started || this.mobileSuspended) return;
     const delta = Number.isFinite(deltaSeconds) ? Math.max(0, deltaSeconds) : 0;
     this.elapsed += delta;
     this.visualState.elapsedSeconds = this.elapsed;
@@ -191,6 +197,12 @@ export class MainMenuPhase implements GamePhase {
     if (this.disposed || width <= 0 || height <= 0) return;
     this.context.camera.aspect = width / height;
     this.context.camera.updateProjectionMatrix();
+  }
+
+  setMobileSuspended(suspended: boolean): void {
+    if (this.disposed || this.mobileSuspended === suspended) return;
+    this.mobileSuspended = suspended;
+    if (suspended) this.clearSignInteraction();
   }
 
   render(): void {
@@ -219,6 +231,8 @@ export class MainMenuPhase implements GamePhase {
         canvas.removeEventListener('pointermove', this.handleMenuPointerMove);
         canvas.removeEventListener('pointerleave', this.handleMenuPointerLeave);
         canvas.removeEventListener('click', this.handleMenuClick);
+        canvas.removeEventListener('pointerdown', this.handlePointerDown);
+        this.context.mount.removeEventListener('pointerdown', this.handlePointerDown, true);
         canvas.style.cursor = '';
       },
       () => {
@@ -244,7 +258,11 @@ export class MainMenuPhase implements GamePhase {
   }
 
   private async requestStart(): Promise<void> {
-    if (this.disposed || this.transitioning || this.pointerLockPending || this.ui.isOverlayOpen) return;
+    if (this.startBlocked()) return;
+    if (touchControlsSelected()) {
+      this.beginTransition();
+      return;
+    }
     this.pointerLockPending = true;
     this.ui.clearPointerLockError();
     try {
@@ -254,19 +272,26 @@ export class MainMenuPhase implements GamePhase {
       );
     } catch {
       this.pointerLockPending = false;
-      if (!this.disposed && !this.transitioning) {
-        this.ui.showPointerLockError();
-      }
+      if (!this.disposed && !this.transitioning) this.ui.showPointerLockError();
       return;
     }
     this.pointerLockPending = false;
-    if (this.disposed || this.ui.isOverlayOpen) {
+    if (this.disposed || this.mobileSuspended || this.ui.isOverlayOpen) {
       if (document.pointerLockElement === this.context.renderer.domElement) {
         document.exitPointerLock();
       }
       return;
     }
-    if (this.transitioning) return;
+    this.beginTransition();
+  }
+
+  private startBlocked(): boolean {
+    return this.disposed || this.mobileSuspended || this.transitioning
+      || this.pointerLockPending || this.ui.isOverlayOpen;
+  }
+
+  private beginTransition(): void {
+    if (this.disposed || this.mobileSuspended || this.transitioning || this.ui.isOverlayOpen) return;
     this.ui.clearPointerLockError();
     this.transitioning = true;
     this.audio.setLoopGain('menuAmbient', 0, MENU_FADE_SECONDS);
@@ -275,6 +300,11 @@ export class MainMenuPhase implements GamePhase {
     this.ui.setTransitioning(true);
     this.ui.setFadeProgress(0);
   }
+
+  private readonly handlePointerDown = (event: PointerEvent): void => {
+    if (event.pointerType === 'touch') selectTouchControls();
+    else if (event.pointerType === 'mouse') selectMouseControls();
+  };
 
   private readonly handleMenuPointerMove = (event: PointerEvent): void => {
     this.pointerAction = this.menuSignAction(event);
@@ -300,7 +330,7 @@ export class MainMenuPhase implements GamePhase {
   };
 
   private menuSignAction(event: MouseEvent): MenuSignAction | null {
-    if (this.disposed || this.transitioning || this.ui.isOverlayOpen) return null;
+    if (this.disposed || this.mobileSuspended || this.transitioning || this.ui.isOverlayOpen) return null;
     const bounds = this.context.renderer.domElement.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) return null;
     const ndcX = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;

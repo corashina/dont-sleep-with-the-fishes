@@ -5,7 +5,7 @@ export const systemText = defineMessages({
   webglGuidance: { en: 'Enable hardware acceleration in your browser, then refresh the page.', pl: 'Włącz przyspieszenie sprzętowe w przeglądarce, a następnie odśwież stronę.', 'es-AR': "Activá la aceleración por hardware en el navegador. Después, actualizá la página." },
   webgl: {"en":"WEBGL UNAVAILABLE","pl":"WEBGL NIEDOSTĘPNE", 'es-AR': "WEBGL NO DISPONIBLE"},
   launch: {"en":"Unable to launch","pl":"Nie można uruchomić gry", 'es-AR': "No se pudo iniciar"},
-  webglLead: {"en":"This demo needs WebGL 2 in a current desktop browser.","pl":"Ta wersja demonstracyjna wymaga WebGL 2 w aktualnej przeglądarce komputerowej.", 'es-AR': "Esta demo necesita WebGL 2 en un navegador de escritorio actualizado."},
+  webglLead: {"en":"This demo needs WebGL 2 in a current browser.","pl":"Ta wersja demonstracyjna wymaga WebGL 2 w aktualnej przeglądarce.", 'es-AR': "Esta demo necesita WebGL 2 en un navegador actualizado."},
   gameError: {"en":"GAME ERROR","pl":"BŁĄD GRY", 'es-AR': "ERROR DEL JUEGO"},
   continue: {"en":"Unable to continue","pl":"Nie można kontynuować", 'es-AR': "No se puede continuar"},
   gameLead: {"en":"The game stopped after an unexpected error.","pl":"Gra zatrzymała się z powodu nieoczekiwanego błędu.", 'es-AR': "El juego se detuvo por un error inesperado."},

@@ -21,6 +21,7 @@ export type ProjectedBoatBounds = ProjectedScreenBounds;
 export type BoatObjectBoundsCache = ObjectScreenBoundsCache;
 
 export type BoatToolId = 'repairTools' | 'fishingRod' | 'pillow' | 'chest';
+export type BoatTouchHit = 'direct' | 'expanded' | null;
 
 export interface BoatInteractionAnchor {
   readonly id: string;
@@ -46,6 +47,7 @@ export interface BoatInteractionAnchor {
   readonly backingInstanceId?: import('../game/ItemState').ItemInstanceId | null;
   readonly hitArea?: BoatInteractionHitArea;
   readonly hitTest?: (x: number, y: number) => boolean;
+  readonly touchHitTest?: (x: number, y: number) => BoatTouchHit;
 }
 
 export function projectBoatObjectBoundsInto(
