@@ -1,6 +1,6 @@
 import type { SurvivalEventDefinition } from './survivalTypes';
 
-export const PRESSURE_DAYS = Object.freeze([8, 15, 25, 40] as const);
+export const PRESSURE_DAYS = Object.freeze([8, 15, 25, 30] as const);
 
 export function pressureForDay(day: number): number {
   return PRESSURE_DAYS.filter((threshold) => day >= threshold).length;

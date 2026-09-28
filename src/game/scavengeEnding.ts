@@ -3,9 +3,8 @@ import { clamp01, smootherStep } from './easing';
 import type { SinkingState } from './sinking';
 
 export const SINKING_CINEMATIC_SECONDS = 8;
-export const ENDING_HOLD_SECONDS = 3;
 
-export type ScavengeEndingStage = 'playing' | 'sinking' | 'endingHold' | 'menuReady' | 'survivalReady';
+export type ScavengeEndingStage = 'playing' | 'sinking' | 'menuReady' | 'survivalReady';
 
 export interface ScavengeEndingState {
   readonly stage: ScavengeEndingStage;
@@ -48,7 +47,7 @@ export function advanceScavengeEnding(
 
   let stage = state.stage;
   let elapsedSeconds = state.elapsedSeconds;
-  let remainingDelta = Math.max(0, deltaSeconds);
+  const remainingDelta = Math.max(0, deltaSeconds);
 
   if (stage === 'playing') {
     if (status === 'failure' || status === 'success') {
@@ -64,17 +63,9 @@ export function advanceScavengeEnding(
     if (remainingDelta < remainingCinematic) {
       return { stage, elapsedSeconds: elapsedSeconds + remainingDelta };
     }
-    remainingDelta -= remainingCinematic;
     if (status === 'success') {
       return { stage: 'survivalReady', elapsedSeconds: 0 };
     }
-    stage = 'endingHold';
-    elapsedSeconds = 0;
-  }
-
-  const remainingHold = Math.max(0, ENDING_HOLD_SECONDS - elapsedSeconds);
-  if (remainingDelta < remainingHold) {
-    return { stage: 'endingHold', elapsedSeconds: elapsedSeconds + remainingDelta };
   }
   return { stage: 'menuReady', elapsedSeconds: 0 };
 }

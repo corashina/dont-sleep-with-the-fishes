@@ -94,7 +94,7 @@ it.each([
     const session = new SurvivalSession(saved(), {
       seed: 13,
       random: sequenceRandom([0, 0, 0.99]),
-      initial: { day: 24, rescueLead: 8 },
+      initial: { day: 27, rescueLead: 5 },
       initialEventId: 'quiet-night',
     });
     session.resolveEvent(choiceResponse('sleep'));
@@ -130,6 +130,35 @@ it('can sink from overnight hull wear', () => {
     id: 'sinking',
     cause: { eventId: null },
   });
+});
+
+// Importance: 95/100. Signals must not allow rescue before the new earliest dawn.
+it('caps signal progress and delays the first possible rescue until day 28', () => {
+  for (const day of [26, 27]) {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initial: { day, rescueLead: 8 },
+      initialEventId: 'quiet-night',
+    });
+    expect(session.snapshot().rescueLead).toBe(5);
+    session.resolveEvent(choiceResponse('sleep'));
+    session.beginDawn();
+    expect(session.snapshot().ending?.id ?? null).toBe(day === 27 ? 'rescue' : null);
+  }
+});
+
+// Importance: 95/100. The final danger increase must apply at dawn on day 30 only.
+it.each([29, 30, 39])('applies the final danger increase after day %i', (day) => {
+  const session = new SurvivalSession(saved(), {
+    seed: 1,
+    random: sequenceRandom([0.99]),
+    initial: { day, pressure: 2 },
+    initialEventId: 'quiet-night',
+  });
+  session.resolveEvent(choiceResponse('sleep'));
+  session.beginDawn();
+  expect(session.snapshot().pressure).toBe(day === 29 ? 3 : 2);
 });
 
 function beginFishing(session: SurvivalSession): FishingSession {
@@ -806,7 +835,7 @@ describe('SurvivalSession daytime actions', () => {
     const session = new SurvivalSession(saved(), {
       seed: 1,
       random: { next },
-      initial: { day: 23, rescueLead: 8 },
+      initial: { day: 26, rescueLead: 5 },
       initialEventId: 'quiet-night',
     });
     session.resolveEvent(choiceResponse('sleep'));

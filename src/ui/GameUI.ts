@@ -22,10 +22,6 @@ const requireElement = createElementRequirement('UI');
 
 export type ScavengePresentation = 'intro' | 'playing';
 
-function isEndingPopupVisible(stage: ScavengeEndingStage): boolean {
-  return stage === 'endingHold' || stage === 'menuReady';
-}
-
 export interface ScavengeItemTooltip {
   readonly text: string;
   readonly x: number;
@@ -267,8 +263,8 @@ export class GameUI {
     record: Extract<EndingRecord, { id: 'dorothy' }> | null,
   ): void {
     if (this.disposed) return;
-    const wasVisible = isEndingPopupVisible(this.endingStage);
-    const visible = isEndingPopupVisible(stage);
+    const wasVisible = this.endingStage === 'menuReady';
+    const visible = stage === 'menuReady';
     if (visible && record === null) {
       throw new Error('Dorothy ending record is missing.');
     }
@@ -276,16 +272,15 @@ export class GameUI {
       this.renderEndingRecord(record);
       this.renderedEndingRecord = record;
     }
-    const revealAction = stage === 'menuReady';
     this.root.style.setProperty('--scavenge-ending-blackout', String(Math.min(1, Math.max(0, blackout))));
     this.hud.hidden = stage !== 'playing' || this.root.dataset.presentation !== 'playing';
     if (stage !== 'playing') this.setPaused(false);
     this.endingLayer.classList.toggle('is-visible', visible);
     this.endingLayer.setAttribute('aria-hidden', String(!visible));
     this.endingLayer.toggleAttribute('inert', !visible);
-    this.endingAction.hidden = !revealAction;
-    this.statisticsView.button.hidden = !revealAction;
-    if (revealAction && this.endingStage !== 'menuReady') this.endingAction.focus();
+    this.endingAction.hidden = !visible;
+    this.statisticsView.button.hidden = !visible;
+    if (visible && !wasVisible) this.endingAction.focus();
     this.endingStage = stage;
     if (visible && !wasVisible) this.onEndingShown();
   }

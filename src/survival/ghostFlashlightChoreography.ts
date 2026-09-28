@@ -27,6 +27,6 @@ export function ghostFlashlightBeam(progress: number): number {
   return 0;
 }
 
-export function ghostFlashlightDeparture(progress: number, index: number): number {
+export function ghostFlashlightFade(progress: number, index: number): number {
   return smoothstep((ghostFlashlightCycle(progress) - index - 0.62) / 0.36);
 }

@@ -718,6 +718,7 @@ describe('event selection contracts', () => {
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });
 
+  // Importance: 95/100. A signal must resolve once and respect the rescue lead limit.
   it.each(['flareGun'] as const)(
     'keeps a Plane %s signal selected before expiry through animation and repeated input',
     async (itemId) => {
@@ -748,8 +749,8 @@ describe('event selection contracts', () => {
         eventResult: { eventId: 'plane', choiceId: itemId, resultId: 'plane-signaled' },
       });
       const after = rig.realSession.snapshot();
-      expect(after.rescueLead).toBe(itemId === 'flareGun' ? 6 : 4);
-      expect(after.inventory[instanceId]?.condition).toBe(itemId === 'flareGun' ? 'consumed' : 'usable');
+      expect(after.rescueLead).toBe(SURVIVAL_BALANCE.rescue.maximumLead);
+      expect(after.inventory[instanceId]?.condition).toBe('consumed');
       expect(after.journalEntries).toHaveLength(1);
       expect(after.journalEntries[0]!.nighttime).toMatchObject({
         kind: 'event', event: { attemptedChoiceId: itemId, attemptedItemId: itemId },

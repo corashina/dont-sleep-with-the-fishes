@@ -37,7 +37,7 @@ export const SURVIVAL_BALANCE = {
       { quantity: 3, chance: 0.01 },
     ],
   },
-  rescue: { firstEffectiveDay: 33, maximumLead: 8 },
+  rescue: { firstEffectiveDay: 33, maximumLead: 5 },
   radio: {
     firstDay: 5,
     signalChance: 0.20,
@@ -55,7 +55,7 @@ export function radioRescueLeadForSignal(sentSignals: number): number {
   return gains[Math.min(sentSignals, gains.length - 1)]!;
 }
 
-export type RescueLead = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+export type RescueLead = 0 | 1 | 2 | 3 | 4 | 5;
 
 export interface HullRepairCalculation {
   readonly energySpent: number;

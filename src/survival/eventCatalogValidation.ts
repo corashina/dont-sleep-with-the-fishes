@@ -1,4 +1,5 @@
 import { HEART_PIECE_IDS, type HeartPieceId } from './heartOfTheSea';
+import { SURVIVAL_BALANCE } from './survivalBalance';
 import {
   ITEM_DEFINITIONS,
   ITEM_IDS,
@@ -442,7 +443,7 @@ function validateMinimumRescueLead(eventEntry: SurvivalEventDefinition): void {
     && (!Number.isFinite(eventEntry.minimumRescueLead)
       || !Number.isInteger(eventEntry.minimumRescueLead)
       || eventEntry.minimumRescueLead < 0
-      || eventEntry.minimumRescueLead > 8)) {
+      || eventEntry.minimumRescueLead > SURVIVAL_BALANCE.rescue.maximumLead)) {
     throw new Error(`${eventEntry.id} has an invalid minimum rescue lead`);
   }
 }

@@ -20,7 +20,7 @@ it('waits four seconds, follows Carlitos, and shows the bubble for eight seconds
   expect(view.update(3.9, true)).toBe(false);
   expect(view.root.hidden).toBe(true);
   expect(view.update(0.1, true)).toBe(true);
-  expect(view.root.textContent).toBe('You forgot to open that chest!');
+  expect(view.root.textContent).toBe('Maybe we should open that chest?');
   expect(view.root.hidden).toBe(false);
   view.setAnchors([{ ...anchor, x: 400 }]);
   expect(view.root.style.left).toBe('400px');
@@ -61,7 +61,7 @@ it('integrates with pauses, language changes, chest opening, and disposal', () =
   const bubble = document.querySelector<HTMLElement>('.carlitos-chest-reminder')!;
   expect(bubble.hidden).toBe(false);
   setLanguage('pl');
-  expect(bubble.textContent).toBe('Nie zapomnij otworzyć tej skrzyni!');
+  expect(bubble.textContent).toBe('Może otworzymy tę skrzynię?');
   ui.setBusy(true);
   expect(bubble.hidden).toBe(true);
   ui.setBusy(false);

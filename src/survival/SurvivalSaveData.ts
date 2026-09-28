@@ -29,7 +29,7 @@ import type {
   JournalNightRecord,
 } from './journalRecords';
 import { createJournalSurvivalActionRecord } from './journalRecords';
-import type { RescueLead } from './survivalBalance';
+import { SURVIVAL_BALANCE, type RescueLead } from './survivalBalance';
 import type {
   ActionOutcome,
   ChestSnapshot,
@@ -521,7 +521,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const bait = parseInteger(value.bait, 0, MAX_COUNTER);
   const recoveredFood = parseInteger(value.recoveredFood, 0, parsedUpperBound(food));
   const recoveredBait = parseInteger(value.recoveredBait, 0, parsedUpperBound(bait));
-  const rescueLead = parseInteger(value.rescueLead, 0, 8);
+  const rescueLead = parseInteger(value.rescueLead, 0, SURVIVAL_BALANCE.rescue.maximumLead);
   const radioSignalsSent = parseInteger(value.radioSignalsSent, 0, MAX_COUNTER);
   const savedPickupCount = parseInteger(value.savedPickupCount, 0, MAX_COUNTER);
   const fishingCounter = parseInteger(value.fishingCounter, 0, MAX_COUNTER);

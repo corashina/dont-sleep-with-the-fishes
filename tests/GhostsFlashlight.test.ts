@@ -1,6 +1,7 @@
 // Importance: 95/100. The beam and moving targets must stay synchronized without reviving cleared ghosts.
 import { describe, expect, it, vi } from 'vitest';
-import { BoxGeometry, Group, Mesh, MeshStandardMaterial, PerspectiveCamera } from 'three';
+import { BoxGeometry, Group, Mesh, MeshStandardMaterial, PerspectiveCamera, Vector3 } from 'three';
+import { FlashlightBeam } from '../src/survival/FlashlightBeam';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
 import type { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
@@ -24,7 +25,7 @@ function rig() {
 }
 
 describe('Ghosts flashlight sequence', () => {
-  it('aims, flashes three times, and drives each ghost away before selecting the next', async () => {
+  it('aims, flashes three times, and fades each ghost before selecting the next', async () => {
     const { animator, ghosts } = rig();
     const context = resolveEventItemUseContext('ghosts', 'flashlight', 'flashlight')!;
     const duration = eventItemUseDuration(context);
@@ -52,11 +53,9 @@ describe('Ghosts flashlight sequence', () => {
           step(progress(flash + 0.07));
           expect(sample.primaryEffect).toBe(0);
         }
-        const before = ghosts[index]!.position.clone();
         step(progress(0.85));
         expect(sample.primaryEffect).toBe(0);
-        expect(ghosts[index]!.position.y).toBeGreaterThan(before.y + 3);
-        expect(ghosts[index]!.position.z).toBeLessThan(before.z - 8);
+        expect(ghosts[index]!.visible).toBe(true);
         step(progress(0.99));
         expect(ghosts.map(ghost => ghost.visible)).toEqual(ghosts.map((_, ghostIndex) => ghostIndex > index));
       }
@@ -83,5 +82,62 @@ describe('Ghosts flashlight sequence', () => {
       animator.stage('ghosts', 19);
       expect(ghosts.every(ghost => ghost.visible)).toBe(true);
     } finally { animator.dispose(); }
+  });
+
+  it('renders a beam at each ghost during every flash', () => {
+    const { animator, ghosts } = rig();
+    const beam = new FlashlightBeam();
+    const actor = new Group();
+    const center = new Vector3();
+    const context = resolveEventItemUseContext('ghosts', 'flashlight', 'flashlight')!;
+    const duration = eventItemUseDuration(context);
+    const sample = createEventItemUseSample();
+    void animator.playItemUse('ghosts', 'flashlight', 'flashlight-1');
+    beam.setTarget(animator.itemAimTarget('ghosts'));
+    let previous = 0;
+    try {
+      for (let index = 0; index < ghosts.length; index += 1) {
+        for (const flash of [0.275, 0.405, 0.535]) {
+          const progress = 0.2 + (index + flash) * 0.15;
+          animator.update(progress * duration, (progress - previous) * duration);
+          previous = progress;
+          sampleEventItemUse(context, 'flashlight', progress, sample);
+          beam.updateTarget();
+          beam.apply(actor, sample.primaryEffect, sample.secondaryEffect);
+          expect(beam.beam.visible).toBe(true);
+          expect(beam.light.intensity).toBeGreaterThan(0);
+          expect(beam.copyTargetCenter(center)).toBe(true);
+          expect(center.distanceTo(ghosts[index]!.position)).toBeLessThan(0.00001);
+        }
+      }
+    } finally { beam.dispose(); animator.dispose(); }
+  });
+
+  it('fades each ghost on its float path without moving other ghosts away', () => {
+    const { animator, ghosts } = rig();
+    const control = rig();
+    const duration = supernaturalItemUseDuration('ghosts', 'flashlight')!;
+    const materials = ghosts.map(ghost => (ghost.children[0] as Mesh<BoxGeometry, MeshStandardMaterial>).material);
+    void animator.playItemUse('ghosts', 'flashlight', 'flashlight-1');
+    let previous = 0;
+    try {
+      for (let index = 0; index < ghosts.length; index += 1) {
+        let previousOpacity = 0.56;
+        for (const fade of [0.63, 0.72, 0.85, 0.99]) {
+          const progress = 0.2 + (index + fade) * 0.15;
+          const delta = (progress - previous) * duration;
+          animator.update(progress * duration, delta);
+          control.animator.update(progress * duration, delta);
+          previous = progress;
+          expect(materials[index]!.opacity).toBeLessThan(previousOpacity);
+          previousOpacity = materials[index]!.opacity;
+          expect(ghosts[index]!.position.distanceTo(control.ghosts[index]!.position)).toBeLessThan(0.00001);
+          for (let next = index + 1; next < ghosts.length; next += 1) {
+            expect(materials[next]!.opacity).toBeCloseTo(0.56);
+          }
+        }
+        expect(materials[index]!.opacity).toBe(0);
+      }
+    } finally { animator.dispose(); control.animator.dispose(); }
   });
 });
