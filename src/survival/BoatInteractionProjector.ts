@@ -78,6 +78,7 @@ interface FocusedProjectionEntry {
 }
 
 const EMPTY_FOCUSED_ENTRIES: readonly FocusedProjectionEntry[] = Object.freeze([]);
+const FISHING_POINTER_PADDING = 18;
 
 interface FeaturedProjectionEntry {
   readonly eventId: FeaturedEventId;
@@ -221,7 +222,7 @@ export class BoatInteractionProjector {
     this.fishingAnchor = {
       id: 'fishing-tools',
       hitTest: (x: number, y: number) => !this.disposed && this.pointerRaycast.hits(
-        roots.fishingRoot, x, y, this.viewportWidth, this.viewportHeight,
+        roots.fishingRoot, x, y, this.viewportWidth, this.viewportHeight, FISHING_POINTER_PADDING,
       ),
       itemType: null,
       toolId: 'fishingRod',
@@ -478,6 +479,8 @@ export class BoatInteractionProjector {
       this.roots.fishingVisibilityRoot.visible && this.fishingProjection.visible,
     );
     updateHitArea(this.fishingAnchor, this.fishingProjection, 44, 72);
+    this.fishingAnchor.hitArea!.width += FISHING_POINTER_PADDING * 2;
+    this.fishingAnchor.hitArea!.height += FISHING_POINTER_PADDING * 2;
     this.nextAnchors.push(this.fishingAnchor);
 
     projectCachedBoatObjectBoundsInto(
