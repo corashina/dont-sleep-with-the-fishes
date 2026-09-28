@@ -21,6 +21,7 @@ import type { SurvivalSnapshot } from '../survival/survivalSnapshot';
 import { createElementRequirement } from './dom';
 import type { EventContextChoice } from './SurvivalUiViewModel';
 import { uiArtwork } from './uiArtwork';
+import { CarlitosTooltipPlacement } from './CarlitosTooltipPlacement';
 
 interface ActionDefinition {
   readonly id: DayActionId;
@@ -195,6 +196,13 @@ export class BoatAnchorView {
   };
   private contentRevision = 0;
   private viewportWidth = 0;
+  private viewportHeight = 0;
+  private readonly carlitosTooltipPlacement = new CarlitosTooltipPlacement();
+  private tooltipWidth = 0;
+  private tooltipHeight = 0;
+  private tooltipLeft = NaN;
+  private tooltipTop = NaN;
+  private tooltipRevision = -1;
   private actionReasons: ReadonlyMap<DayActionId, string | null> = new Map();
   private currentSnapshot: SurvivalSnapshot | null = null;
   private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
@@ -1167,6 +1175,50 @@ export class BoatAnchorView {
     if (highlightInvalidated) this.publishAnchorHighlight();
     this.syncCarlitosActions();
     this.syncOverlapState();
+    this.syncTooltipVisibility();
+  }
+
+  private syncTooltipVisibility(): void {
+    const active = this.hoveredAnchorId ?? this.focusedAnchorId;
+    for (const [id, button] of this.anchorButtons) {
+      const anchor = this.anchors.get(id)!;
+      let suppressed = active !== null && id !== active;
+      if (anchor.companionId === 'carlitos') {
+        suppressed ||= !this.carlitosCard.hidden || !this.placeCarlitosTooltip(button, anchor);
+      }
+      if (button.hasAttribute('data-tooltip-suppressed') !== suppressed) {
+        button.toggleAttribute('data-tooltip-suppressed', suppressed);
+      }
+    }
+  }
+
+  private placeCarlitosTooltip(button: HTMLButtonElement, anchor: BoatInteractionAnchor): boolean {
+    const tooltip = this.anchorTooltipNodes.get(button)?.tooltip;
+    if (tooltip === undefined || tooltip.hidden) return false;
+    if (this.tooltipRevision !== this.contentRevision || this.tooltipWidth === 0) {
+      this.tooltipWidth = tooltip.offsetWidth;
+      this.tooltipHeight = tooltip.offsetHeight;
+      this.tooltipRevision = this.contentRevision;
+    }
+    const layout = this.carlitosTooltipPlacement;
+    if (!layout.place(anchor, this.anchors, this.tooltipWidth, this.tooltipHeight, this.viewportWidth, this.viewportHeight)) return false;
+    const hitArea = anchor.hitArea ?? DEFAULT_ANCHOR_HIT_AREA;
+    const left = layout.x - anchor.x + hitArea.width / 2;
+    const top = layout.y - anchor.y + hitArea.height / 2;
+    if (!button.hasAttribute('data-tooltip-placed')) {
+      button.toggleAttribute('data-tooltip-placed', true);
+      this.tooltipLeft = NaN;
+      this.tooltipTop = NaN;
+    }
+    if (this.tooltipLeft !== left) {
+      this.tooltipLeft = left;
+      tooltip.style.left = `${left}px`;
+    }
+    if (this.tooltipTop !== top) {
+      this.tooltipTop = top;
+      tooltip.style.top = `${top}px`;
+    }
+    return true;
   }
 
   private syncAnchorButton(button: HTMLButtonElement, id: string): boolean {
@@ -1355,6 +1407,7 @@ export class BoatAnchorView {
   }
 
   private publishAnchorHighlight(): void {
+    this.syncTooltipVisibility();
     const next = this.focusedAnchorId ?? this.hoveredAnchorId;
     if (next === this.publishedAnchorId) return;
     this.publishedAnchorId = next;
@@ -1532,6 +1585,8 @@ export class BoatAnchorView {
   private refreshViewport(): void {
     const bounds = this.host.getBoundingClientRect();
     this.viewportWidth = bounds.width || this.host.clientWidth || window.innerWidth;
+    this.viewportHeight = bounds.height || this.host.clientHeight || window.innerHeight;
+    this.tooltipRevision = -1;
     for (const [id, layout] of this.anchorLayouts) {
       const button = this.anchorButtons.get(id);
       if (button !== undefined) this.placeAnchorTooltip(button, layout.x, layout.y);

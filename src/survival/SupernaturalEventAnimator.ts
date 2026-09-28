@@ -1,4 +1,18 @@
 import { GHOST_COUNT, ghostFlashlightCycle, ghostFlashlightFade } from './ghostFlashlightChoreography';
+import {
+  GHOST_BAIT_PASS_OFFSETS,
+  GHOST_BAIT_REACTION_DURATION,
+  GHOST_BAIT_RUSH_CUE,
+  GHOST_BAIT_TURN_CUE,
+  ghostBaitDriftRate,
+  ghostBaitRushProgress,
+  ghostBaitTurn,
+  sampleGhostBaitCamera,
+  sampleGhostBaitRush,
+  type GhostBaitCamera,
+  type GhostBaitRush,
+} from './ghostBaitChoreography';
+import type { EventPresentationCue } from './eventPresentationCue';
 import { ItemAimTarget } from './ItemAimTarget';
 import { smoothstep } from './animationMath';
 import {
@@ -80,6 +94,17 @@ type ActiveSupernaturalItem = Extract<ActiveSupernaturalAnimation, { kind: 'item
 type ActiveSupernaturalReaction = Extract<ActiveSupernaturalAnimation, { kind: 'react' }>;
 
 const REACTION_DURATION = 0.84;
+const GHOST_OPACITY = 0.56;
+const GHOST_EMISSIVE = 0.34;
+const FALLBACK_PLAYER_POSITION = [0, 1.5, 0] as const;
+
+function isGhostBait(eventId: string, response: EventPhysicalResponsePresentation | null): boolean {
+  return eventId === 'ghosts' && response?.choiceId === 'baitTin';
+}
+
+function wrapAngle(angle: number): number {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
 
 function itemDuration(eventId: string, choiceId: string): number | null {
   const sceneDuration = supernaturalItemUseDuration(eventId, choiceId);
@@ -236,6 +261,12 @@ export class SupernaturalEventAnimator {
   private readonly ghostAimTo = new Vector3();
   private ghostsRepelled = false;
   private ghostFloatPaths = createGhostFloatPaths(0);
+  private readonly ghostCenterHeights: number[] = [];
+  private readonly ghostBaitRush: GhostBaitRush = { travel: 0, opacity: 0 };
+  private readonly ghostBaitCamera: GhostBaitCamera = { yaw: 0, pitch: 0 };
+  private readonly ghostBaitPlayer = new Vector3();
+  private readonly ghostBaitTarget = new Vector3();
+  private ghostBaitCues = 0;
   private readonly siren: Group;
   private readonly sirenRock: Group;
   private readonly sirenTableau = new Group();
@@ -257,8 +288,9 @@ export class SupernaturalEventAnimator {
     _cameraRig: Group,
     private readonly supplyDisplay: BoatSupplyDisplay,
     eventModels: EventModelLibrary,
-    viewCamera?: Object3D,
+    private readonly viewCamera?: Object3D,
     onlyEventId?: string,
+    private readonly emitCue: (cue: EventPresentationCue) => void = () => undefined,
   ) {
     this.cameraLook = viewCamera === undefined
       ? null
@@ -274,7 +306,7 @@ export class SupernaturalEventAnimator {
       const material = new MeshStandardMaterial({
         color: 0xb4c9c7,
         emissive: 0x526b72,
-        emissiveIntensity: 0.34,
+        emissiveIntensity: GHOST_EMISSIVE,
         roughness: 0.92,
         flatShading: true,
         transparent: true,
@@ -283,8 +315,11 @@ export class SupernaturalEventAnimator {
       });
       this.ghostMaterials.push(material);
       replaceMaterials(ghost, material);
-      this.poseFloatingGhost(ghost, index);
       ghost.scale.multiplyScalar(0.88 + index * 0.045);
+      ghost.updateWorldMatrix(false, true);
+      const bounds = new Box3().setFromObject(ghost);
+      this.ghostCenterHeights.push(bounds.isEmpty() ? 0 : (bounds.min.y + bounds.max.y) / 2 - ghost.position.y);
+      this.poseFloatingGhost(ghost, index);
       ghost.visible = false;
       return ghost;
     }) : [];
@@ -463,6 +498,8 @@ export class SupernaturalEventAnimator {
     if (actor !== undefined) {
       this.supplyDisplay.pinEventActor(actor.instanceId);
     }
+    const ghostBait = isGhostBait(eventId, sceneResponse);
+    if (ghostBait) this.startGhostBait();
     return new Promise((resolve) => {
       this.active = {
         kind: 'react',
@@ -470,7 +507,7 @@ export class SupernaturalEventAnimator {
         outcome,
         response: sceneResponse,
         elapsed: 0,
-        duration: REACTION_DURATION,
+        duration: ghostBait ? GHOST_BAIT_REACTION_DURATION : REACTION_DURATION,
         resolve,
       };
     });
@@ -479,11 +516,12 @@ export class SupernaturalEventAnimator {
   update(_time: number, delta: number, _amplitudeScale = 1): void {
     if (this.disposed) return;
     const frameDelta = Math.max(0, Number.isFinite(delta) ? delta : 0);
-    if (this.stagedEventId === 'ghosts') this.ghostFloatTime += frameDelta;
     const active = this.active;
+    this.advanceGhostFloat(frameDelta);
     if (active === null) {
       if (this.stagedEventId === 'ghosts' && this.ghostLoopVisible) {
-        this.showGhostLoop(0.56);
+        this.showGhostLoop(GHOST_OPACITY);
+        this.updateGhostAim(0);
       }
       return;
     }
@@ -504,10 +542,28 @@ export class SupernaturalEventAnimator {
         this.updateItem(active, progress);
         break;
       case 'react':
-        this.updateReaction(active.eventId, active.outcome, active.response, progress);
+        this.updateActiveReaction(active, progress);
         break;
     }
     if (progress >= 1) this.finishActive();
+  }
+
+  // The ghosts slow to a halt while they notice the bait.
+  private advanceGhostFloat(frameDelta: number): void {
+    if (this.stagedEventId !== 'ghosts') return;
+    const active = this.active;
+    const drift = active?.kind === 'react' && isGhostBait(active.eventId, active.response)
+      ? ghostBaitDriftRate(active.elapsed / active.duration)
+      : 1;
+    this.ghostFloatTime += frameDelta * drift;
+  }
+
+  private updateActiveReaction(active: ActiveSupernaturalReaction, progress: number): void {
+    if (isGhostBait(active.eventId, active.response)) {
+      this.updateGhostBait(active.eventId, active.response, progress, active.elapsed);
+    } else {
+      this.updateReaction(active.eventId, active.outcome, active.response, progress);
+    }
   }
 
   clear(): void {
@@ -544,7 +600,7 @@ export class SupernaturalEventAnimator {
     if (eventId === 'ghosts') {
       this.sirenTableau.visible = false;
       this.showGhostFog();
-      this.showGhostLoop(Math.max(0.42, sample.ghostVisibility * 0.56));
+      this.showGhostLoop(Math.max(0.42, sample.ghostVisibility * GHOST_OPACITY));
       return;
     }
 
@@ -592,7 +648,7 @@ export class SupernaturalEventAnimator {
       const ghost = this.ghosts[index]!;
       const fade = ghostFlashlightFade(progress, index);
       this.poseFloatingGhost(ghost, index);
-      this.ghostMaterials[index]!.opacity = 0.56 * (1 - fade);
+      this.ghostMaterials[index]!.opacity = GHOST_OPACITY * (1 - fade);
       ghost.visible = fade < 1;
     }
   }
@@ -623,21 +679,7 @@ export class SupernaturalEventAnimator {
       this.reactionSample,
     )) return;
     const sample = this.reactionSample;
-    const actor = response?.actors[0];
-    if (
-      actor !== undefined
-      && sampleEventPhysicalResponsePose(
-        eventId,
-        { choiceId: response?.choiceId ?? '', condition: actor.condition },
-        progress,
-        this.physicalResponsePose,
-      )
-    ) {
-      this.supplyDisplay.applyEventItemPose(
-        actor.instanceId,
-        this.physicalResponsePose,
-      );
-    }
+    this.applyPhysicalResponse(eventId, response, progress);
     this.applyCameraPose(
       sample.cameraX,
       sample.cameraY,
@@ -664,6 +706,88 @@ export class SupernaturalEventAnimator {
     this.siren.rotation.z = this.sirenBaseRotation.z - sample.sirenStrike * 0.34;
   }
 
+  private applyPhysicalResponse(
+    eventId: string,
+    response: EventPhysicalResponsePresentation | null,
+    progress: number,
+  ): void {
+    const actor = response?.actors[0];
+    if (
+      actor !== undefined
+      && sampleEventPhysicalResponsePose(
+        eventId,
+        { choiceId: response?.choiceId ?? '', condition: actor.condition },
+        progress,
+        this.physicalResponsePose,
+      )
+    ) {
+      this.supplyDisplay.applyEventItemPose(
+        actor.instanceId,
+        this.physicalResponsePose,
+      );
+    }
+  }
+
+  private startGhostBait(): void {
+    this.ghostBaitCues = 0;
+    const player = this.ghostBaitPlayer;
+    if (this.viewCamera === undefined) {
+      player.fromArray(FALLBACK_PLAYER_POSITION);
+      return;
+    }
+    this.viewCamera.updateWorldMatrix(true, false);
+    this.worldRoot.updateWorldMatrix(true, false);
+    this.viewCamera.getWorldPosition(player);
+    this.worldRoot.worldToLocal(player);
+  }
+
+  // The ghosts halt, turn to the player, stare, then rush through the player one by one.
+  private updateGhostBait(
+    eventId: string,
+    response: EventPhysicalResponsePresentation | null,
+    progress: number,
+    elapsed: number,
+  ): void {
+    this.applyPhysicalResponse(eventId, response, progress);
+    if (this.ghostBaitCues === 0 && progress >= GHOST_BAIT_TURN_CUE) {
+      this.ghostBaitCues = 1;
+      this.emitCue({ eventId: 'ghosts', cue: 'turn' });
+    }
+    if (this.ghostBaitCues === 1 && progress >= GHOST_BAIT_RUSH_CUE) {
+      this.ghostBaitCues = 2;
+      this.emitCue({ eventId: 'ghosts', cue: 'rush' });
+    }
+    const camera = sampleGhostBaitCamera(this.ghostBaitCamera, progress, this.ghosts.length);
+    this.cameraLook?.apply(camera.yaw, camera.pitch, camera.yaw * 0.6);
+    const player = this.ghostBaitPlayer;
+    const target = this.ghostBaitTarget;
+    for (let index = 0; index < this.ghosts.length; index += 1) {
+      const ghost = this.ghosts[index]!;
+      const material = this.ghostMaterials[index]!;
+      const offset = GHOST_BAIT_PASS_OFFSETS[index]!;
+      this.poseFloatingGhost(ghost, index);
+      target.set(
+        player.x + offset[0],
+        player.y + offset[1] - this.ghostCenterHeights[index]!,
+        player.z,
+      );
+      const pathYaw = ghost.rotation.y;
+      const faceYaw = Math.atan2(ghost.position.x - target.x, ghost.position.z - target.z);
+      const turn = ghostBaitTurn(progress, index);
+      ghost.rotation.y = pathYaw + wrapAngle(faceYaw - pathYaw) * turn;
+      const rushing = ghostBaitRushProgress(progress, index) > 0;
+      ghost.rotation.z = rushing ? 0 : Math.sin(elapsed * 23 + index * 1.7) * 0.035 * turn;
+      const rush = sampleGhostBaitRush(this.ghostBaitRush, progress, index);
+      if (rushing) {
+        target.sub(ghost.position);
+        ghost.position.addScaledVector(target, rush.travel);
+      }
+      material.opacity = (GHOST_OPACITY + 0.24 * turn) * rush.opacity;
+      material.emissiveIntensity = GHOST_EMISSIVE + 0.7 * turn;
+      ghost.visible = material.opacity > 0.01;
+    }
+  }
+
   private poseFloatingGhost(
     ghost: Group,
     index: number,
@@ -678,6 +802,7 @@ export class SupernaturalEventAnimator {
       -this.ghostFloatPose.tangent[0],
       -this.ghostFloatPose.tangent[2],
     );
+    ghost.rotation.z = 0;
     ghost.userData.modelForwardAxis = 'negative-z';
     ghost.userData.facingPath = true;
   }
@@ -686,6 +811,7 @@ export class SupernaturalEventAnimator {
     for (let index = 0; index < this.ghosts.length; index += 1) {
       const ghost = this.ghosts[index]!;
       this.ghostMaterials[index]!.opacity = opacity;
+      this.ghostMaterials[index]!.emissiveIntensity = GHOST_EMISSIVE;
       this.poseFloatingGhost(ghost, index);
       ghost.visible = true;
     }
@@ -787,7 +913,7 @@ export class SupernaturalEventAnimator {
     if (active.eventId === 'ghosts') {
       this.ghostLoopVisible = true;
       this.showGhostFog();
-      this.showGhostLoop(0.56);
+      this.showGhostLoop(GHOST_OPACITY);
     } else this.restoreStage();
     active.resolve();
   }
@@ -814,6 +940,8 @@ export class SupernaturalEventAnimator {
     response: EventPhysicalResponsePresentation | null,
   ): void {
     this.hideAll();
+    // The ghosts leave after they pass through the player.
+    if (isGhostBait(eventId, response)) this.ghostsRepelled = true;
     if (eventId === 'ghosts' && !this.ghostsRepelled && response?.choiceId !== 'flareGun') {
       this.ghostLoopVisible = true;
       this.showGhostFog();

@@ -74,6 +74,8 @@ const EVENT_TEXT = {
   underUsReveal: { en: 'A vast shadow circles the boat. A low groan rises from below. Pale eyes fade beneath the water.', pl: 'Ogromny cień krąży wokół łodzi. Z głębin dobiega niski jęk. Blade oczy znikają pod wodą.', 'es-AR': 'Una sombra enorme rodea el bote. Un gemido grave sube desde abajo. Unos ojos pálidos se pierden bajo el agua.' },
   underUsStillChoice: { en: 'Stay still — lose 1 Energy at dawn', pl: 'Nie ruszaj się — strać 1 energię o świcie', 'es-AR': 'Quedate quieto — perdés 1 de energía al amanecer' },
   underUsBaitChoice: { en: 'Throw 1 Bait away from the boat', pl: 'Rzuć 1 przynętę z dala od łodzi', 'es-AR': 'Tirá 1 carnada lejos del bote' },
+  ghostsBaitChoice: { en: 'Throw 1 Bait at the ghosts', pl: 'Rzuć 1 przynętę w duchy', 'es-AR': 'Tirales 1 carnada a los fantasmas' },
+  ghostsBaitResult: { en: 'The ghosts stop and turn to you as one. They rush through the boat, and through you.', pl: 'Duchy zatrzymują się i razem odwracają się do ciebie. Przelatują przez łódź i przez ciebie.', 'es-AR': 'Los fantasmas se frenan y se dan vuelta hacia vos a la vez. Atraviesan el bote, y te atraviesan a vos.' },
   underUsStillResult: { en: 'You stay still until it leaves. Keeping watch costs you one energy at dawn.', pl: 'Nie ruszasz się, aż odpływa. Czuwanie kosztuje cię jedną energię o świcie.', 'es-AR': 'Te quedás quieto hasta que se va. La vigilia te cuesta una energía al amanecer.' },
   underUsBaitResult: { en: 'The shadow follows the bait. The boat settles, and you can sleep.', pl: 'Cień podąża za przynętą. Łódź opada i możesz zasnąć.', 'es-AR': 'La sombra sigue la carnada. El bote baja y podés dormir.' },
   bloodOceanTitle: { en: 'Ocean of Blood', pl: 'Ocean krwi', 'es-AR': 'Océano de sangre' },
