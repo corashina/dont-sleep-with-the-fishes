@@ -469,6 +469,7 @@ export const createSupernaturalAdapter: EventPresentationAdapterFactory = (event
     dependencies.dedicatedEnvironment.eventModels,
     dependencies.focusedDependencies.camera,
     eventId,
+    dependencies.dedicatedEnvironment.emitCue,
   );
   try {
     return createAdapter(eventId, [

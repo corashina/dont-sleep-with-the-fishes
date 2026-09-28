@@ -29,7 +29,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   plane: { models: [], sounds: ['planeFlyby'] },
   'flying-saucer': { models: [], sounds: ['ufoFlyby'] },
   'something-under-us': { models: [], sounds: ['underUsPresence'] },
-  ghosts: { models: ['ghost'], sounds: ['ghostSpiritBreath'] },
+  ghosts: { models: ['ghost'], sounds: ['ghostSpiritBreath', 'ghostRush'] },
   'eerie-melody': {
     models: ['siren'],
     sounds: ['eerieMelody'],

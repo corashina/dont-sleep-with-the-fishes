@@ -496,6 +496,8 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(1, 'eventText178',
         effects([subtract('pressure', 1)], [consume('flareGun')]))),
     choice('flashlight', 'eventText071', 'flashlight', outcome(60, 'eventText179'), outcome(40, 'eventText180', atNextDawn(1))),
+    choice('baitTin', 'ghostsBaitChoice', 'baitTin',
+      outcome(1, 'ghostsBaitResult', effects([subtract('bait', 1), add('pressure', 1)]))),
     choice('sleep', 'eventText063', undefined, outcome(60, 'eventText152', atNextDawn(2)), outcome(30, 'eventText180', atNextDawn(1))),
   ], undefined, { minimumPressure: 1 }),
   event('eerie-melody', 'night', 'eventText045', 'dangerous', 'darkness', 1, 13, 3, [
