@@ -901,6 +901,9 @@ export class SurvivalPhase implements GamePhase {
       else if (eventId === 'midnight-tour') this.audio.midnightTourCue(cue);
       else if (eventId === 'chest-attack') this.audio.chestAttackCue(cue);
       else if (eventId === 'swarm-of-sharks') this.audio.sharkBite();
+      else if (eventId === 'kraken') this.audio.krakenCue(cue);
+      else if (eventId === 'ghost-ship') this.audio.ghostShipCue(cue);
+      else if (eventId === 'ghosts') this.audio.ghostsCue(cue);
       else this.audio.checkBackCue(cue);
     });
     this.world.setThunderListener?.(() => this.audio.thunder());
