@@ -101,9 +101,11 @@ export function settingsMarkup(options: SettingsMarkupOptions): string {
     <div class="settings-menu__paper">
       <header><h2 class="ui-role-display" id="settings-title" data-settings-copy="settings">${settingsText('settings')}</h2></header>
       <div class="settings-menu__sections">
-        ${buildGeneralCategory(options.save)}
-        <section class="settings-menu__category"><h3 data-settings-copy="sound">${settingsText('sound')}</h3>${buildAudioControl(options.audio)}</section>
-        <section class="settings-menu__category"><h3 data-settings-copy="graphics">${settingsText('graphics')}</h3>
+        <div class="settings-menu__column">
+          ${buildGeneralCategory(options.save)}
+          <section class="settings-menu__category"><h3 data-settings-copy="sound">${settingsText('sound')}</h3>${buildAudioControl(options.audio)}</section>
+        </div>
+        <section class="settings-menu__column settings-menu__category"><h3 data-settings-copy="graphics">${settingsText('graphics')}</h3>
           <div class="settings-menu__quality" data-settings-quality></div>
           ${buildCameraControl(options.camera)}
           ${buildPerformanceStatsControl(options.performance)}
