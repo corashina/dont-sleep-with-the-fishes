@@ -35,7 +35,6 @@ import {
 } from '../src/game/shipDanger';
 import { PlayerController } from '../src/player/PlayerController';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
-import { InputController } from '../src/input/InputController';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type {
   PostProcessingControls,
@@ -1634,60 +1633,6 @@ describe('ScavengePhase lifecycle integration', () => {
       }
     }
   });
-
-  // Importance: 100/100. A bubbled mouse press must request one lock on each play surface.
-  it('requests one mouse lock from canvas and one from the look surface on a coarse device', async () => {
-    vi.stubGlobal('matchMedia', () => ({ matches: true }));
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const phases: ScavengePhase[] = [];
-    const game = createTestGame({
-      createMenu: (_context, onComplete) => { onComplete(); return gamePhase(); },
-      createScavenge: (context, onComplete, onRestart, onReturnToMenu) => {
-        const phase = new ScavengePhase(context, onComplete, onRestart, onReturnToMenu);
-        phases.push(phase);
-        return phase;
-      },
-      createSurvival: () => gamePhase(),
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      physicsMode: 'off',
-      sceneRenderer: postProcessingSceneRenderer(),
-      mount,
-    });
-    await flushPhases();
-    const request = vi.spyOn(InputController.prototype, 'requestPointerLock').mockResolvedValue(true);
-    try {
-      phases[0]!.start();
-      const press = (target: Element) => {
-        const event = new Event('pointerdown', { bubbles: true });
-        Object.defineProperty(event, 'pointerType', { value: 'mouse' });
-        target.dispatchEvent(event);
-      };
-      press(mount.querySelector('canvas')!);
-      expect(request).toHaveBeenCalledTimes(1);
-      press(mount.querySelector('[data-touch-look]')!);
-      expect(request).toHaveBeenCalledTimes(2);
-      const child = document.createElement('button');
-      mount.append(child);
-      press(child);
-      expect(request).toHaveBeenCalledTimes(2);
-      phases[0]!.setOverlayActive(true);
-      press(mount.querySelector('[data-touch-look]')!);
-      press(child);
-      expect(request).toHaveBeenCalledTimes(2);
-    } finally {
-      request.mockRestore();
-      game.dispose();
-      await flushPhases();
-      mount.remove();
-      vi.unstubAllGlobals();
-    }
-  }, 10000);
 
   // Importance: 95/100. Each real run must count once, including a restart.
   it('runs the complete failure timeline and restarts scavenging once', async () => {

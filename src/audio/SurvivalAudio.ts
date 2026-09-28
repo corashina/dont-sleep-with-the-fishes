@@ -578,7 +578,7 @@ export class SurvivalAudio {
 
   ghostsCue(cue: GhostsAudioCue): void {
     if (this.disposed) return;
-    this.scope.play(cue === 'turn' ? 'ghostSpiritBreath' : 'ghostRush');
+    this.scope.play(cue === 'turn' ? 'ghostSpiritBreath' : 'ghostScream');
   }
 
   sharkBite(): void {

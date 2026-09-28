@@ -175,7 +175,8 @@ const PRESENTATION = {
   },
   ghost: {
     targetLongestDimension: 1.65,
-    rotation: [0, -Math.PI / 2, 0],
+    // The source eyes face +Z with a slight left turn. Normalize their face to -Z.
+    rotation: [0, Math.PI + 0.2, 0],
     offset: [0, 0.75, 0],
     maxTriangles: 1_100,
   },

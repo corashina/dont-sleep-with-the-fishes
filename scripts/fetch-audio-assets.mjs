@@ -78,6 +78,7 @@ const freesoundSources = [
   ['planeFlyby', 'straget', '403316'],
   ['ufoFlyby', 'LilMati', '518740'],
   ['ghostSpiritBreath', 'timgormly', '152721'],
+  ['ghostScream', 'onderwish', '469141'],
   ['tornadoWind', 'Julien_Matthey', '557188'],
   ['leak', 'colinpoh', '146346'],
   ['tentacleMovement', 'iampagan', '177017'],
@@ -117,15 +118,15 @@ async function fetchBuffer(url) {
   throw new Error(`Download attempts exhausted: ${url}`);
 }
 
-async function prepareUfoAudio(audio, destination) {
-  const temporaryRoot = await mkdtemp(join(tmpdir(), 'fishes-ufo-'));
+async function prepareProcessedAudio(audio, destination, script) {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'fishes-audio-'));
   const source = join(temporaryRoot, 'source.mp3');
   try {
     await writeFile(source, audio);
     const prepared = spawnSync(process.env.PYTHON ?? 'python', [
-      join(scriptRoot, 'prepare-ufo-audio.py'), source, destination,
+      join(scriptRoot, script), source, destination,
     ], { stdio: 'inherit' });
-    if (prepared.status !== 0) throw new Error('UFO loop preparation failed; install Python, soundfile, and numpy.');
+    if (prepared.status !== 0) throw new Error(`${script} failed; install Python, soundfile, and numpy.`);
   } finally {
     await rm(source, { force: true });
     await rmdir(temporaryRoot);
@@ -135,7 +136,11 @@ async function prepareUfoAudio(audio, destination) {
 
 async function writeFreesoundAudio(id, audio, destination) {
   if (id === 'ufoFlyby') {
-    await prepareUfoAudio(audio, destination);
+    await prepareProcessedAudio(audio, destination, 'prepare-ufo-audio.py');
+    return;
+  }
+  if (id === 'ghostScream') {
+    await prepareProcessedAudio(audio, destination, 'prepare-ghost-scream-audio.py');
     return;
   }
   // Start the dive clip at its splash instead of the quiet recording lead-in.
@@ -153,7 +158,7 @@ async function writeFreesoundAudio(id, audio, destination) {
 }
 
 async function fetchFreesound([id, user, number, license = 'cc0']) {
-  const destination = join(assetRoot, `${id}.${id === 'ufoFlyby' ? 'wav' : 'mp3'}`);
+  const destination = join(assetRoot, `${id}.${['ufoFlyby', 'ghostScream'].includes(id) ? 'wav' : 'mp3'}`);
   if (await hasFile(destination)) return;
   const pageUrl = `https://freesound.org/people/${user}/sounds/${number}/`;
   let page = '';

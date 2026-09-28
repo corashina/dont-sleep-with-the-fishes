@@ -102,6 +102,7 @@ export class MainMenuPhase implements GamePhase {
   private pointerAction: MenuSignAction | null = null;
   private startKeyboardFocused = false;
   private guideKeyboardFocused = false;
+  private settingsKeyboardFocused = false;
   private readonly handlePointerLockChange = (): void => {
     if (
       this.disposed
@@ -145,6 +146,10 @@ export class MainMenuPhase implements GamePhase {
     };
     this.ui.onGuideFocusChange = (focused) => {
       this.guideKeyboardFocused = focused;
+      this.syncSignHighlights();
+    };
+    this.ui.onSettingsFocusChange = (focused) => {
+      this.settingsKeyboardFocused = focused;
       this.syncSignHighlights();
     };
     this.ui.onOverlayChange = () => this.clearSignInteraction();
@@ -239,14 +244,17 @@ export class MainMenuPhase implements GamePhase {
         this.ui.onStart = NOOP;
         this.ui.onStartFocusChange = NOOP;
         this.ui.onGuideFocusChange = NOOP;
+        this.ui.onSettingsFocusChange = NOOP;
         this.ui.onOverlayChange = NOOP;
       },
       () => {
         this.pointerAction = null;
         this.startKeyboardFocused = false;
         this.guideKeyboardFocused = false;
+        this.settingsKeyboardFocused = false;
         this.world.setMenuSignHighlighted('start', false);
         this.world.setMenuSignHighlighted('guide', false);
+        this.world.setMenuSignHighlighted('settings', false);
       },
       () => this.scene.remove(this.context.camera),
       () => this.animator.dispose(),
@@ -326,7 +334,8 @@ export class MainMenuPhase implements GamePhase {
     if (!action) return;
     event.preventDefault();
     if (action === 'start') this.ui.onStart();
-    else this.ui.openGuide();
+    else if (action === 'guide') this.ui.openGuide();
+    else this.ui.openSettings();
   };
 
   private menuSignAction(event: MouseEvent): MenuSignAction | null {
@@ -342,20 +351,24 @@ export class MainMenuPhase implements GamePhase {
     if (this.disposed) return;
     const keyboardAction = this.startKeyboardFocused
       ? 'start'
-      : this.guideKeyboardFocused ? 'guide' : null;
-    const activeAction = this.transitioning
+      : this.guideKeyboardFocused ? 'guide'
+        : this.settingsKeyboardFocused ? 'settings' : null;
+    const activeAction = this.transitioning || this.ui.isOverlayOpen
       ? null
       : this.pointerAction ?? keyboardAction;
     this.world.setMenuSignHighlighted('start', activeAction === 'start');
     this.world.setMenuSignHighlighted('guide', activeAction === 'guide');
+    this.world.setMenuSignHighlighted('settings', activeAction === 'settings');
   }
 
   private clearSignInteraction(): void {
     this.pointerAction = null;
     this.startKeyboardFocused = false;
     this.guideKeyboardFocused = false;
+    this.settingsKeyboardFocused = false;
     this.context.renderer.domElement.style.cursor = '';
     this.world.setMenuSignHighlighted('start', false);
     this.world.setMenuSignHighlighted('guide', false);
+    this.world.setMenuSignHighlighted('settings', false);
   }
 }

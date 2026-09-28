@@ -73,7 +73,7 @@ describe('Settings menu', () => {
     const startMenu = new MenuUI(mount);
     cleanup.push(() => startMenu.dispose());
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    const settings = mount.querySelector<HTMLButtonElement>('[data-open-settings]')!;
+    const settings = mount.querySelector<HTMLButtonElement>('[data-pause] [data-open-settings]')!;
     settings.click();
     expect(menu.element.hidden).toBe(false);
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));

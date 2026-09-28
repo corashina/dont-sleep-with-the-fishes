@@ -17,6 +17,7 @@ export class MenuUI {
   onStart: () => void = () => undefined;
   onStartFocusChange: (focused: boolean) => void = () => undefined;
   onGuideFocusChange: (focused: boolean) => void = () => undefined;
+  onSettingsFocusChange: (focused: boolean) => void = () => undefined;
   onOverlayChange: () => void = () => undefined;
   private readonly pause: MenuPauseView;
   private pauseOrigin: HTMLElement | null = null;
@@ -25,6 +26,7 @@ export class MenuUI {
   private readonly guide: HTMLElement;
   private readonly startButton: HTMLButtonElement;
   private readonly guideButton: HTMLButtonElement;
+  private readonly settingsButton: HTMLButtonElement;
   private readonly guideCloseButton: HTMLButtonElement;
   private readonly guidePreviousButton: HTMLButtonElement;
   private readonly guideNextButton: HTMLButtonElement;
@@ -42,10 +44,11 @@ export class MenuUI {
     this.root = document.createElement('div');
     this.root.className = 'menu-ui';
     this.root.innerHTML = `
-      <section class="screen is-visible underwater-menu-screen" data-menu>
-        <button type="button" class="menu-action-accessible" data-menu-start>START</button>
+      <section class="screen is-visible underwater-menu-screen" data-menu aria-hidden="false">
         <button type="button" class="menu-action-accessible" data-menu-guide-open aria-haspopup="dialog"
           aria-controls="menu-how-to-play-dialog">HOW TO PLAY</button>
+        <button type="button" class="menu-action-accessible" data-menu-start>START</button>
+        <button type="button" class="menu-action-accessible" data-open-settings aria-haspopup="dialog">SETTINGS</button>
         <div class="underwater-menu-screen__content">
           <h1 class="menu-title-accessible">DON'T SLEEP WITH THE FISHES</h1>
           <p class="input-error illustrated-warning ui-role-narrative"
@@ -83,6 +86,7 @@ export class MenuUI {
     this.guide = requireElement(this.root, '[data-menu-guide]');
     this.startButton = requireElement(this.root, '[data-menu-start]');
     this.guideButton = requireElement(this.root, '[data-menu-guide-open]');
+    this.settingsButton = requireElement(this.menu, '[data-open-settings]');
     this.guideCloseButton = requireElement(this.root, '[data-menu-guide-close]');
     this.guidePreviousButton = requireElement(this.root, '[data-menu-guide-previous]');
     this.guideNextButton = requireElement(this.root, '[data-menu-guide-next]');
@@ -98,6 +102,9 @@ export class MenuUI {
     this.guideButton.addEventListener('click', this.handleGuideOpen);
     this.guideButton.addEventListener('focus', this.handleGuideFocus);
     this.guideButton.addEventListener('blur', this.handleGuideBlur);
+    this.settingsButton.addEventListener('click', this.handleSettingsOpen);
+    this.settingsButton.addEventListener('focus', this.handleSettingsFocus);
+    this.settingsButton.addEventListener('blur', this.handleSettingsBlur);
     this.guide.addEventListener('click', this.handleGuideBackdrop);
     this.guideCloseButton.addEventListener('click', this.handleGuideClose);
     this.guidePreviousButton.addEventListener('click', this.handleGuidePrevious);
@@ -111,6 +118,7 @@ export class MenuUI {
     this.transitioning = active;
     this.startButton.disabled = active;
     this.guideButton.disabled = active;
+    this.settingsButton.disabled = active;
     this.root.classList.toggle('is-transitioning', active);
   }
 
@@ -132,11 +140,15 @@ export class MenuUI {
   }
 
   openGuide(): void {
-    if (!this.transitioning && !this.pause.isOpen) this.setGuideOpen(true);
+    if (!this.transitioning && !this.isOverlayOpen) this.setGuideOpen(true);
+  }
+
+  openSettings(): void {
+    if (!this.transitioning && !this.isOverlayOpen) this.settingsButton.click();
   }
 
   get isOverlayOpen(): boolean {
-    return this.guideOpen || this.pause.isOpen;
+    return this.guideOpen || this.pause.isOpen || this.menu.classList.contains('settings-covered');
   }
 
   dispose(): void {
@@ -149,6 +161,9 @@ export class MenuUI {
     this.guideButton.removeEventListener('click', this.handleGuideOpen);
     this.guideButton.removeEventListener('focus', this.handleGuideFocus);
     this.guideButton.removeEventListener('blur', this.handleGuideBlur);
+    this.settingsButton.removeEventListener('click', this.handleSettingsOpen);
+    this.settingsButton.removeEventListener('focus', this.handleSettingsFocus);
+    this.settingsButton.removeEventListener('blur', this.handleSettingsBlur);
     this.guide.removeEventListener('click', this.handleGuideBackdrop);
     this.guideCloseButton.removeEventListener('click', this.handleGuideClose);
     this.guidePreviousButton.removeEventListener('click', this.handleGuidePrevious);
@@ -158,6 +173,7 @@ export class MenuUI {
     this.onStart = () => undefined;
     this.onStartFocusChange = () => undefined;
     this.onGuideFocusChange = () => undefined;
+    this.onSettingsFocusChange = () => undefined;
     this.onOverlayChange = () => undefined;
     this.root.remove();
   }
@@ -179,6 +195,18 @@ export class MenuUI {
   private readonly handleGuideFocus = (): void => this.onGuideFocusChange(true);
 
   private readonly handleGuideBlur = (): void => this.onGuideFocusChange(false);
+
+  private readonly handleSettingsOpen = (event: MouseEvent): void => {
+    if (this.transitioning || this.isOverlayOpen) {
+      event.stopPropagation();
+      return;
+    }
+    this.onOverlayChange();
+  };
+
+  private readonly handleSettingsFocus = (): void => this.onSettingsFocusChange(true);
+
+  private readonly handleSettingsBlur = (): void => this.onSettingsFocusChange(false);
 
   private readonly handleGuideBackdrop = (event: MouseEvent): void => {
     if (event.target === this.guide) this.setGuideOpen(false);
@@ -277,6 +305,7 @@ export class MenuUI {
     this.pause.refreshLanguage();
     this.startButton.textContent = menuText('start');
     this.guideButton.textContent = menuText('guide');
+    this.settingsButton.textContent = menuText('settings');
     this.guideCloseButton.setAttribute('aria-label', menuText('close'));
     this.guidePreviousButton.setAttribute('aria-label', menuText('previous'));
     this.guideNextButton.setAttribute('aria-label', menuText('next'));

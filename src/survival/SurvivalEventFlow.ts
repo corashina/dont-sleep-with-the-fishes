@@ -69,6 +69,7 @@ export type EventWorldPort = Pick<
   | 'setEventEligibleItems'
   | 'setEventSelectedItem'
   | 'syncInventory'
+  | 'reseatCarlitosAtDawn'
   | 'projectInteractionAnchors'
   | 'retrieveDriftingItem'
   | 'delegateDriftingItem'
@@ -2186,12 +2187,14 @@ export class SurvivalEventFlow {
   ): Promise<SurvivalSnapshot> {
     if (!this.isCurrent(generation, operation)) return this.dependencies.session.snapshot();
     const dawn = this.dependencies.session.beginDawn?.();
-    if (dawn?.accepted) {
+    const advanced = dawn?.accepted === true;
+    if (advanced) {
       this.dependencies.audio.dawn();
       await (this.dependencies.world.play?.(dawn.cue) ?? Promise.resolve());
       if (!this.isCurrent(generation, operation)) return this.dependencies.session.snapshot();
     }
     const snapshot = this.dependencies.renderSnapshot();
+    if (advanced && !isTerminal(snapshot.state)) this.dependencies.world.reseatCarlitosAtDawn?.(snapshot);
     this.dependencies.onDawnSnapshot?.(snapshot, generation);
     return snapshot;
   }

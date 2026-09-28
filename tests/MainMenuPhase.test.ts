@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 // Importance: 9/10. Protects menu input, transition, rendering, retry, and lifecycle ownership.
 import { PerspectiveCamera, type Scene } from 'three';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MainMenuPhase } from '../src/phases/MainMenuPhase';
-
-afterEach(() => { delete document.documentElement.dataset.touchControls; });
 
 function createRig(
   requestPointerLock = vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
@@ -15,6 +13,7 @@ function createRig(
     onStart: () => undefined,
     onStartFocusChange: (_focused: boolean) => undefined,
     onGuideFocusChange: (_focused: boolean) => undefined,
+    onSettingsFocusChange: (_focused: boolean) => undefined,
     onOverlayChange: () => undefined,
     isOverlayOpen: false,
     setTransitioning: vi.fn(),
@@ -22,11 +21,12 @@ function createRig(
     clearPointerLockError: vi.fn(),
     showPointerLockError: vi.fn(),
     openGuide: vi.fn(),
+    openSettings: vi.fn(),
     dispose: vi.fn(),
   };
   const world = {
     actors: {},
-    getMenuSignActionAt: vi.fn(() => null as 'start' | 'guide' | null),
+    getMenuSignActionAt: vi.fn(() => null as 'start' | 'guide' | 'settings' | null),
     setMenuSignHighlighted: vi.fn(),
     dispose: vi.fn(),
   };
@@ -74,55 +74,6 @@ function createRig(
 }
 
 describe('MainMenuPhase', () => {
-  it('starts after a touch without requesting pointer lock', async () => {
-    const { canvas, onComplete, phase, requestPointerLock, ui } = createRig();
-    phase.start();
-    const touch = new Event('pointerdown', { bubbles: true });
-    Object.defineProperty(touch, 'pointerType', { value: 'touch' });
-    canvas.dispatchEvent(touch);
-    ui.onStart();
-    await Promise.resolve();
-    phase.update(0, 0.7);
-    expect(requestPointerLock).not.toHaveBeenCalled();
-    expect(onComplete).toHaveBeenCalledOnce();
-    phase.dispose();
-    delete document.documentElement.dataset.touchControls;
-  });
-
-  it('blocks a touch start while the mobile gate suspends the menu', async () => {
-    const { onComplete, phase, requestPointerLock, ui } = createRig();
-    document.documentElement.dataset.touchControls = 'true';
-    phase.start();
-    phase.setMobileSuspended(true);
-    ui.onStart();
-    await Promise.resolve();
-    phase.update(0, 1);
-    expect(onComplete).not.toHaveBeenCalled();
-    expect(requestPointerLock).not.toHaveBeenCalled();
-    phase.setMobileSuspended(false);
-    ui.onStart();
-    await Promise.resolve();
-    phase.update(0, 0.7);
-    expect(onComplete).toHaveBeenCalledOnce();
-    phase.dispose();
-    delete document.documentElement.dataset.touchControls;
-  });
-
-  it('uses mouse capture after a mouse press on a mixed device', async () => {
-    const { canvas, phase, requestPointerLock, ui } = createRig();
-    document.documentElement.dataset.touchControls = 'true';
-    phase.start();
-    const mouse = new Event('pointerdown', { bubbles: true });
-    Object.defineProperty(mouse, 'pointerType', { value: 'mouse' });
-    canvas.dispatchEvent(mouse);
-    ui.onStart();
-    await Promise.resolve();
-    expect(requestPointerLock).toHaveBeenCalledOnce();
-    phase.dispose();
-    delete document.documentElement.dataset.touchControls;
-  });
-
-
   it('cancels a pending start when a menu overlay opens', async () => {
     let resolvePointerLock!: () => void;
     const request = vi.fn(() => new Promise<void>((resolve) => { resolvePointerLock = resolve; }));

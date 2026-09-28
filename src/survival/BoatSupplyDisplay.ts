@@ -151,6 +151,7 @@ interface EventItemPoseBinding {
 
 interface BorrowedSupplyBinding {
   readonly groupId: BoatSupplyGroupId;
+  readonly sourceCopy: Object3D;
   readonly motionIndex: number;
   readonly root: Group;
   readonly copyPosition: Vector3;
@@ -218,7 +219,6 @@ export class BoatSupplyDisplay {
   /** Presentation actor for food units, including food without an inventory can. */
   readonly foodSupplyActorId = FOOD_SUPPLY_ACTOR_ID;
   readonly baitSupplyActorId = BAIT_SUPPLY_ACTOR_ID;
-  private borrowedFoodCanId: ItemInstanceId | null = null;
   private readonly recordsById = new Map<BoatSupplyGroupId, MutableRecord>();
   private readonly eventMotionRecords: MutableRecord[] = [];
   private readonly copiesById = new Map<BoatSupplyGroupId, CopyBinding[]>();
@@ -546,22 +546,22 @@ export class BoatSupplyDisplay {
   }
 
   borrowFoodCan(): BorrowedSupplyActor | null {
-    const actor = this.borrowEventActor(this.foodSupplyActorId);
-    if (actor !== null) {
-      this.borrowedFoodCanId = actor.instanceId;
-      this.applyBorrowedGroupVisibility('cannedFood');
-    }
-    return actor;
+    return this.borrowEventActor(this.foodSupplyActorId);
   }
 
   private applyBorrowedGroupVisibility(groupId: BoatSupplyGroupId): void {
     const record = this.recordsById.get(groupId)!;
     const root = record.root;
-    const keepOtherCans = groupId === 'cannedFood' && this.borrowedFoodCanId !== null;
-    root.visible = keepOtherCans;
-    if (keepOtherCans) {
-      const stolenCan = root.children[record.visibleCopies - 1];
-      if (stolenCan !== undefined) stolenCan.visible = false;
+    root.visible = false;
+    if (!AGGREGATE_ITEM_IDS.has(groupId)) return;
+    for (const binding of this.borrowedBindings.values()) {
+      if (binding.groupId === groupId) binding.sourceCopy.visible = false;
+    }
+    for (const copy of root.children) {
+      if (copy.visible) {
+        root.visible = true;
+        break;
+      }
     }
   }
 
@@ -916,7 +916,7 @@ export class BoatSupplyDisplay {
       this.restoreSelectedGroup(groupId, previousSelectedItemId);
       if (this.hasBorrowedGroup(groupId)) {
         const restoredRecord = this.recordsById.get(groupId);
-        if (restoredRecord !== undefined) restoredRecord.root.visible = false;
+        if (restoredRecord !== undefined) this.applyBorrowedGroupVisibility(groupId);
       }
       return null;
     }
@@ -942,9 +942,12 @@ export class BoatSupplyDisplay {
     );
 
     this.restoreSelectedGroup(groupId, previousSelectedItemId);
-    record.root.visible = false;
     const binding: BorrowedSupplyBinding = {
       groupId,
+      sourceCopy: record.root.children[
+        instanceId === this.foodSupplyActorId || instanceId === this.baitSupplyActorId
+          ? record.visibleCopies - 1 : 0
+      ]!,
       motionIndex: BOAT_SUPPLY_GROUP_IDS.indexOf(groupId),
       root,
       ...copyTransform,
@@ -956,6 +959,7 @@ export class BoatSupplyDisplay {
       (this.borrowedCountByGroup.get(groupId) ?? 0) + 1,
     );
     this.releaseBorrowedOnSync.delete(instanceId);
+    this.applyBorrowedGroupVisibility(groupId);
     this.applyBorrowedEventMotion(binding);
     return binding;
   }
@@ -1053,7 +1057,6 @@ export class BoatSupplyDisplay {
     const binding = this.borrowedBindings.get(instanceId);
     if (binding === undefined) return;
     const groupId = binding.groupId;
-    if (this.borrowedFoodCanId === instanceId) this.borrowedFoodCanId = null;
     this.borrowedBindings.delete(instanceId);
     this.borrowedActors.delete(instanceId);
     this.releaseBorrowedOnSync.delete(instanceId);

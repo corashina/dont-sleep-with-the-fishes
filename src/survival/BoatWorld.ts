@@ -138,11 +138,7 @@ import type {
 } from './survivalTypes';
 import type { SurvivalSnapshot } from './survivalSnapshot';
 import type { SurvivalEventId } from './eventCatalog';
-import {
-  eventSideFromSeed,
-  oppositeEventSide,
-  type EventSide,
-} from './eventVariant';
+import { eventSideFromSeed } from './eventVariant';
 import {
   EMPTY_SURVIVAL_EVENT_MODELS,
   type SurvivalEventModels,
@@ -384,8 +380,7 @@ export class BoatWorld {
   private carlitosCardOpen = false;
   private carlitosCareActive = false;
   private carlitosCareOperation = 0;
-  private ambientCarlitosSide: EventSide = 1;
-  private eventCarlitosSide: EventSide | null = null;
+  private carlitosSeatInitialized = false;
   private readonly chestDisplay: ChestDisplay;
   private readonly itemEffects: EventItemEffects;
   private readonly itemUseAdapter: EventItemUseAdapter;
@@ -1036,12 +1031,25 @@ export class BoatWorld {
     this.supplyDisplay.sync(snapshot);
     this.heartDisplay.sync(snapshot);
     this.radioSignalAvailable = snapshot.radioSignalAvailable;
-    this.setCarlitosAmbientSide(eventSideFromSeed(snapshot.seed));
     this.carlitos.sync(snapshot.carlitos);
     this.chestState = snapshot.chest.state;
     this.chestDisplay.sync(snapshot.chest);
-    this.carlitosPlacement.setPreference(this.eventCarlitosSide ?? this.ambientCarlitosSide, snapshot.seed);
+    if (!this.carlitosSeatInitialized) this.selectCarlitosSeat(snapshot);
     this.updateCarlitosSeat();
+  }
+
+  /** The dawn flow calls this after fade-out completes and before fade-in starts. */
+  reseatCarlitosAtDawn(snapshot: SurvivalSnapshot): void {
+    if (this.disposed) return;
+    this.syncInventory(snapshot);
+    this.selectCarlitosSeat(snapshot);
+  }
+
+  private selectCarlitosSeat(snapshot: SurvivalSnapshot): void {
+    if (!this.carlitos.isAboard) return;
+    this.carlitosSeatInitialized = true;
+    const seed = (snapshot.seed + snapshot.day - 1) >>> 0;
+    this.carlitos.root.visible = this.carlitosPlacement.selectSeat(eventSideFromSeed(seed), seed);
   }
 
   setCarlitosCardOpen(open: boolean): void {
@@ -1301,7 +1309,7 @@ export class BoatWorld {
     const route = eventPresentationRoute(eventId);
     if (route === null) throw new Error(`Missing event presentation route: ${eventId}`);
     this.ensureEventPresenter(eventId as SurvivalEventId);
-    this.setEventScenery(eventId, resolvedVariantSeed ?? 0);
+    this.setEventScenery(eventId);
     this.activeFeaturedEventId = route === 'featured'
       ? eventId as FeaturedEventId
       : null;
@@ -1500,7 +1508,6 @@ export class BoatWorld {
     this.weatherEffects.setMistOffsetZ(0);
     this.cameraController.cancelFocusedEventView();
     this.weatherEventOperation += 1;
-    this.setCarlitosEventSide(null);
     this.itemUseController.clear(this.phase);
     this.eventPresentationHost.clear();
     this.resetDedicatedEffects();
@@ -2038,45 +2045,8 @@ export class BoatWorld {
     sequence?.resolve();
   }
 
-  private setEventScenery(eventId: string, variantSeed: number): void {
+  private setEventScenery(eventId: string): void {
     this.weatherEffects.setMistOffsetZ(eventId === 'eerie-melody' ? SIREN_SCENE_OFFSET_Z : 0);
-    this.setCarlitosEventSide(this.carlitosSeatSideForEvent(eventId, variantSeed));
-  }
-
-  private carlitosSeatSideForEvent(
-    eventId: string,
-    variantSeed: number,
-  ): EventSide | null {
-    switch (eventId) {
-      case 'night-trader':
-      case 'monster-in-the-fog':
-      case 'midnight-tour':
-        return oppositeEventSide(eventSideFromSeed(variantSeed));
-      case 'drifting-supplies':
-      case 'drifting-chest':
-        return oppositeEventSide(eventSideFromSeed(variantSeed));
-      case 'eerie-melody':
-      case 'plane':
-        return 1;
-      case 'other-people':
-      case 'ghost-ship':
-        return oppositeEventSide(eventSideFromSeed(variantSeed));
-      case 'school-of-fish':
-      case 'tornado':
-        return -1;
-      default:
-        return null;
-    }
-  }
-
-  private setCarlitosAmbientSide(side: EventSide): void {
-    this.ambientCarlitosSide = side;
-    if (this.eventCarlitosSide === null) this.carlitosPlacement.setPreference(side);
-  }
-
-  private setCarlitosEventSide(side: EventSide | null): void {
-    this.eventCarlitosSide = side;
-    this.carlitosPlacement.setPreference(side ?? this.ambientCarlitosSide);
   }
 
   private updateCarlitosSeat(delta = 0): void {

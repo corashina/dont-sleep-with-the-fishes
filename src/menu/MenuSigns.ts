@@ -16,10 +16,12 @@ export async function loadMenuSignFont(): Promise<void> {
   await document.fonts.load('400 150px "Bowlby One SC"');
 }
 
-export const MENU_GUIDE_SIGN_POSITION = [-2.55, -0.94, 3.75] as const;
+export const MENU_GUIDE_SIGN_POSITION = [-2.55, -0.94, 4.65] as const;
 export const MENU_GUIDE_SIGN_ROTATION = [0.02, 0.24, -0.06] as const;
-export const MENU_START_SIGN_POSITION = [2.55, -0.86, 3.72] as const;
-export const MENU_START_SIGN_ROTATION = [0.02, -0.22, 0.05] as const;
+export const MENU_START_SIGN_POSITION = [0, -0.86, 4.62] as const;
+export const MENU_START_SIGN_ROTATION = [0.02, 0, 0] as const;
+export const MENU_SETTINGS_SIGN_POSITION = [2.55, -0.94, 4.65] as const;
+export const MENU_SETTINGS_SIGN_ROTATION = [0.02, -0.24, 0.05] as const;
 
 export interface MenuSignCanvasSurface {
   readonly canvas: HTMLCanvasElement;
@@ -27,7 +29,7 @@ export interface MenuSignCanvasSurface {
 }
 
 export type MenuSignCanvasFactory = () => MenuSignCanvasSurface;
-export type MenuSignAction = 'start' | 'guide';
+export type MenuSignAction = 'start' | 'guide' | 'settings';
 
 export interface MenuSignsComponent extends MenuSceneComponent {
   readonly startHitTarget: Mesh<
@@ -40,6 +42,8 @@ export interface MenuSignsComponent extends MenuSceneComponent {
   >;
   setStartHighlighted(active: boolean): void;
   setGuideHighlighted(active: boolean): void;
+  readonly settingsHitTarget: Mesh<BoxGeometry, MeshStandardMaterial | MeshStandardMaterial[]>;
+  setSettingsHighlighted(active: boolean): void;
 }
 
 interface WoodenSignSpec {
@@ -79,14 +83,17 @@ export class MenuSigns implements MenuSignsComponent {
   readonly root = new Group();
   readonly startHitTarget: Mesh<BoxGeometry, MeshStandardMaterial[]>;
   readonly guideHitTarget: Mesh<BoxGeometry, MeshStandardMaterial[]>;
-  readonly textures: readonly [CanvasTexture, CanvasTexture];
+  readonly settingsHitTarget: Mesh<BoxGeometry, MeshStandardMaterial[]>;
+  readonly textures: readonly CanvasTexture[];
 
   private readonly startSign: WoodenSignParts;
   private readonly guideSign: WoodenSignParts;
+  private readonly settingsSign: WoodenSignParts;
   private readonly geometries = new Set<BoxGeometry>();
   private readonly materials = new Set<MeshStandardMaterial>();
   private startHighlighted = false;
   private guideHighlighted = false;
+  private settingsHighlighted = false;
   private disposed = false;
   private readonly unsubscribeLanguage: () => void;
 
@@ -120,15 +127,32 @@ export class MenuSigns implements MenuSignsComponent {
       wearSeed: 0x537461,
     });
 
+    const settings = this.createWoodenSign(factory, {
+      name: 'menu:settings-sign',
+      get textLines() { return [menuText('settings')]; },
+      textLineWidths: [880],
+      textLineYs: [170],
+      position: MENU_SETTINGS_SIGN_POSITION,
+      rotation: MENU_SETTINGS_SIGN_ROTATION,
+      boardSize: [2.4, 0.76, 0.16],
+      boardHeight: 1.18,
+      postHeight: 1.82,
+      postSpacing: 0.78,
+      fontSize: 96,
+      wearSeed: 0x536574,
+    });
+
     this.root.name = 'menu:signs';
-    this.root.add(guide.root, start.root);
+    this.root.add(guide.root, start.root, settings.root);
     this.startSign = start;
     this.guideSign = guide;
+    this.settingsSign = settings;
     this.startHitTarget = start.board;
     this.guideHitTarget = guide.board;
-    this.textures = [guide.texture, start.texture];
+    this.settingsHitTarget = settings.board;
+    this.textures = [guide.texture, start.texture, settings.texture];
     this.unsubscribeLanguage = onLanguageChange(() => {
-      for (const sign of [this.guideSign, this.startSign]) {
+      for (const sign of [this.guideSign, this.startSign, this.settingsSign]) {
         this.paintSign(sign.surface, sign.spec);
         sign.texture.needsUpdate = true;
       }
@@ -145,6 +169,12 @@ export class MenuSigns implements MenuSignsComponent {
     if (this.disposed || this.guideHighlighted === active) return;
     this.guideHighlighted = active;
     this.setSignHighlighted(this.guideSign, active);
+  }
+
+  setSettingsHighlighted(active: boolean): void {
+    if (this.disposed || this.settingsHighlighted === active) return;
+    this.settingsHighlighted = active;
+    this.setSignHighlighted(this.settingsSign, active);
   }
 
   dispose(): void {
@@ -241,9 +271,9 @@ export class MenuSigns implements MenuSignsComponent {
       context.globalAlpha = 0.82;
       context.strokeStyle = '#211711';
       context.lineWidth = 16;
-      context.strokeText(line, 518, y + 5);
+      context.strokeText(line, 518, y + 5, 900);
       context.fillStyle = '#c9bd94';
-      context.fillText(line, 512, y);
+      context.fillText(line, 512, y, 900);
 
       const lineWidth = spec.textLineWidths[index]!;
       const left = 512 - lineWidth * 0.5;

@@ -27,7 +27,7 @@ export class SettingsMenu {
   readonly element = document.createElement('section');
   private readonly qualityControls;
   private readonly ambientOcclusionControl;
-  private pauseRoot: HTMLElement | null = null;
+  private ownerRoot: HTMLElement | null = null;
   private opener: HTMLButtonElement | null = null;
   private disposed = false;
   private readonly unsubscribeLanguage: () => void;
@@ -65,11 +65,11 @@ export class SettingsMenu {
   close(): void {
     if (this.element.hidden) return;
     this.element.hidden = true;
-    this.pauseRoot?.removeAttribute('inert');
-    this.pauseRoot?.setAttribute('aria-hidden', 'false');
-    this.pauseRoot?.classList.remove('settings-covered');
+    this.ownerRoot?.removeAttribute('inert');
+    this.ownerRoot?.setAttribute('aria-hidden', 'false');
+    this.ownerRoot?.classList.remove('settings-covered');
     this.opener?.focus();
-    this.pauseRoot = null;
+    this.ownerRoot = null;
     this.opener = null;
   }
 
@@ -114,16 +114,16 @@ export class SettingsMenu {
   };
 
   private open(button: HTMLButtonElement): void {
-    const pause = button.closest<HTMLElement>('[data-pause]');
-    if (!pause || pause.getAttribute('aria-hidden') !== 'false' || !this.element.hidden) return;
+    const owner = button.closest<HTMLElement>('[data-pause], [data-menu]');
+    if (!owner || owner.hasAttribute('inert') || owner.getAttribute('aria-hidden') !== 'false' || !this.element.hidden) return;
     this.opener = button;
-    this.pauseRoot = pause;
+    this.ownerRoot = owner;
     this.element.hidden = false;
     this.ambientOcclusionControl?.refresh();
     requireElement<HTMLInputElement>(this.element, '[data-save-enabled]').focus();
-    pause.setAttribute('inert', '');
-    pause.setAttribute('aria-hidden', 'true');
-    pause.classList.add('settings-covered');
+    owner.setAttribute('inert', '');
+    owner.setAttribute('aria-hidden', 'true');
+    owner.classList.add('settings-covered');
   }
 
   private readonly handleInput = (event: Event): void => {

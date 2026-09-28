@@ -1,10 +1,12 @@
 import {
-  AdditiveBlending, type Box3, BoxGeometry, type BufferGeometry, ConeGeometry, type Group,
+  AdditiveBlending, type Box3, type BufferGeometry, type Group,
   IcosahedronGeometry, type Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D,
   PointLight, SphereGeometry, Vector3,
 } from 'three';
 import { clamp01, smoothstep } from './animationMath';
 import type { GhostShipAudioCue } from './eventPresentationCue';
+import { CannonWaterSplash } from './CannonWaterSplash';
+import { CannonWoodImpact } from './CannonWoodImpact';
 
 export const CANNONADE_DURATION = 7.4;
 
@@ -29,15 +31,10 @@ export const CANNONADE_IMPACT_TIME = HIT_SHOT.fire + HIT_SHOT.flight;
 // Boat-local strike point: the bow gunwale on the side that faces the ship.
 const BOW_STRIKE = Object.freeze({ x: 0.62, y: 0.5, z: -2.45 });
 const WATER_Y = 0;
-const GRAVITY = -9.8;
 const TRAIL_LENGTH = 6;
 const SMOKE_PUFFS = 3;
-const SPLINTERS = 18;
-const DUST_PUFFS = 4;
 const FLASH_TIME = 0.2;
 const SMOKE_TIME = 3.3;
-const SPLASH_TIME = 1.6;
-const DUST_TIME = 1.4;
 
 interface Shot {
   readonly spec: ShotSpec;
@@ -51,23 +48,9 @@ interface Shot {
   readonly flashMaterial: MeshBasicMaterial;
   readonly smoke: readonly Mesh[];
   readonly smokeMaterial: MeshBasicMaterial;
-  readonly splash: Mesh;
-  readonly splashMaterial: MeshBasicMaterial;
+  readonly splash: CannonWaterSplash;
   fired: boolean;
   landed: boolean;
-}
-
-interface Splinter {
-  readonly mesh: Mesh;
-  readonly launch: Vector3;
-  readonly velocity: Vector3;
-  readonly spin: Vector3;
-}
-
-// Stable pseudo-random values keep each volley identical.
-function seeded(index: number, salt: number): number {
-  const value = Math.sin(index * 127.1 + salt * 311.7) * 43758.5453;
-  return value - Math.floor(value);
 }
 
 function envelope(age: number, rise: number, duration: number): number {
@@ -92,11 +75,9 @@ export class GhostShipCannonade {
   private readonly geometries: BufferGeometry[] = [];
   private readonly materials: Material[] = [];
   private readonly shots: Shot[] = [];
-  private readonly splinters: Splinter[] = [];
-  private readonly dust: Mesh[] = [];
+  private readonly woodImpact = new CannonWoodImpact();
   private readonly ports: Mesh[] = [];
   private readonly portMaterial: MeshBasicMaterial;
-  private readonly dustMaterial: MeshBasicMaterial;
   private readonly burst: Mesh;
   private readonly burstMaterial: MeshBasicMaterial;
   private readonly muzzleLight = new PointLight(0x8dffb8, 0, 36, 2);
@@ -118,20 +99,12 @@ export class GhostShipCannonade {
     const ballGeometry = this.geometry(new SphereGeometry(0.2, 12, 8));
     const glowGeometry = this.geometry(new SphereGeometry(1, 12, 8));
     const puffGeometry = this.geometry(new IcosahedronGeometry(1, 1));
-    const splashGeometry = this.geometry(new ConeGeometry(1, 1, 12, 1, true).translate(0, 0.5, 0));
-    const splinterGeometry = this.geometry(new BoxGeometry(0.05, 0.03, 0.34));
     const iron = this.material(new MeshStandardMaterial({
       name: 'ghost-ship-cannonball', color: 0x252622, roughness: 0.55, metalness: 0.7,
     }));
     const ghostFire = this.glow(0x7dffb0, 0.7);
-    const wood = this.material(new MeshStandardMaterial({
-      name: 'ghost-ship-splinter', color: 0x7a5431, roughness: 0.92, metalness: 0,
-    }));
     this.portMaterial = this.glow(0x6dffa0, 0);
     this.burstMaterial = this.glow(0xd4ffe0, 0);
-    this.dustMaterial = this.material(new MeshBasicMaterial({
-      name: 'ghost-ship-impact-dust', color: 0x5e554b, transparent: true, opacity: 0, depthWrite: false,
-    }));
 
     const center = bounds.getCenter(new Vector3());
     const size = bounds.getSize(new Vector3());
@@ -161,33 +134,15 @@ export class GhostShipCannonade {
         puff.name = 'ghost-ship-cannon-smoke';
         return puff;
       });
-      const splashMaterial = this.material(new MeshBasicMaterial({
-        name: 'ghost-ship-cannon-splash', color: 0xd3e8e4, transparent: true, opacity: 0, depthWrite: false,
-      }));
-      const splash = new Mesh(splashGeometry, splashMaterial);
-      splash.name = 'ghost-ship-cannon-splash';
+      const splash = new CannonWaterSplash();
       this.shots.push({
         spec, port, muzzle: new Vector3(), target: new Vector3(), ball, halo, trail, flash, flashMaterial,
-        smoke, smokeMaterial, splash, splashMaterial, fired: false, landed: false,
+        smoke, smokeMaterial, splash, fired: false, landed: false,
       });
       this.ship.add(portGlow, flash);
-      this.root.add(ball, halo, ...trail, ...smoke, splash);
+      this.root.add(ball, halo, ...trail, ...smoke, splash.root);
     }
-    for (let index = 0; index < SPLINTERS; index += 1) {
-      const mesh = new Mesh(splinterGeometry, wood);
-      mesh.name = 'ghost-ship-hull-splinter';
-      mesh.scale.setScalar(0.55 + seeded(index, 1) * 0.9);
-      this.splinters.push({ mesh, launch: new Vector3(), velocity: new Vector3(), spin: new Vector3(
-        (seeded(index, 2) - 0.5) * 24, (seeded(index, 3) - 0.5) * 18, (seeded(index, 4) - 0.5) * 24,
-      ) });
-      this.root.add(mesh);
-    }
-    for (let index = 0; index < DUST_PUFFS; index += 1) {
-      const puff = new Mesh(puffGeometry, this.dustMaterial);
-      puff.name = 'ghost-ship-impact-dust';
-      this.dust.push(puff);
-      this.root.add(puff);
-    }
+    this.root.add(this.woodImpact.root);
     this.burst = new Mesh(glowGeometry, this.burstMaterial);
     this.burst.name = 'ghost-ship-impact-burst';
     this.muzzleLight.name = 'ghost-ship-muzzle-light';
@@ -224,7 +179,11 @@ export class GhostShipCannonade {
       this.ports[index]!.position.copy(shot.port);
       shot.flash.position.copy(shot.port);
       this.placeTarget(shot);
+      this.scratch.copy(shot.target);
+      if (shot.spec.target === 'hit') this.scratch.addScaledVector(this.toShip, 0.9);
+      shot.splash.place(this.scratch, shot.spec.target === 'hit' ? 0.45 : 1);
     }
+    this.woodImpact.place(this.impact, this.toShip, this.lateral);
   }
 
   sample(time: number, live: boolean): void {
@@ -267,13 +226,12 @@ export class GhostShipCannonade {
       shot.flash.visible = false;
       shot.ball.visible = false;
       shot.halo.visible = false;
-      shot.splash.visible = false;
+      shot.splash.reset();
       for (const ember of shot.trail) ember.visible = false;
       for (const puff of shot.smoke) puff.visible = false;
     }
     for (const port of this.ports) port.visible = false;
-    for (const splinter of this.splinters) splinter.mesh.visible = false;
-    for (const puff of this.dust) puff.visible = false;
+    this.woodImpact.reset();
     this.burst.visible = false;
     this.muzzleLight.intensity = 0;
     this.impactLight.intensity = 0;
@@ -287,6 +245,8 @@ export class GhostShipCannonade {
     this.reset();
     this.muzzleLight.dispose();
     this.impactLight.dispose();
+    for (const shot of this.shots) shot.splash.dispose();
+    this.woodImpact.dispose();
     for (const geometry of this.geometries) geometry.dispose();
     for (const material of this.materials) material.dispose();
   }
@@ -351,7 +311,7 @@ export class GhostShipCannonade {
       shot.landed = true;
       if (live && shot.spec.target !== 'hit') this.onCue('cannon-splash');
     }
-    this.sampleSplash(shot, age - shot.spec.flight);
+    shot.splash.sample(age - shot.spec.flight);
   }
 
   private arcPoint(shot: Shot, progress: number, output: Vector3): void {
@@ -359,23 +319,8 @@ export class GhostShipCannonade {
     output.y += shot.spec.arc * 4 * progress * (1 - progress);
   }
 
-  private sampleSplash(shot: Shot, age: number): void {
-    const visible = age >= 0 && age < SPLASH_TIME;
-    shot.splash.visible = visible;
-    if (!visible) return;
-    const hit = shot.spec.target === 'hit';
-    const rise = smoothstep(age / 0.2);
-    const fall = 1 - smoothstep((age - 0.35) / (SPLASH_TIME - 0.35));
-    const size = hit ? 0.45 : 1;
-    shot.splash.position.copy(shot.target);
-    shot.splash.position.y = WATER_Y;
-    if (hit) shot.splash.position.addScaledVector(this.toShip, 0.9);
-    const width = size * (0.45 + age * 0.9);
-    shot.splash.scale.set(width, Math.max(0.01, size * 3.4 * rise * (0.35 + 0.65 * fall)), width);
-    shot.splashMaterial.opacity = 0.42 * fall;
-  }
-
   private sampleImpact(age: number, time: number, live: boolean): void {
+    this.woodImpact.sample(age);
     if (age < 0) {
       this.burst.visible = false;
       this.impactLight.intensity = 0;
@@ -383,7 +328,6 @@ export class GhostShipCannonade {
     }
     if (!this.impactEmitted) {
       this.impactEmitted = true;
-      this.launchSplinters();
       if (live) this.onCue('cannon-impact');
     }
     const flash = clamp01(1 - age / 0.28);
@@ -394,25 +338,6 @@ export class GhostShipCannonade {
     this.impactLight.position.copy(this.impact);
     this.impactLight.position.y += 0.4;
     this.impactLight.intensity = 70 * Math.exp(-age * 7);
-    for (const splinter of this.splinters) {
-      const position = splinter.mesh.position.copy(splinter.launch).addScaledVector(splinter.velocity, age);
-      position.y += 0.5 * GRAVITY * age * age;
-      splinter.mesh.visible = position.y > WATER_Y - 0.1;
-      splinter.mesh.rotation.set(splinter.spin.x * age, splinter.spin.y * age, splinter.spin.z * age);
-    }
-    const dustVisible = age < DUST_TIME;
-    this.dustMaterial.opacity = dustVisible ? 0.4 * envelope(age, 0.06, DUST_TIME) : 0;
-    for (let index = 0; index < this.dust.length; index += 1) {
-      const puff = this.dust[index]!;
-      puff.visible = dustVisible;
-      if (!dustVisible) continue;
-      const spread = 1 - Math.exp(-age * 2.5);
-      puff.position.copy(this.impact)
-        .addScaledVector(this.lateral, (index - 1.5) * 0.35 * spread)
-        .addScaledVector(this.toShip, 0.3 * spread);
-      puff.position.y += age * 0.55 + index * 0.08;
-      puff.scale.setScalar((0.16 + index * 0.05) * (1 + age * 1.6));
-    }
     const jolt = Math.exp(-age * 3.2);
     const motion = this.motion;
     motion.boatRoll = -this.strikeSide * 0.1 * jolt * Math.sin(age * 13 + 0.4);
@@ -421,16 +346,6 @@ export class GhostShipCannonade {
     const shake = 2.6 * Math.exp(-age * 4.2);
     motion.aimX += shake * Math.sin(time * 47.3);
     motion.aimY += shake * Math.sin(time * 38.1 + 1.3);
-  }
-
-  private launchSplinters(): void {
-    for (let index = 0; index < this.splinters.length; index += 1) {
-      const splinter = this.splinters[index]!;
-      splinter.launch.copy(this.impact);
-      splinter.velocity.set(0, 3.2 + seeded(index, 5) * 4.2, 0)
-        .addScaledVector(this.toShip, -(0.2 + seeded(index, 6) * 1.2))
-        .addScaledVector(this.lateral, (seeded(index, 7) - 0.5) * 4.4);
-    }
   }
 
   private geometry<T extends BufferGeometry>(geometry: T): T {

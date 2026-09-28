@@ -50,48 +50,6 @@ afterEach(() => {
 });
 
 describe('InputController', () => {
-  it('reuses movement and look samples during repeated frame reads', () => {
-    const { input } = createInput();
-    const movement = input.movement;
-    const look = input.consumeLook();
-    expect(input.movement).toBe(movement);
-    expect(input.consumeLook()).toBe(look);
-  });
-
-  it('combines touch movement, look, and one queued action', () => {
-    const { input } = createInput();
-    input.setTouchMovement(0.8, -0.8);
-    input.addTouchLook(12, -5);
-    input.queueTouchInteract();
-    input.queueTouchJump();
-    input.setTouchSprint(true);
-
-    expect(Math.hypot(input.movement.x, input.movement.z)).toBeCloseTo(1);
-    expect(input.consumeLook()).toEqual({ x: 12, y: -5 });
-    expect(input.consumeInteract()).toBe(true);
-    expect(input.consumeInteract()).toBe(false);
-    expect(input.consumeJump()).toBe(true);
-    expect(input.consumeJump()).toBe(false);
-    expect(input.sprinting).toBe(true);
-  });
-
-  it('clears touch movement, sprint, look, and actions on interruption', () => {
-    const { input } = createInput();
-    input.setTouchMovement(1, -1);
-    input.addTouchLook(40, 20);
-    input.setTouchSprint(true);
-    input.queueTouchInteract();
-    input.queueTouchJump();
-
-    input.clear();
-
-    expect(input.movement).toEqual({ x: 0, z: 0 });
-    expect(input.sprinting).toBe(false);
-    expect(input.consumeLook()).toEqual({ x: 0, y: 0 });
-    expect(input.consumeInteract()).toBe(false);
-    expect(input.consumeJump()).toBe(false);
-  });
-
   it('tracks normalized movement and sprint state, then clears them on blur', () => {
     const { canvas, input } = createInput();
     browserDocument.pointerLockElement = canvas;

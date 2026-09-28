@@ -445,7 +445,6 @@ function sampleThrowTarget(
   output.yaw = -0.3 * windUp;
   output.pitch += 0.22 * windUp;
   output.roll += throwRoll * windUp;
-  output.cameraYaw = -0.035 * windUp;
   output.targetBlend = flight;
   output.ballisticFlight = flight > 0;
   output.flightArc = 4 * flight * (1 - flight);

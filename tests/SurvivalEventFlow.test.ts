@@ -148,6 +148,7 @@ function createRig(
     setEventEligibleItems: vi.fn(),
     setEventSelectedItem: vi.fn(),
     syncInventory: vi.fn(),
+    reseatCarlitosAtDawn: vi.fn(),
     projectInteractionAnchors: vi.fn(() => []),
     play: vi.fn(async (cue: string) => { calls.push(`play:${cue}`); }),
     retrieveDriftingItem: vi.fn(async () => undefined),

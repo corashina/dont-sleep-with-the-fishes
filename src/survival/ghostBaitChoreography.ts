@@ -21,7 +21,7 @@ export const GHOST_BAIT_PASS_OFFSETS: readonly (readonly [number, number])[] = O
 ]);
 
 export interface GhostBaitRush {
-  // Travel from the ghost to the player (0 to 1), then past the player (above 1).
+  // Travel from the ghost to contact with the player (0 to 1).
   travel: number;
   opacity: number;
 }
@@ -42,18 +42,12 @@ export function ghostBaitPassProgress(index: number): number {
   return GHOST_BAIT_RUSH_CUE + index * RUSH_STAGGER + GHOST_BAIT_PASS * RUSH_SPAN;
 }
 
-// The ghost accelerates to the player, then keeps its pass speed behind the player.
+// The ghost accelerates to the player and disappears at contact.
 export function sampleGhostBaitRush(output: GhostBaitRush, progress: number, index: number): GhostBaitRush {
   const rush = ghostBaitRushProgress(progress, index);
-  if (rush < GHOST_BAIT_PASS) {
-    const approach = rush / GHOST_BAIT_PASS;
-    output.travel = approach * approach;
-    output.opacity = 1;
-  } else {
-    const exit = (rush - GHOST_BAIT_PASS) / GHOST_BAIT_PASS;
-    output.travel = 1 + 2 * exit;
-    output.opacity = rush >= 1 ? 0 : 1 - smoothstep((rush - GHOST_BAIT_PASS) / (1 - GHOST_BAIT_PASS));
-  }
+  const approach = Math.min(1, rush / GHOST_BAIT_PASS);
+  output.travel = approach * approach;
+  output.opacity = progress < ghostBaitPassProgress(index) ? 1 : 0;
   return output;
 }
 

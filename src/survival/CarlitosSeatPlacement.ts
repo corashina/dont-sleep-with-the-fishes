@@ -91,8 +91,6 @@ export class CarlitosSeatPlacement {
   private readonly viewRay = new Ray();
   private viewDistance = 0;
   private currentSeat: Seat | null = null;
-  private preferredSide: EventSide = 1;
-  private seed = 0;
   private interacting = false;
   private checkFullTurn = false;
   private yaw = 0;
@@ -114,11 +112,19 @@ export class CarlitosSeatPlacement {
     this.seats = supportedSeats(boat);
   }
 
-  setPreference(side: EventSide, seed = this.seed): void {
-    if (side === this.preferredSide && seed === this.seed) return;
-    this.preferredSide = side;
-    this.seed = seed >>> 0;
+  /** Call only before the first reveal or under the dawn cover. */
+  selectSeat(side: EventSide, seed: number): boolean {
     this.currentSeat = null;
+    this.preparePlacement();
+    if (this.localBounds.isEmpty()) return false;
+    for (let pass = 0; pass < 2; pass++) {
+      for (let offset = 0; offset < this.seats.length; offset++) {
+        const seat = this.seats[((seed >>> 0) + offset) % this.seats.length]!;
+        if ((Math.sign(seat.x) === side) !== (pass === 0)) continue;
+        if (this.trySeat(seat, true)) return true;
+      }
+    }
+    return false;
   }
 
   get currentSeatId(): string | null {
@@ -148,18 +154,14 @@ export class CarlitosSeatPlacement {
   }
 
   cycleFrontSeat(direction: -1 | 1): boolean {
-    this.scene.updateMatrixWorld(true);
-    this.camera.updateWorldMatrix(true, false);
-    this.camera.getWorldPosition(this.player);
-    this.boat.worldToLocal(this.player);
-    this.measureBody();
+    this.preparePlacement();
     if (!this.localBounds.isEmpty()) {
       const current = this.currentSeat === null ? -1 : this.seats.indexOf(this.currentSeat);
       const start = current < 0 ? (direction === 1 ? -1 : 0) : current;
       for (let offset = 1; offset <= this.seats.length; offset++) {
         const index = (start + direction * offset + this.seats.length) % this.seats.length;
         const seat = this.seats[index]!;
-        if (seat.z < 0 && this.trySeat(seat)) return true;
+        if (seat.z < 0 && this.trySeat(seat, true)) return true;
       }
     }
     this.currentSeat = null;
@@ -167,36 +169,31 @@ export class CarlitosSeatPlacement {
   }
 
   update(deltaSeconds = 0): boolean {
+    if (this.currentSeat === null) {
+      this.finishFacing(false);
+      return false;
+    }
+    this.preparePlacement();
     this.turnFraction = 1 - Math.exp(-10 * Math.max(0, deltaSeconds));
-    const placed = this.updateSeat();
+    // A blocked pose stops the turn. It must never trigger a visible seat change.
+    if (this.localBounds.isEmpty() || !this.trySeat(this.currentSeat)) {
+      this.finishFacing(false);
+      return true;
+    }
     this.checkFullTurn = false;
-    if (!placed) this.finishFacing(false);
-    else if (this.interacting && Math.abs(angleDifference(this.playerYaw(this.currentSeat!), this.yaw)) < 0.012) {
+    if (this.interacting && Math.abs(angleDifference(this.playerYaw(this.currentSeat), this.yaw)) < 0.012) {
       this.finishFacing(true);
     }
-    return placed;
+    return true;
   }
 
-  private updateSeat(): boolean {
+  private preparePlacement(): void {
     // SkinnedMesh.updateMatrixWorld also refreshes its attached bind matrix.
     this.scene.updateMatrixWorld(true);
     this.camera.updateWorldMatrix(true, false);
     this.camera.getWorldPosition(this.player);
     this.boat.worldToLocal(this.player);
     this.measureBody();
-    if (this.localBounds.isEmpty()) return false;
-    if (this.currentSeat !== null && this.trySeat(this.currentSeat)) return true;
-    // Prefer the event's clear side, then consider all other visible seats.
-    for (let pass = 0; pass < 2; pass++) {
-      for (let offset = 0; offset < this.seats.length; offset++) {
-        const seat = this.seats[(this.seed + offset) % this.seats.length]!;
-        const preferred = Math.sign(seat.x) === this.preferredSide;
-        if (preferred !== (pass === 0)) continue;
-        if (this.trySeat(seat)) return true;
-      }
-    }
-    this.currentSeat = null;
-    return false;
   }
 
   private measureBody(): void {
@@ -216,7 +213,7 @@ export class CarlitosSeatPlacement {
     this.localBounds.max.addScalar(0.025);
   }
 
-  private trySeat(seat: Seat): boolean {
+  private trySeat(seat: Seat, checkView = false): boolean {
     const idleYaw = this.idleYaw(seat);
     const targetYaw = this.interacting ? this.playerYaw(seat) : idleYaw;
     const from = this.currentSeat === seat ? this.yaw : targetYaw;
@@ -224,7 +221,7 @@ export class CarlitosSeatPlacement {
     const next = Math.abs(difference) < 0.01 ? targetYaw : from + difference * this.turnFraction;
     if (this.checkFullTurn && Math.abs(difference) > 0.0001 && !this.clearTurn(seat, from, targetYaw)) return false;
     if (Math.abs(next - from) > 0.0001 && !this.clearTurn(seat, from, next)) return false;
-    if (!this.clearPose(seat, next)) return false;
+    if (!this.clearPose(seat, next, checkView)) return false;
     this.root.position.copy(this.position);
     this.root.quaternion.copy(this.rotation);
     this.root.updateMatrixWorld(true);
@@ -270,20 +267,23 @@ export class CarlitosSeatPlacement {
     return clear;
   }
 
-  private clearPose(seat: Seat, yaw: number): boolean {
+  private clearPose(seat: Seat, yaw: number, checkView = false): boolean {
     this.position.set(seat.x, seat.surfaceY - this.localBounds.min.y * this.root.scale.y + SUPPORT_GAP, seat.z);
     this.rotation.setFromAxisAngle(UP, yaw);
     this.candidateMatrix.compose(this.position, this.rotation, this.root.scale);
     this.candidateMatrix.premultiply(this.boat.matrixWorld);
-    if (!this.fitsViewport()) return false;
+    if (checkView && !this.fitsViewport()) return false;
     this.candidateInverse.copy(this.candidateMatrix).invert();
     // Projected bounds alone can accept a cat completely hidden behind the chest.
-    this.camera.getWorldPosition(this.viewRay.origin).applyMatrix4(this.candidateInverse);
-    this.localBounds.getCenter(this.point);
-    this.point.y = this.localBounds.max.y - (this.localBounds.max.y - this.localBounds.min.y) * 0.15;
-    this.viewRay.direction.copy(this.point).sub(this.viewRay.origin);
-    this.viewDistance = this.viewRay.direction.length();
-    this.viewRay.direction.normalize();
+    this.viewDistance = 0;
+    if (checkView) {
+      this.camera.getWorldPosition(this.viewRay.origin).applyMatrix4(this.candidateInverse);
+      this.localBounds.getCenter(this.point);
+      this.point.y = this.localBounds.max.y - (this.localBounds.max.y - this.localBounds.min.y) * 0.15;
+      this.viewRay.direction.copy(this.point).sub(this.viewRay.origin);
+      this.viewDistance = this.viewRay.direction.length();
+      this.viewRay.direction.normalize();
+    }
     return !this.intersectsScene(this.scene);
   }
 
@@ -336,7 +336,7 @@ export class CarlitosSeatPlacement {
     }
     this.meshBounds.applyMatrix4(this.meshToCandidate);
     const blocksBody = this.meshBounds.intersectsBox(this.localBounds);
-    const blocksView = this.viewRay.intersectBox(this.meshBounds, this.point) !== null
+    const blocksView = this.viewDistance > 0 && this.viewRay.intersectBox(this.meshBounds, this.point) !== null
       && this.point.distanceTo(this.viewRay.origin) < this.viewDistance;
     if (!blocksBody && !blocksView) return false;
     if (this.meshBounds.containsBox(this.localBounds)) return true;
@@ -357,7 +357,7 @@ export class CarlitosSeatPlacement {
   }
 
   private triangleBlocksView(): boolean {
-    return this.viewRay.intersectTriangle(this.triangle.a, this.triangle.b, this.triangle.c, false, this.point) !== null
+    return this.viewDistance > 0 && this.viewRay.intersectTriangle(this.triangle.a, this.triangle.b, this.triangle.c, false, this.point) !== null
       && this.point.distanceTo(this.viewRay.origin) < this.viewDistance;
   }
 }

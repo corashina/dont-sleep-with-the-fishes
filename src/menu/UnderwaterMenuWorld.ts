@@ -199,7 +199,7 @@ export class UnderwaterMenuWorld {
       throw error;
     }
     this.signs = signs;
-    this.signHitTargets = [signs.startHitTarget, signs.guideHitTarget];
+    this.signHitTargets = [signs.startHitTarget, signs.guideHitTarget, signs.settingsHitTarget];
 
     this.placeGroundedModel(boat.root, 'boat', MENU_PLACEMENT.boat, 0.2);
 
@@ -327,12 +327,14 @@ export class UnderwaterMenuWorld {
     const hit = this.signIntersections[0]?.object;
     if (hit === this.signs.startHitTarget) return 'start';
     if (hit === this.signs.guideHitTarget) return 'guide';
+    if (hit === this.signs.settingsHitTarget) return 'settings';
     return null;
   }
 
   setMenuSignHighlighted(action: MenuSignAction, active: boolean): void {
     if (action === 'start') this.signs.setStartHighlighted(active);
-    else this.signs.setGuideHighlighted(active);
+    else if (action === 'guide') this.signs.setGuideHighlighted(active);
+    else this.signs.setSettingsHighlighted(active);
   }
 
   dispose(): void {

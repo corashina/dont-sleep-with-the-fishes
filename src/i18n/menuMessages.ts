@@ -5,6 +5,7 @@ export const menuText = defineMessages({
   guideLine2: { en: 'PLAY', pl: 'GRAĆ' , 'es-AR': "JUGAR" },
   pointerLock: {"en":"Mouse look was blocked. Click the button and allow pointer lock to continue.","pl":"Nie można rozglądać się myszą. Kliknij przycisk i zezwól na przechwycenie kursora, aby kontynuować.", 'es-AR': "Se bloqueó la vista con el mouse. Hacé clic en el botón y permití capturar el cursor para continuar." },
   start: {"en":"START","pl":"START", 'es-AR': "JUGAR" },
+  settings: { en: 'SETTINGS', pl: 'USTAWIENIA', 'es-AR': 'CONFIGURACIÓN' },
   guide: {"en":"HOW TO PLAY","pl":"JAK GRAĆ", 'es-AR': "CÓMO JUGAR" },
   close: {"en":"Close how to play","pl":"Zamknij instrukcję", 'es-AR': "Cerrar instrucciones" },
   pages: {"en":"How to play pages","pl":"Strony instrukcji", 'es-AR': "Páginas de instrucciones" },

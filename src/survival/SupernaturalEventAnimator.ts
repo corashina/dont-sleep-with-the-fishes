@@ -2,9 +2,9 @@ import { GHOST_COUNT, ghostFlashlightCycle, ghostFlashlightFade } from './ghostF
 import {
   GHOST_BAIT_PASS_OFFSETS,
   GHOST_BAIT_REACTION_DURATION,
-  GHOST_BAIT_RUSH_CUE,
   GHOST_BAIT_TURN_CUE,
   ghostBaitDriftRate,
+  ghostBaitPassProgress,
   ghostBaitRushProgress,
   ghostBaitTurn,
   sampleGhostBaitCamera,
@@ -126,7 +126,7 @@ const FLARE_RADII = [
   1, 0.68, 0.94, 0.62, 1.08, 0.7,
   0.88, 0.6, 1.02, 0.66, 0.9, 0.64,
 ] as const;
-function replaceMaterials(root: Group, material: Material): void {
+function replaceGhostMaterials(root: Group, body: MeshStandardMaterial, eyes: MeshStandardMaterial): void {
   const replacedMaterials = new Set<Material>();
   const replacedTextures = new Set<Texture>();
   root.traverse((object) => {
@@ -138,7 +138,9 @@ function replaceMaterials(root: Group, material: Material): void {
         if (value instanceof Texture) replacedTextures.add(value);
       }
     }
-    object.material = material;
+    const replacements = materials.map(material => material instanceof MeshStandardMaterial
+      && Math.max(material.color.r, material.color.g, material.color.b) < 0.05 ? eyes : body);
+    object.material = Array.isArray(object.material) ? replacements : replacements[0]!;
     object.castShadow = true;
     object.receiveShadow = true;
   });
@@ -245,6 +247,7 @@ export class SupernaturalEventAnimator {
     scaleZ: 1,
   };
   private readonly ghostMaterials: MeshStandardMaterial[] = [];
+  private readonly ghostEyeMaterials: MeshStandardMaterial[] = [];
   private readonly flareMaterial = new MeshBasicMaterial({
     color: 0xffffff,
     vertexColors: true,
@@ -314,7 +317,11 @@ export class SupernaturalEventAnimator {
         depthWrite: false,
       });
       this.ghostMaterials.push(material);
-      replaceMaterials(ghost, material);
+      const eyes = material.clone();
+      eyes.color.set(0x101719);
+      eyes.emissiveIntensity = 0;
+      this.ghostEyeMaterials.push(eyes);
+      replaceGhostMaterials(ghost, material, eyes);
       ghost.scale.multiplyScalar(0.88 + index * 0.045);
       ghost.updateWorldMatrix(false, true);
       const bounds = new Box3().setFromObject(ghost);
@@ -648,7 +655,7 @@ export class SupernaturalEventAnimator {
       const ghost = this.ghosts[index]!;
       const fade = ghostFlashlightFade(progress, index);
       this.poseFloatingGhost(ghost, index);
-      this.ghostMaterials[index]!.opacity = GHOST_OPACITY * (1 - fade);
+      this.setGhostOpacity(index, GHOST_OPACITY * (1 - fade));
       ghost.visible = fade < 1;
     }
   }
@@ -692,7 +699,7 @@ export class SupernaturalEventAnimator {
       if (this.ghostsRepelled) { this.hideGhosts(); return; }
       for (let index = 0; index < this.ghosts.length; index += 1) {
         const ghost = this.ghosts[index]!;
-        this.ghostMaterials[index]!.opacity = Math.min(0.62, sample.ghostVisibility * 0.52);
+        this.setGhostOpacity(index, Math.min(0.62, sample.ghostVisibility * 0.52));
         this.poseFloatingGhost(ghost, index);
         ghost.visible = sample.ghostVisibility > 0.015;
       }
@@ -741,7 +748,7 @@ export class SupernaturalEventAnimator {
     this.worldRoot.worldToLocal(player);
   }
 
-  // The ghosts halt, turn to the player, stare, then rush through the player one by one.
+  // The ghosts halt, turn, stare, then rush at the player and disappear on contact.
   private updateGhostBait(
     eventId: string,
     response: EventPhysicalResponsePresentation | null,
@@ -753,9 +760,9 @@ export class SupernaturalEventAnimator {
       this.ghostBaitCues = 1;
       this.emitCue({ eventId: 'ghosts', cue: 'turn' });
     }
-    if (this.ghostBaitCues === 1 && progress >= GHOST_BAIT_RUSH_CUE) {
+    if (this.ghostBaitCues === 1 && progress >= ghostBaitPassProgress(0)) {
       this.ghostBaitCues = 2;
-      this.emitCue({ eventId: 'ghosts', cue: 'rush' });
+      this.emitCue({ eventId: 'ghosts', cue: 'contact' });
     }
     const camera = sampleGhostBaitCamera(this.ghostBaitCamera, progress, this.ghosts.length);
     this.cameraLook?.apply(camera.yaw, camera.pitch, camera.yaw * 0.6);
@@ -782,7 +789,7 @@ export class SupernaturalEventAnimator {
         target.sub(ghost.position);
         ghost.position.addScaledVector(target, rush.travel);
       }
-      material.opacity = (GHOST_OPACITY + 0.24 * turn) * rush.opacity;
+      this.setGhostOpacity(index, (GHOST_OPACITY + 0.24 * turn) * rush.opacity);
       material.emissiveIntensity = GHOST_EMISSIVE + 0.7 * turn;
       ghost.visible = material.opacity > 0.01;
     }
@@ -810,11 +817,16 @@ export class SupernaturalEventAnimator {
   private showGhostLoop(opacity: number): void {
     for (let index = 0; index < this.ghosts.length; index += 1) {
       const ghost = this.ghosts[index]!;
-      this.ghostMaterials[index]!.opacity = opacity;
+      this.setGhostOpacity(index, opacity);
       this.ghostMaterials[index]!.emissiveIntensity = GHOST_EMISSIVE;
       this.poseFloatingGhost(ghost, index);
       ghost.visible = true;
     }
+  }
+
+  private setGhostOpacity(index: number, opacity: number): void {
+    this.ghostMaterials[index]!.opacity = opacity;
+    this.ghostEyeMaterials[index]!.opacity = opacity;
   }
 
   private showFlare(amount: number): void {
@@ -940,7 +952,7 @@ export class SupernaturalEventAnimator {
     response: EventPhysicalResponsePresentation | null,
   ): void {
     this.hideAll();
-    // The ghosts leave after they pass through the player.
+    // The ghosts stay gone after contact with the player.
     if (isGhostBait(eventId, response)) this.ghostsRepelled = true;
     if (eventId === 'ghosts' && !this.ghostsRepelled && response?.choiceId !== 'flareGun') {
       this.ghostLoopVisible = true;

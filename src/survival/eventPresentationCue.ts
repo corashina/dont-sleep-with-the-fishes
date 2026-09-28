@@ -38,7 +38,7 @@ export type GhostShipAudioCue = typeof GHOST_SHIP_AUDIO_CUES[number];
 
 export const GHOSTS_AUDIO_CUES = Object.freeze([
   'turn',
-  'rush',
+  'contact',
 ] as const);
 
 export type GhostsAudioCue = typeof GHOSTS_AUDIO_CUES[number];

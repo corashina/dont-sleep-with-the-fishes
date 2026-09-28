@@ -2,6 +2,7 @@ import { MENU_MODEL_SPECS } from './menuModelManifest';
 import {
   MENU_GUIDE_SIGN_POSITION,
   MENU_START_SIGN_POSITION,
+  MENU_SETTINGS_SIGN_POSITION,
 } from './MenuSigns';
 
 export const MENU_CAMERA_POSITION = [0, 1.35, 7.8] as const;
@@ -23,7 +24,7 @@ export function menuSandChannelContains(x: number, z: number, radius = 0): boole
     < menuSandChannelHalfWidth(z) + radius;
 }
 
-// Authored patches leave both sign faces and the sandy centre open.
+// Authored patches leave the sign faces and the sandy centre open.
 export const MENU_PLANT_PATCHES = [
   [-2.0, 5.7, 0.85], [2.1, 5.6, 0.85],
   [-3.8, 4.8, 0.85], [4.0, 4.7, 0.9],
@@ -171,6 +172,7 @@ const MODEL_HALF_SIZE: Readonly<Record<
 export const MENU_PROTECTED_FOOTPRINTS: readonly MenuGroundFootprint[] = [
   { id: 'guide-sign', position: MENU_GUIDE_SIGN_POSITION, halfSize: [1.45, 0.55] },
   { id: 'start-sign', position: MENU_START_SIGN_POSITION, halfSize: [1.3, 0.55] },
+  { id: 'settings-sign', position: MENU_SETTINGS_SIGN_POSITION, halfSize: [1.45, 0.55] },
   { id: 'boat', position: [0, 0.42, -4.8], halfSize: [1.3, 2.9] },
   { id: 'dorothy', position: [1.6, 1.8, -19.5], halfSize: [18.4, 5.8] },
 ];
