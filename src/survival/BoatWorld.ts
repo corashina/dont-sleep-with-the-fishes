@@ -975,6 +975,16 @@ export class BoatWorld {
     this.cameraController.setItemAnimationLabLook(yaw, pitch);
   }
 
+  cycleCarlitosPositionForLab(direction: -1 | 1): void {
+    if (this.disposed || !this.carlitos.isAboard) return;
+    this.carlitos.root.visible = this.carlitosPlacement.cycleFrontSeat(direction);
+  }
+
+  getCarlitosPositionForLab(): string | null {
+    return this.carlitos.isAboard && this.carlitos.root.visible
+      ? this.carlitosPlacement.currentSeatId : null;
+  }
+
   setWeather(weather: WeatherId): void {
     this.setPresentationWeather(weather);
   }

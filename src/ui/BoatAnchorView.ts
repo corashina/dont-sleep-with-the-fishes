@@ -172,6 +172,11 @@ export class BoatAnchorView {
   onEventFocus: (eventId: InspectableEventId) => void = () => undefined;
   onHighlight: (anchorId: string | null) => void = () => undefined;
   onCarlitosCardChange: (open: boolean) => void = () => undefined;
+  onCarlitosPosition: (direction: -1 | 1) => void = () => undefined;
+
+  private readonly carlitosPositionControls: HTMLElement;
+  private readonly carlitosPositionLabel: HTMLOutputElement;
+  private readonly carlitosPositionButtons: HTMLButtonElement[];
 
   private readonly carlitosPet: HTMLButtonElement;
   private readonly carlitosHungerLabel: HTMLElement;
@@ -245,12 +250,27 @@ export class BoatAnchorView {
             </button>
           </div>
         </div>
+        <div class="carlitos-position-controls" data-carlitos-position-controls hidden>
+          <div class="carlitos-position-controls__label ui-role-context">
+            <span data-ui-text="carlitosPosition">${uiText('carlitosPosition')}</span>:
+            <output data-carlitos-position-label aria-live="polite">—</output>
+          </div>
+          <button type="button" class="carlitos-status__action ui-role-context" data-carlitos-position="previous">
+            <span data-ui-text="previousPosition">${uiText('previousPosition')}</span>
+          </button>
+          <button type="button" class="carlitos-status__action ui-role-context" data-carlitos-position="next">
+            <span data-ui-text="nextPosition">${uiText('nextPosition')}</span>
+          </button>
+        </div>
       </section>`;
     const roots = [...template.content.children];
     this.anchorLayer = roots[0] as HTMLElement;
     this.carlitosCard = roots[1] as HTMLElement;
     this.roots = [this.anchorLayer, this.carlitosCard];
     this.carlitosPet = requireElement(this.carlitosCard, '[data-action="petCarlitos"]');
+    this.carlitosPositionControls = requireElement(this.carlitosCard, '[data-carlitos-position-controls]');
+    this.carlitosPositionLabel = requireElement(this.carlitosCard, '[data-carlitos-position-label]');
+    this.carlitosPositionButtons = [...this.carlitosCard.querySelectorAll<HTMLButtonElement>('[data-carlitos-position]')];
     this.carlitosHungerLabel = requireElement(this.carlitosCard, '[data-carlitos-hunger-label]');
     this.carlitosHappiness = requireElement(this.carlitosCard, '[data-carlitos-happiness]');
     this.carlitosRestStatus = requireElement(this.carlitosCard, '[data-carlitos-rest-label]');
@@ -443,11 +463,13 @@ export class BoatAnchorView {
     if (this.disposed || this.paused === paused) return;
     if (paused) this.closeCarlitosCard(true);
     this.paused = paused;
+    this.syncCarlitosActions();
   }
 
   setModalOpen(open: boolean): void {
     if (this.disposed || this.modalOpen === open) return;
     this.modalOpen = open;
+    this.syncCarlitosActions();
   }
 
   beginEventPresentation(): void {
@@ -467,6 +489,11 @@ export class BoatAnchorView {
     this.eventPresentationActive = active;
     if (!active) this.itemAnimationLab = false;
     this.syncCommandState();
+  }
+
+  setCarlitosPosition(position: string | null): void {
+    const label = position ?? '—';
+    if (this.carlitosPositionLabel.textContent !== label) this.carlitosPositionLabel.textContent = label;
   }
 
   setItemAnimationLabActive(active: boolean): void {
@@ -671,6 +698,7 @@ export class BoatAnchorView {
     clean(() => { this.onEventFocus = () => undefined; });
     clean(() => { this.onHighlight = () => undefined; });
     clean(() => { this.onCarlitosCardChange = () => undefined; });
+    clean(() => { this.onCarlitosPosition = () => undefined; });
     clean(() => this.anchorLayouts.clear());
     if (failed) throw firstError;
   }
@@ -1036,6 +1064,13 @@ export class BoatAnchorView {
   }
 
   private syncCarlitosActions(): void {
+    this.carlitosPositionControls.hidden = !this.itemAnimationLab;
+    const disabled = !this.itemAnimationLab || this.busy || this.paused || this.modalOpen
+      || this.currentSnapshot?.carlitos == null;
+    for (const button of this.carlitosPositionButtons) {
+      button.disabled = disabled;
+      button.setAttribute('aria-disabled', String(disabled));
+    }
     CARLITOS_ACTIONS.forEach((action) => {
       const button = this.carlitosActions.get(action)!;
       const reason = this.actionReasons.get(action) ?? null;
@@ -1451,6 +1486,12 @@ export class BoatAnchorView {
     if (this.modalOpen) return;
     if (button.hasAttribute('data-carlitos-close')) {
       this.closeCarlitosCard(true);
+      return;
+    }
+    if (button.dataset.carlitosPosition !== undefined) {
+      if (this.itemAnimationLab) {
+        this.onCarlitosPosition(button.dataset.carlitosPosition === 'previous' ? -1 : 1);
+      }
       return;
     }
     this.handleCarlitosAction(button);

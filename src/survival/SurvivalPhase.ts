@@ -478,6 +478,7 @@ export class SurvivalPhase implements GamePhase {
       : time;
     this.simulationTimeInitialized = true;
     this.world.update?.(this.elapsedSeconds, deltaSeconds);
+    this.syncCarlitosLabPosition();
     if (this.started) this.fishingFlow.update(deltaSeconds);
     if (this.started) this.eventFlow.update(deltaSeconds);
     const snapshot = this.session.snapshot();
@@ -910,8 +911,17 @@ export class SurvivalPhase implements GamePhase {
     this.wireUI();
   }
 
+  private syncCarlitosLabPosition(): void {
+    if (this.itemAnimationLab) this.ui.setCarlitosPosition?.(this.world.getCarlitosPositionForLab?.() ?? null);
+  }
+
   private wireUI(): void {
     this.ui.onAction = (action, option) => this.handleAction(action, option);
+    this.ui.onCarlitosPosition = (direction) => {
+      if (!this.itemAnimationLab || !this.canAcceptCommand() || this.session.snapshot().carlitos === null) return;
+      this.world.cycleCarlitosPositionForLab?.(direction);
+      this.syncCarlitosLabPosition();
+    };
     this.ui.onEventItem = (choiceId, instanceId) => this.handleEventItem(choiceId, instanceId);
     this.ui.onEventChoice = (choiceId) => {
       if (this.itemAnimationLab) this.itemAnimationLabFlow.choose(choiceId);

@@ -56,6 +56,44 @@ function expectInView(body: Object3D, camera: PerspectiveCamera) {
 }
 
 describe('Carlitos sitting positions', () => {
+  it('cycles safe front seats in both directions and keeps the selected seat during updates', () => {
+    const { placement, cat, body, boat, camera } = fixture();
+    expect(placement.cycleFrontSeat(1)).toBe(true);
+    const first = placement.currentSeatId;
+    const seats = new Set<string>();
+    do {
+      const selected = placement.currentSeatId!;
+      expect(seats.has(selected)).toBe(false);
+      seats.add(selected);
+      expect(cat.position.z).toBeLessThan(0);
+      expect(selected).not.toBe('bow');
+      expectInView(body, camera);
+      expect(placement.update()).toBe(true);
+      expect(placement.currentSeatId).toBe(selected);
+      expect(placement.cycleFrontSeat(1)).toBe(true);
+    } while (placement.currentSeatId !== first);
+    expect(seats.size).toBeGreaterThan(2);
+    expect(placement.cycleFrontSeat(-1)).toBe(true);
+    expect(placement.currentSeatId).toBe([...seats].at(-1));
+    expect(placement.cycleFrontSeat(1)).toBe(true);
+    expect(placement.currentSeatId).toBe(first);
+
+    const obstacle = new Mesh(new BoxGeometry(0.6, 0.8, 0.6), new MeshStandardMaterial());
+    obstacle.position.copy(cat.position).add(new Vector3(0, 0.3, 0));
+    boat.add(obstacle);
+    for (let step = 0; step < seats.size; step++) {
+      expect(placement.cycleFrontSeat(1)).toBe(true);
+      expect(placement.currentSeatId).not.toBe(first);
+      expect(new Box3().setFromObject(body, true).intersectsBox(new Box3().setFromObject(obstacle))).toBe(false);
+      expectInView(body, camera);
+    }
+    obstacle.scale.setScalar(100);
+    expect(placement.cycleFrontSeat(1)).toBe(false);
+    expect(placement.currentSeatId).toBeNull();
+    obstacle.visible = false;
+    expect(placement.cycleFrontSeat(-1)).toBe(true);
+  });
+
   it.each([16 / 9, 4 / 3, 9 / 16])('keeps the full body in view at aspect %s', aspect => {
     const { placement, cat, body, camera } = fixture(aspect);
     const seats = new Set<string>();

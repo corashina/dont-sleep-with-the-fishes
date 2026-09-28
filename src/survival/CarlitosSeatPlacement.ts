@@ -101,6 +101,27 @@ export class CarlitosSeatPlacement {
     this.currentSeat = null;
   }
 
+  get currentSeatId(): string | null {
+    return this.currentSeat?.id ?? null;
+  }
+
+  cycleFrontSeat(direction: -1 | 1): boolean {
+    this.scene.updateMatrixWorld(true);
+    this.camera.updateWorldMatrix(true, false);
+    this.measureBody();
+    if (!this.localBounds.isEmpty()) {
+      const current = this.currentSeat === null ? -1 : this.seats.indexOf(this.currentSeat);
+      const start = current < 0 ? (direction === 1 ? -1 : 0) : current;
+      for (let offset = 1; offset <= this.seats.length; offset++) {
+        const index = (start + direction * offset + this.seats.length) % this.seats.length;
+        const seat = this.seats[index]!;
+        if (seat.z < 0 && this.trySeat(seat)) return true;
+      }
+    }
+    this.currentSeat = null;
+    return false;
+  }
+
   update(): boolean {
     // SkinnedMesh.updateMatrixWorld also refreshes its attached bind matrix.
     this.scene.updateMatrixWorld(true);
