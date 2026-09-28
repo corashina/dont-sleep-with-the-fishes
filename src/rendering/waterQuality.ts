@@ -4,6 +4,7 @@ import {
   type PreferenceStorage,
   type StoredPreference,
 } from '../browser/storage';
+import { prefersTouchControls } from '../browser/deviceCapabilities';
 
 export type WaterQuality = 'low' | 'high';
 
@@ -13,20 +14,21 @@ export const WATER_QUALITY_STORAGE_KEY =
 
 export interface WaterQualityPreference extends StoredPreference<WaterQuality> {}
 
-export function parseWaterQuality(value: unknown): WaterQuality {
+export function parseWaterQuality(value: unknown, fallback = DEFAULT_WATER_QUALITY): WaterQuality {
   return value === 'low' || value === 'high'
     ? value
-    : DEFAULT_WATER_QUALITY;
+    : fallback;
 }
 
 export function createWaterQualityPreference(
   apply: (value: WaterQuality) => void = () => undefined,
   storage: PreferenceStorage | null = browserStorage(),
 ): WaterQualityPreference {
+  const initial: WaterQuality = prefersTouchControls() ? 'low' : DEFAULT_WATER_QUALITY;
   return createStoredPreference(
-    DEFAULT_WATER_QUALITY,
+    initial,
     WATER_QUALITY_STORAGE_KEY,
-    parseWaterQuality,
+    (value) => parseWaterQuality(value, initial),
     apply,
     storage,
   );
