@@ -56,6 +56,76 @@ function expectInView(body: Object3D, camera: PerspectiveCamera) {
 }
 
 describe('Carlitos sitting positions', () => {
+  it('rejects a turn with a blocked middle even when both endpoint poses are clear', () => {
+    const { placement, cat, body, boat, camera } = fixture();
+    body.geometry.dispose();
+    body.geometry = new BoxGeometry(0.12, 0.56, 0.9);
+    for (let step = 0; step < 30; step++) {
+      expect(placement.cycleFrontSeat(1)).toBe(true);
+      if (cat.position.z < -2.5) break;
+    }
+    const seat = placement.currentSeatId;
+    const from = cat.quaternion.clone();
+    const target = Math.atan2(cat.position.x - camera.position.x, cat.position.z - camera.position.z);
+    const current = Math.atan2(2 * from.w * from.y, 1 - 2 * from.y * from.y);
+    const arc = Math.atan2(Math.sin(target - current), Math.cos(target - current));
+    const obstacle = new Mesh(new BoxGeometry(0.04, 0.08, 0.04), new MeshStandardMaterial());
+    obstacle.position.set(0, 0, -0.4).applyQuaternion(from)
+      .applyAxisAngle(new Vector3(0, 1, 0), arc / 2).add(cat.position);
+    obstacle.position.y += 0.3;
+    boat.add(obstacle);
+    const obstacleBounds = new Box3().setFromObject(obstacle);
+    expect(new Box3().setFromObject(body, true).intersectsBox(obstacleBounds)).toBe(false);
+    cat.rotation.y = target;
+    expect(new Box3().setFromObject(body, true).intersectsBox(obstacleBounds)).toBe(false);
+    cat.quaternion.copy(from);
+    placement.setInteracting(true);
+    expect(placement.update(1 / 60)).toBe(true);
+    expect(placement.currentSeatId).not.toBe(seat);
+    expect(new Box3().setFromObject(body, true).intersectsBox(obstacleBounds)).toBe(false);
+  });
+
+  // Importance: 95/100. Care must face the player without snapping or crossing solid models.
+  it('uses distance for resting direction, then turns smoothly toward the player and back', async () => {
+    const { placement, cat, body, camera } = fixture();
+    const bands = new Set<string>();
+    for (let step = 0; step < 30; step++) {
+      expect(placement.cycleFrontSeat(1)).toBe(true);
+      const distance = Math.hypot(cat.position.x - camera.position.x, cat.position.z - camera.position.z);
+      const forward = new Vector3(0, 0, -1).applyQuaternion(cat.quaternion);
+      const towardPlayer = camera.position.clone().sub(cat.position).setY(0).normalize();
+      if (distance < 3.15) {
+        bands.add('near');
+        expect(forward.dot(towardPlayer)).toBeGreaterThan(0.999);
+      } else if (distance < 3.65) {
+        bands.add('middle');
+        expect(forward.z).toBeCloseTo(1);
+      } else {
+        bands.add('far');
+        expect(forward.dot(cat.position.clone().setY(0).normalize())).toBeGreaterThan(0.999);
+      }
+    }
+    expect([...bands].sort()).toEqual(['far', 'middle', 'near']);
+    for (let step = 0; step < 30 && cat.position.z > -2.4; step++) placement.cycleFrontSeat(1);
+    const resting = cat.quaternion.clone();
+    const seat = placement.currentSeatId;
+    placement.setInteracting(true);
+    const ready = placement.waitUntilFacingPlayer();
+    for (let frame = 0; frame < 90; frame++) {
+      const before = cat.quaternion.clone();
+      expect(placement.update(1 / 60)).toBe(true);
+      expect(cat.quaternion.angleTo(before)).toBeLessThan(0.5);
+      expectInView(body, camera);
+    }
+    expect(await ready).toBe(true);
+    expect(placement.currentSeatId).toBe(seat);
+    const target = camera.position.clone().sub(cat.position).setY(0).normalize();
+    expect(new Vector3(0, 0, -1).applyQuaternion(cat.quaternion).dot(target)).toBeGreaterThan(0.999);
+    placement.setInteracting(false);
+    for (let frame = 0; frame < 90; frame++) expect(placement.update(1 / 60)).toBe(true);
+    expect(cat.quaternion.angleTo(resting)).toBeLessThan(0.02);
+  });
+
   it('cycles safe front seats in both directions and keeps the selected seat during updates', () => {
     const { placement, cat, body, boat, camera } = fixture();
     expect(placement.cycleFrontSeat(1)).toBe(true);
@@ -159,14 +229,17 @@ it('keeps the production cat visible and seated while the feeding can moves thro
     const cat = world.scene.getObjectByName('carlitos-companion')!;
     const model = world.scene.getObjectByName('carlitos-model')!;
     const seats = new Set<string>();
-    const feed = world.playCarlitosAction('feedCarlitos');
+    const handoff = vi.fn();
+    const feed = world.playCarlitosAction('feedCarlitos', handoff);
     for (let frame = 0; frame < 180; frame++) {
       world.update(frame / 30, 1 / 30);
+      await Promise.resolve();
       expect(cat.visible, `feeding frame ${frame}`).toBe(true);
       expectInView(model, camera);
       seats.add(cat.userData.seatId);
     }
     await feed;
+    expect(handoff).toHaveBeenCalledOnce();
     expect(seats.size).toBe(1);
   } finally { world.dispose(); models.dispose(); production.dispose(); }
 }, 30_000);
@@ -260,6 +333,16 @@ async function productionChest(): Promise<ChestDisplay> {
   return chest;
 }
 
+function facePlayer(cat: CarlitosPresentation, placement: CarlitosSeatPlacement, camera: PerspectiveCamera): void {
+  cat.setAttentive(true);
+  placement.setInteracting(true);
+  for (let frame = 0; frame < 60; frame++) {
+    cat.update(1 / 60);
+    expect(placement.update(1 / 60)).toBe(true);
+    expectInView(cat.modelRoot, camera);
+  }
+}
+
 it('keeps the production animated cat visible with every item aboard through care and status poses', async () => {
   const models = await productionModels();
   const { scene, boat, camera, cat: dummy } = fixture();
@@ -289,13 +372,19 @@ it('keeps the production animated cat visible with every item aboard through car
         }
       }
       for (const action of ['pet', 'feed'] as const) {
+        facePlayer(cat, placement, camera);
         const done = cat.play(action);
         for (let frame = 0; frame < 40; frame++) {
           cat.update(0.1);
-          expect(placement.update(), `${action} frame ${frame}, aspect ${aspect}`).toBe(true);
+          expect(placement.update(0.1), `${action} frame ${frame}, aspect ${aspect}`).toBe(true);
           expectInView(cat.modelRoot, camera);
+          const towardPlayer = camera.position.clone().sub(cat.root.position).setY(0).normalize();
+          const forward = new Vector3(0, 0, -1).applyQuaternion(cat.root.quaternion);
+          expect(forward.dot(towardPlayer), `${action} must face the player`).toBeGreaterThan(0.999);
         }
         await done;
+        placement.setInteracting(false);
+        cat.setAttentive(false);
       }
     }
     expect(selected.size).toBeGreaterThan(4);

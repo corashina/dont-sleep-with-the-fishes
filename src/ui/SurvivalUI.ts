@@ -44,6 +44,7 @@ const requireElement = createElementRequirement('survival UI');
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
   onCarlitosPosition: (direction: -1 | 1) => void = () => undefined;
+  onCarlitosCardChange: (open: boolean) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
   onEventChoice: (choiceId: EventResponseId) => void = () => undefined;
   onRestart: () => void = () => undefined;
@@ -193,6 +194,7 @@ export class SurvivalUI {
       if (this.disposed || this.carlitosRadioPause === open) return;
       this.carlitosRadioPause = open;
       this.syncRadioPause();
+      this.onCarlitosCardChange(open);
     };
     this.eventView.onChoice = (choiceId) => {
       if (!this.disposed) this.onEventChoice(choiceId);
@@ -657,6 +659,7 @@ export class SurvivalUI {
       () => document.removeEventListener('keydown', this.handleKeyDown),
       () => { this.onAction = () => undefined; },
       () => { this.onCarlitosPosition = () => undefined; },
+      () => { this.onCarlitosCardChange = () => undefined; },
       () => { this.onEventItem = () => undefined; },
       () => { this.onEventChoice = () => undefined; },
       () => { this.onRestart = () => undefined; },

@@ -918,6 +918,9 @@ export class SurvivalPhase implements GamePhase {
 
   private wireUI(): void {
     this.ui.onAction = (action, option) => this.handleAction(action, option);
+    this.ui.onCarlitosCardChange = (open) => {
+      if (!this.disposed) this.world.setCarlitosCardOpen?.(open);
+    };
     this.ui.onCarlitosPosition = (direction) => {
       if (!this.itemAnimationLab || !this.canAcceptCommand() || this.session.snapshot().carlitos === null) return;
       this.world.cycleCarlitosPositionForLab?.(direction);

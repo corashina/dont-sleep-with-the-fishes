@@ -89,6 +89,7 @@ export class CarlitosPresentation {
   private activeAction: ActiveAction | null = null;
   private aboard = false;
   private disposed = false;
+  private attentive = false;
 
   constructor(
     propModels: Pick<PropModelLibrary, 'createPresentation' | 'createEventModel'>,
@@ -173,6 +174,13 @@ export class CarlitosPresentation {
     this.applyPose();
   }
 
+  setAttentive(attentive: boolean): void {
+    if (this.disposed || this.attentive === attentive) return;
+    this.attentive = attentive;
+    this.samplePose();
+    this.applyPose();
+  }
+
   play(action: CarlitosAction, onContact?: () => void): Promise<void> {
     if (this.disposed || !this.aboard) return Promise.resolve();
     this.finishAction();
@@ -242,7 +250,7 @@ export class CarlitosPresentation {
     this.interactionRoot.visible = aboard;
   }
 
-  private finishAction(): void {
+  finishAction(): void {
     const action = this.activeAction;
     if (action === null) return;
     this.activeAction = null;
@@ -258,6 +266,10 @@ export class CarlitosPresentation {
     this.poseSample.elapsed = action?.elapsed ?? 0;
     this.poseSample.duration = action?.duration ?? CARLITOS_PET_DURATION;
     sampleCarlitosPoseInto(this.pose, this.poseSample);
+    if (this.attentive) {
+      this.pose.bodyYaw = 0;
+      this.pose.headYaw = 0;
+    }
   }
 
   get modelRoot(): Group {
@@ -283,6 +295,8 @@ export class CarlitosPresentation {
     this.updateHeadPosition();
     this.foodTarget.position.copy(this.headPosition);
     this.foodTarget.position.y += 0.015;
+    // Keep the offered can beside the face when he looks directly at the player.
+    this.foodTarget.position.x += 0.35;
     // Leave room for the whole thrown can before it disappears at the feeding target.
     this.foodTarget.position.z -= 0.4;
     this.hand.visible = this.aboard && this.activeAction?.id === 'pet' && pose.handReach > 0;
