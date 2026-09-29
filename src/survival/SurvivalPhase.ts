@@ -1,5 +1,6 @@
 import { COMPLETE_HEART } from './heartOfTheSea';
 import { trackGameEnding } from '../browser/GoogleAnalytics';
+import type { SirenAudioCue } from './eventPresentationCue';
 import type { EventReactionPreviewRequest } from './EventReactionPreview';
 import { playEventReactionPreview, type EventReactionPreviewPorts } from './EventReactionPreviewPlayer';
 import { PerspectiveCamera } from 'three';
@@ -893,10 +894,8 @@ export class SurvivalPhase implements GamePhase {
     this.world.setEventCueHandler?.(({ eventId, cue }) => {
       if (eventId === 'seagull-theft') this.eventFlow.seagullGrab();
       else if (eventId === 'monster-in-the-fog') {
-        this.reactionPreviewCovered = this.itemAnimationLab;
         this.audio.fogMonsterBite();
-        void this.ui.setSleepCoverProfile?.('midnight-attack');
-        void this.ui.setSleepCovered?.(true);
+        this.coverAttackImpact();
       }
       else if (eventId === 'midnight-tour') this.audio.midnightTourCue(cue);
       else if (eventId === 'chest-attack') this.audio.chestAttackCue(cue);
@@ -904,6 +903,7 @@ export class SurvivalPhase implements GamePhase {
       else if (eventId === 'kraken') this.audio.krakenCue(cue);
       else if (eventId === 'ghost-ship') this.audio.ghostShipCue(cue);
       else if (eventId === 'ghosts') this.audio.ghostsCue(cue);
+      else if (eventId === 'eerie-melody') this.sirenCue(cue);
       else this.audio.checkBackCue(cue);
     });
     this.world.setThunderListener?.(() => this.audio.thunder());
@@ -912,6 +912,18 @@ export class SurvivalPhase implements GamePhase {
       this.audio.sinkingCue(cue);
     });
     this.wireUI();
+  }
+
+  private sirenCue(cue: SirenAudioCue): void {
+    this.audio.sirenCue(cue);
+    if (cue === 'contact') this.coverAttackImpact();
+  }
+
+  // Cut to black the moment an attacker hits the boat.
+  private coverAttackImpact(): void {
+    this.reactionPreviewCovered = this.itemAnimationLab;
+    void this.ui.setSleepCoverProfile?.('midnight-attack');
+    void this.ui.setSleepCovered?.(true);
   }
 
   private syncCarlitosLabPosition(): void {

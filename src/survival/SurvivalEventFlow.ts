@@ -1984,6 +1984,8 @@ export class SurvivalEventFlow {
     return (context.eventId === 'swarm-of-sharks'
       && (context.presentation.resourceDeltas.health ?? 0) < 0)
       || (context.eventId === 'monster-in-the-fog'
+        && (context.presentation.resourceDeltas.hull ?? 0) < 0)
+      || (context.eventId === 'eerie-melody'
         && (context.presentation.resourceDeltas.hull ?? 0) < 0);
   }
 
@@ -2059,7 +2061,8 @@ export class SurvivalEventFlow {
   }
 
   private eventResolutionCue(context: EventResolutionContext): Promise<void> {
-    if (context.eventId === 'monster-in-the-fog' && this.isImpactBite(context)) return Promise.resolve();
+    if ((context.eventId === 'monster-in-the-fog' || context.eventId === 'eerie-melody')
+      && this.isImpactBite(context)) return Promise.resolve();
     const stationaryHandymanTouch = context.eventId === 'handyman'
       && context.choice.choiceId === 'touch';
     if (stationaryHandymanTouch) return Promise.resolve();

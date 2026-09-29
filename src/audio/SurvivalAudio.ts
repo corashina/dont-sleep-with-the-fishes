@@ -13,6 +13,7 @@ import type {
   KrakenAudioCue,
   GhostShipAudioCue,
   GhostsAudioCue,
+  SirenAudioCue,
   MidnightTourAudioCue,
 } from '../survival/eventPresentationCue';
 import type { AudioVoice } from './AudioBackend';
@@ -579,6 +580,13 @@ export class SurvivalAudio {
   ghostsCue(cue: GhostsAudioCue): void {
     if (this.disposed) return;
     this.scope.play(cue === 'turn' ? 'ghostSpiritBreath' : 'ghostScream');
+  }
+
+  sirenCue(cue: SirenAudioCue): void {
+    if (this.disposed) return;
+    // The melody stops the moment she hits the boat.
+    if (cue === 'contact') this.stopEventMelody(0.05);
+    this.scope.play(cue === 'scream' ? 'ghostScream' : 'cannonImpact');
   }
 
   sharkBite(): void {

@@ -45,11 +45,7 @@ export interface SupernaturalReactionSample {
   ghostAdvance: number;
   flareFlash: number;
   sirenRear: number;
-  sirenDive: number;
-  sirenSwim: number;
-  sirenBurst: number;
-  sirenStrike: number;
-  sirenFall: number;
+  sirenRush: number;
   sirenFocus: number;
 }
 
@@ -58,7 +54,9 @@ const REVEAL_DURATIONS: Readonly<Record<SupernaturalAnimationEventId, number>> =
   'eerie-melody': 4.4,
 });
 
-export const SIREN_ATTACK_DURATION = 3.4;
+export const SIREN_ATTACK_DURATION = 2.4;
+export const SIREN_SCREAM_PROGRESS = 0.2;
+export const SIREN_CONTACT_PROGRESS = 0.94;
 
 const ITEM_DURATIONS = Object.freeze({
   ghosts: Object.freeze({ flareGun: 1.2, flashlight: GHOST_FLASHLIGHT_BASE_DURATION }),
@@ -227,11 +225,7 @@ function resetReaction(output: SupernaturalReactionSample): void {
   output.ghostAdvance = 0;
   output.flareFlash = 0;
   output.sirenRear = 0;
-  output.sirenDive = 0;
-  output.sirenSwim = 0;
-  output.sirenBurst = 0;
-  output.sirenStrike = 0;
-  output.sirenFall = 0;
+  output.sirenRush = 0;
   output.sirenFocus = 0;
 }
 
@@ -363,18 +357,12 @@ function sampleGhostReaction(
   output.cameraRoll = wrongChoice ? 0.1 * pulse(t, 0.22, 0.48, 0.82) : 0;
 }
 
-// The siren hisses, dives off her rock, swims under the surface, bursts out
-// in front of the player, strikes, and falls back into the sea.
+// The siren rears up and screams, then rushes head first at the player.
+// The scene cuts to black when she hits the boat.
 function sampleSirenAttack(t: number, output: SupernaturalReactionSample): void {
-  output.sirenRear = smoothstep(t / 0.14);
-  output.sirenDive = smoothstep((t - 0.14) / 0.14);
-  output.sirenSwim = smoothstep((t - 0.28) / 0.22);
-  output.sirenBurst = smoothstep((t - 0.5) / 0.08);
-  output.sirenStrike = pulse(t, 0.56, 0.6, 0.7);
-  output.sirenFall = smoothstep((t - 0.7) / 0.2);
-  output.sirenFocus = smoothstep(t / 0.1) * (1 - smoothstep((t - 0.88) / 0.12));
-  output.cameraPitch = 0.1 * output.sirenStrike;
-  output.cameraRoll = 0.12 * output.sirenStrike;
+  output.sirenRear = smoothstep(t / SIREN_SCREAM_PROGRESS);
+  output.sirenRush = clamp01((t - SIREN_SCREAM_PROGRESS) / (SIREN_CONTACT_PROGRESS - SIREN_SCREAM_PROGRESS)) ** 2;
+  output.sirenFocus = smoothstep(t / 0.15);
 }
 
 function sampleSirenReaction(
