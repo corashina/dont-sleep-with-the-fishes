@@ -107,8 +107,8 @@ Deploy `dist/` to a static host. Match its URL path to `base` in [vite.config.ts
 The checked-in base assumes `/dont-sleep-with-the-fishes/`; change it before building for a different path.
 
 [Deploy to GitHub Pages](../.github/workflows/deploy-pages.yml) runs on pushes to `master` and manual dispatch.
-Deployment waits for the build job and macOS verification.
-The workflow checks assets, tests, builds, thumbnails, and PowerShell portability across those jobs.
+Deployment waits for the Ubuntu build job.
+That job checks models and textures, then runs lint, TypeScript checks, and the production build.
 
 ## Analytics
 
