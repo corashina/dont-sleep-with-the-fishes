@@ -25,8 +25,9 @@ import {
 } from './whirlpoolChoreography';
 
 const MAX_LOST_ACTORS = 2;
-const CENTER_X = 5.9;
-const CENTER_Z = -11.6;
+// The boat rides the outer rim, clear of the sunken water.
+const CENTER_X = 7.03;
+const CENTER_Z = -13.82;
 const CENTER_DISTANCE = Math.hypot(CENTER_X, CENTER_Z);
 const RADIUS = 17;
 const DEPRESSION = 6;
@@ -37,7 +38,9 @@ const CORE_RADIUS = RADIUS * 0.56;
 const DRAG_ANGLE = 0.3;
 const LURCH_ANGLE = 0.22;
 const LURCH_PULL = 1.1;
-const BOW_DIP = 0.2;
+const BOW_DIP = 0.06;
+// The camera looks further down than the boat tilts, so the throat shows without the hull dipping under water.
+const CAMERA_DIP = 0.2;
 // Turns the bow toward the throat while the current drags the boat.
 const HEADING_TURN = 0.35;
 const INWARD_ROLL = 0.08;
@@ -277,14 +280,14 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     const pull = lurch * LURCH_PULL / CENTER_DISTANCE;
     const x = CENTER_X + offsetX * (1 - pull);
     const z = CENTER_Z + offsetZ * (1 - pull);
-    // The bow dips into the funnel so the throat shows past the gunwale.
-    const pitch = -(drag * BOW_DIP + lurch * 0.08);
+    const boatPitch = -(drag * BOW_DIP + lurch * 0.04);
+    const cameraPitch = -(drag * CAMERA_DIP + lurch * 0.08);
     const roll = -(drag * INWARD_ROLL + lurch * 0.07) + drag * 0.025 * Math.sin(this.flowTime * 1.3);
     const heading = angle - drag * HEADING_TURN;
     this.environment.boatEffectsRoot?.position.set(x, 0, z);
-    this.environment.boatEffectsRoot?.rotation.set(pitch, heading, roll, 'YXZ');
+    this.environment.boatEffectsRoot?.rotation.set(boatPitch, heading, roll, 'YXZ');
     this.environment.cameraEffectsRoot?.position.set(x, 0, z);
-    this.environment.cameraEffectsRoot?.rotation.set(pitch, heading, roll, 'YXZ');
+    this.environment.cameraEffectsRoot?.rotation.set(cameraPitch, heading, roll, 'YXZ');
   }
 
   private applyLostPoses(): void {
