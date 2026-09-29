@@ -40,7 +40,11 @@ import type {
 import { SharkSwarmPresentation } from './events/SharkSwarmPresentation';
 import { CrabSwarmPresentation } from './events/CrabSwarmPresentation';
 import { SomethingUnderUsPresentation } from './events/SomethingUnderUsPresentation';
-import { CarlitosEventPresentation } from './events/CarlitosEventPresentation';
+import {
+  CarlitosEventPresentation,
+  isCarlitosEventId,
+  type CarlitosEventId,
+} from './events/CarlitosEventPresentation';
 import { DeathStarePresentation } from './events/DeathStarePresentation';
 import { LeakPresentation } from './events/LeakPresentation';
 import { OceanOfBloodPresentation } from './events/OceanOfBloodPresentation';
@@ -203,25 +207,31 @@ function createBorrowedDedicatedEnvironment(
   return { ...environment, eventModels };
 }
 
+const DEDICATED_PRESENTATIONS: Readonly<Record<
+  Exclude<DedicatedEventId, CarlitosEventId>,
+  (environment: DedicatedEventEnvironment) => DedicatedEventPresentation
+>> = {
+  kraken: environment => new KrakenPresentation(environment),
+  'starry-night': environment => new StarryNightPresentation(environment),
+  'ocean-of-blood': environment => new OceanOfBloodPresentation(environment),
+  leak: environment => new LeakPresentation(environment),
+  'school-of-fish': environment => new SchoolOfFishPresentation(environment),
+  'tentacle-attack': environment => new SnatcherPresentation(environment),
+  'death-stare': environment => new DeathStarePresentation(environment),
+  'swarm-of-sharks': environment => new SharkSwarmPresentation(environment),
+  'crab-swarm': environment => new CrabSwarmPresentation(environment),
+  'something-under-us': environment => new SomethingUnderUsPresentation(environment),
+  tornado: environment => new TornadoPresentation(environment),
+  whirlpool: environment => new WhirlpoolPresentation(environment),
+};
+
 function createDedicatedPresentation(
   eventId: DedicatedEventId,
   environment: DedicatedEventEnvironment,
 ): DedicatedEventPresentation {
-  switch (eventId) {
-    case 'kraken': return new KrakenPresentation(environment);
-    case 'starry-night': return new StarryNightPresentation(environment);
-    case 'ocean-of-blood': return new OceanOfBloodPresentation(environment);
-    case 'leak': return new LeakPresentation(environment);
-    case 'school-of-fish': return new SchoolOfFishPresentation(environment);
-    case 'tentacle-attack': return new SnatcherPresentation(environment);
-    case 'death-stare': return new DeathStarePresentation(environment);
-    case 'swarm-of-sharks': return new SharkSwarmPresentation(environment);
-    case 'crab-swarm': return new CrabSwarmPresentation(environment);
-    case 'something-under-us': return new SomethingUnderUsPresentation(environment);
-    case 'tornado': return new TornadoPresentation(environment);
-    case 'whirlpool': return new WhirlpoolPresentation(environment);
-    default: return new CarlitosEventPresentation(eventId, environment);
-  }
+  return isCarlitosEventId(eventId)
+    ? new CarlitosEventPresentation(eventId, environment)
+    : DEDICATED_PRESENTATIONS[eventId](environment);
 }
 
 const noChoice = (): Promise<void> => Promise.resolve();

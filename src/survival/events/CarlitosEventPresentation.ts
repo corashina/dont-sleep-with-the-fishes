@@ -55,7 +55,7 @@ interface ActiveAnimation {
   readonly resolve: (played?: boolean) => void;
 }
 
-function isCarlitosEventId(id: DedicatedEventId): id is CarlitosEventId {
+export function isCarlitosEventId(id: DedicatedEventId): id is CarlitosEventId {
   return (CARLITOS_EVENT_IDS as readonly string[]).includes(id);
 }
 
