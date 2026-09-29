@@ -40,11 +40,7 @@ import type {
 import { SharkSwarmPresentation } from './events/SharkSwarmPresentation';
 import { CrabSwarmPresentation } from './events/CrabSwarmPresentation';
 import { SomethingUnderUsPresentation } from './events/SomethingUnderUsPresentation';
-import {
-  CarlitosEventPresentation,
-  isCarlitosEventId,
-  type CarlitosEventId,
-} from './events/CarlitosEventPresentation';
+import { CarlitosEventPresentation } from './events/CarlitosEventPresentation';
 import { DeathStarePresentation } from './events/DeathStarePresentation';
 import { LeakPresentation } from './events/LeakPresentation';
 import { OceanOfBloodPresentation } from './events/OceanOfBloodPresentation';
@@ -208,7 +204,7 @@ function createBorrowedDedicatedEnvironment(
 }
 
 const DEDICATED_PRESENTATIONS: Readonly<Record<
-  Exclude<DedicatedEventId, CarlitosEventId>,
+  DedicatedEventId,
   (environment: DedicatedEventEnvironment) => DedicatedEventPresentation
 >> = {
   kraken: environment => new KrakenPresentation(environment),
@@ -223,15 +219,15 @@ const DEDICATED_PRESENTATIONS: Readonly<Record<
   'something-under-us': environment => new SomethingUnderUsPresentation(environment),
   tornado: environment => new TornadoPresentation(environment),
   whirlpool: environment => new WhirlpoolPresentation(environment),
+  'shadow-figure': environment => new CarlitosEventPresentation('shadow-figure', environment),
+  'guarded-sleep': environment => new CarlitosEventPresentation('guarded-sleep', environment),
 };
 
 function createDedicatedPresentation(
   eventId: DedicatedEventId,
   environment: DedicatedEventEnvironment,
 ): DedicatedEventPresentation {
-  return isCarlitosEventId(eventId)
-    ? new CarlitosEventPresentation(eventId, environment)
-    : DEDICATED_PRESENTATIONS[eventId](environment);
+  return DEDICATED_PRESENTATIONS[eventId](environment);
 }
 
 const noChoice = (): Promise<void> => Promise.resolve();
