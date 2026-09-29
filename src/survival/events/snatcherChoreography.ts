@@ -1,12 +1,13 @@
-import { clamp01, pulse, smoothstep } from '../animationMath';
+import { clamp01, pulse, smootherstep, smoothstep } from '../animationMath';
 import { scaleEventItemDuration } from '../eventItemTiming';
 import { eventItemUseDurationForItem } from '../eventItemUseChoreography';
 import { sampleNetAttackContact } from '../netAttackChoreography';
 
-export const SNATCHER_REVEAL_DURATION = 2.5;
+export const SNATCHER_REVEAL_DURATION = 3;
 export const SNATCHER_ITEM_DURATION = scaleEventItemDuration(1.15);
-export const SNATCHER_REACTION_DURATION = 1.2;
+export const SNATCHER_REACTION_DURATION = 1.8;
 const SNATCHER_REVEAL_DEPTH = 2.4;
+const SNATCHER_SINK_DEPTH = 2.7;
 
 export function snatcherItemDuration(choiceId: string): number {
   if (choiceId === 'cannedFood') return eventItemUseDurationForItem('throw-target', 'cannedFood');
@@ -76,17 +77,38 @@ export function sampleSnatcherReveal(
   const t = clamp01(progress);
   if (t === 0) return true;
 
-  output.fingerVisibility = smoothstep((t - 0.04) / 0.24);
-  output.headVisibility = smoothstep((t - 0.3) / 0.28);
-  output.crouchStrength = smoothstep((t - 0.28) / 0.34);
-  output.pointStrength = smoothstep((t - 0.37) / 0.24);
-  const rise = smoothstep((t - 0.04) / 0.52);
+  // One eased rise, a small crest above the hold pose, then a settle.
+  const rise = smootherstep((t - 0.02) / 0.64);
+  const unfurl = 1 - rise;
+  const crest = Math.sin(Math.PI * clamp01((t - 0.5) / 0.46)) * 0.1;
+  output.fingerVisibility = smoothstep(t / 0.12);
+  output.headVisibility = smoothstep((t - 0.18) / 0.32);
+  output.crouchStrength = smootherstep((t - 0.08) / 0.58);
+  output.pointStrength = smootherstep((t - 0.34) / 0.5);
   output.creatureY = -0.16 * output.crouchStrength
-    - SNATCHER_REVEAL_DEPTH * (1 - rise);
+    - SNATCHER_REVEAL_DEPTH * unfurl
+    + crest;
   output.creatureZ = 0.12 * (1 - output.headVisibility);
-  output.creaturePitch = 0.14 * output.crouchStrength;
-  output.creatureRoll = -0.035 * output.crouchStrength;
+  // The tentacle leans back and sways while it leaves the water.
+  output.creaturePitch = 0.14 * output.crouchStrength - 0.2 * unfurl;
+  output.creatureRoll = -0.035 * output.crouchStrength
+    + Math.sin(t * Math.PI * 2.4) * 0.12 * unfurl;
+  output.creatureYaw = Math.sin(t * Math.PI * 1.7) * 0.08 * unfurl;
   return true;
+}
+
+function applySnatcherSink(progress: number, output: SnatcherSample): void {
+  const flinch = pulse(progress, 0, 0.12, 0.32);
+  const sink = smootherstep((progress - 0.1) / 0.9);
+  const fade = 1 - smoothstep((progress - 0.72) / 0.28);
+  output.creatureY += flinch * 0.1 - sink * SNATCHER_SINK_DEPTH;
+  output.creaturePitch += sink * 0.2 - flinch * 0.12;
+  output.creatureRoll -= sink * 0.18;
+  output.creatureYaw += sink * 0.22;
+  output.pointStrength *= 1 - smoothstep((progress - 0.04) / 0.5);
+  output.crouchStrength *= 1 - sink;
+  output.fingerVisibility *= fade;
+  output.headVisibility *= fade;
 }
 
 export function sampleSnatcherItemUse(
@@ -121,24 +143,20 @@ export function sampleSnatcherReaction(
   output: SnatcherSample,
   choiceId: string | null,
 ): boolean {
-  if (choiceId === 'shotgun' || choiceId === 'fishingNet' || choiceId === 'knife') {
-    return sampleSnatcherReveal(1 - clamp01(progress), output);
-  }
+  const t = clamp01(progress);
   if (choiceId === 'cannedFood') {
     sampleSnatcherItemUse('cannedFood', 1, output);
-    const leave = smoothstep(progress);
-    output.creatureX += leave * 1.2;
-    output.creatureY -= leave * 1.5;
-    return true;
+    output.creatureX += smoothstep(t / 0.8);
+  } else {
+    resetSnatcherSample(output);
+    holdCrouchedThreat(output);
+    if (choiceId !== 'shotgun' && choiceId !== 'fishingNet' && choiceId !== 'knife') {
+      // The tentacle drags its catch away from the hull before it dives.
+      const pull = smootherstep(t / 0.5);
+      output.creatureX = pull * 0.34;
+      output.pointStrength = 1 - pull * 0.54;
+    }
   }
-  resetSnatcherSample(output);
-  holdCrouchedThreat(output);
-  const t = clamp01(progress);
-  if (t === 0) return true;
-
-  const retreat = smoothstep((t - 0.18) / 0.72);
-  output.pointStrength = 1 - retreat * 0.54;
-  output.creatureX = retreat * 0.34;
-  output.creatureY = -0.16 - retreat * 0.08;
+  applySnatcherSink(t, output);
   return true;
 }
