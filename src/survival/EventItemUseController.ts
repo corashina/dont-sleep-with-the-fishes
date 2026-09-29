@@ -288,7 +288,8 @@ export class EventItemUseController {
   }
 
   private applyRequestSample(request: EventItemUseRequest): void {
-    if (request.eventId === 'tornado' || request.eventId === 'carlitos') {
+    if (request.eventId === 'tornado' || request.eventId === 'whirlpool'
+      || request.eventId === 'carlitos') {
       this.sample.cameraYaw = 0;
       this.sample.cameraPitch = 0;
       this.sample.cameraTargetBlend = 0;

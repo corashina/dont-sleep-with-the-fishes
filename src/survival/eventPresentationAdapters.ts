@@ -46,6 +46,7 @@ import { OceanOfBloodPresentation } from './events/OceanOfBloodPresentation';
 import { SchoolOfFishPresentation } from './events/SchoolOfFishPresentation';
 import { SnatcherPresentation } from './events/SnatcherPresentation';
 import { TornadoPresentation } from './events/TornadoPresentation';
+import { WhirlpoolPresentation } from './events/WhirlpoolPresentation';
 import { StarryNightPresentation } from './events/StarryNightPresentation';
 import {
   MoonEventPresentation,
@@ -215,6 +216,7 @@ function createDedicatedPresentation(
     case 'swarm-of-sharks': return new SharkSwarmPresentation(environment);
     case 'something-under-us': return new SomethingUnderUsPresentation(environment);
     case 'tornado': return new TornadoPresentation(environment);
+    case 'whirlpool': return new WhirlpoolPresentation(environment);
     default: return new CarlitosEventPresentation(eventId, environment);
   }
 }

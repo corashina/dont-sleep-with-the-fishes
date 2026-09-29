@@ -174,7 +174,7 @@ const FLASHLIGHT_SIGNAL_EVENTS: ReadonlySet<string> = new Set([
   'other-people', 'ghost-ship', 'plane', 'flying-saucer', 'lighthouse',
 ]);
 const ANCHOR_DROP_EVENTS: ReadonlySet<string> = new Set([
-  'tornado', 'thunderstorm', 'restless-waves', 'dangerous-waters',
+  'tornado', 'whirlpool', 'thunderstorm', 'restless-waves', 'dangerous-waters',
 ]);
 const SETTLE_ROLL_EXCLUDED_CONTEXTS: ReadonlySet<EventItemUseContext> = new Set([
   'shotgun-fire',
