@@ -30,6 +30,7 @@ const constructors = vi.hoisted(() => ({
   deathStare: vi.fn(),
   sharks: vi.fn(),
   tornado: vi.fn(),
+  whirlpool: vi.fn(),
   carlitos: vi.fn(),
   wreckage: vi.fn(),
 }));
@@ -66,6 +67,9 @@ vi.mock('../src/survival/events/SharkSwarmPresentation', () => ({
 }));
 vi.mock('../src/survival/events/TornadoPresentation', () => ({
   TornadoPresentation: constructors.tornado,
+}));
+vi.mock('../src/survival/events/WhirlpoolPresentation', () => ({
+  WhirlpoolPresentation: constructors.whirlpool,
 }));
 vi.mock('../src/survival/events/CarlitosEventPresentation', () => ({
   CarlitosEventPresentation: constructors.carlitos,
@@ -233,6 +237,7 @@ beforeEach(() => {
   constructors.deathStare.mockImplementation(() => presentation);
   constructors.sharks.mockImplementation(() => presentation);
   constructors.tornado.mockImplementation(() => presentation);
+  constructors.whirlpool.mockImplementation(() => presentation);
   constructors.carlitos.mockImplementation(() => presentation);
   constructors.wreckage.mockImplementation(() => ({
     ...presentation,

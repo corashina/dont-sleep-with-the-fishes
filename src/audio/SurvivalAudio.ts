@@ -438,7 +438,7 @@ export class SurvivalAudio {
   }
 
   private playEventAmbience(eventId: string): void {
-    if (eventId === 'thunderstorm') {
+    if (['thunderstorm', 'whirlpool'].includes(eventId)) {
       this.scope.startLoop('stormRumble');
       this.scope.setLoopGain('stormRumble', 0, 0);
       this.scope.setLoopGain('stormRumble', 1, 0.6);
@@ -635,7 +635,7 @@ export class SurvivalAudio {
       this.scope.play('fishCatch');
     } else if (choiceId === 'shotgun') {
       this.scope.play('shotgun');
-    } else if (eventId === 'tornado' && choiceId === 'anchor') {
+    } else if ((eventId === 'tornado' || eventId === 'whirlpool') && choiceId === 'anchor') {
       this.scope.play('anchorChain');
     } else {
       this.scope.play('itemHandling');

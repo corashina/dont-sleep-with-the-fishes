@@ -81,6 +81,7 @@ const EVENT_WEATHER: Readonly<Record<string, PresentationWeatherId>> = Object.fr
   'swarm-of-sharks': 'overcast',
   'something-under-us': 'calm',
   tornado: 'wind',
+  whirlpool: 'calm',
   'shower-night': 'rain',
   'windy-night': 'wind',
   'bad-sleep': 'overcast',

@@ -135,7 +135,7 @@ function expectEventEffectRootsCleared(scene: Object3D, eventId: SurvivalEventId
   }
   const dedicatedRoots: Partial<Record<SurvivalEventId, string>> = {
     leak: 'leak', 'school-of-fish': 'school-of-fish', 'tentacle-attack': 'tentacle-attack',
-    'death-stare': 'death-stare', 'swarm-of-sharks': 'shark-swarm', tornado: 'tornado',
+    'death-stare': 'death-stare', 'swarm-of-sharks': 'shark-swarm', tornado: 'tornado', whirlpool: 'whirlpool',
     'starry-night': 'starry-night', 'ocean-of-blood': 'ocean-of-blood',
     'something-under-us': 'something-under-us', 'shadow-figure': 'shadow-figure', 'guarded-sleep': 'guarded-sleep',
   };
