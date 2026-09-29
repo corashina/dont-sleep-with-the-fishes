@@ -281,6 +281,33 @@ function createSessionRig(
 }
 
 describe('event selection contracts', () => {
+  // Importance: 95/100. Ignoring crabs must show theft before the sleep cover hides it.
+  it.each(['sleep', 'flashlight'] as const)('shows crab theft before covering the scene after %s', async choice => {
+    const type = choice === 'sleep' ? 'map' : 'flashlight';
+    const instanceId = `${type}-1` as const;
+    const rig = createSessionRig(new SurvivalSession([
+      { type, instanceId },
+    ], { seed: 42, initialEventId: 'crab-swarm' }));
+    const reaction = deferred();
+    try {
+      await rig.flow.revealPending(rig.realSession.snapshot());
+      rig.ui.setSleepCovered.mockClear();
+      rig.world.reactToEventOutcome.mockImplementation(() => reaction.promise);
+      if (choice === 'sleep') rig.flow.resolveContextual('sleep');
+      else rig.flow.resolveItem('flashlight', 'flashlight-1');
+      await vi.waitFor(() => expect(rig.world.reactToEventOutcome).toHaveBeenCalledOnce());
+      expect(rig.ui.setSleepCovered).not.toHaveBeenCalledWith(true);
+      expect(rig.realSession.snapshot().inventory[instanceId]?.condition).toBe('lost');
+      rig.flow.sync(rig.realSession.snapshot());
+      expect(rig.world.syncInventory).toHaveBeenLastCalledWith(expect.objectContaining({
+        inventory: { [instanceId]: expect.objectContaining({ condition: 'usable' }) },
+      }));
+      reaction.resolve();
+      await vi.waitFor(() => expect(rig.ui.setSleepCovered).toHaveBeenCalledWith(true));
+      expect(rig.onFatalError).not.toHaveBeenCalled();
+    } finally { reaction.resolve(); rig.flow.dispose(); }
+  });
+
   // Importance: 95/100. The worn bucket must remain intact until the Eerie Melody scene is covered and cleared.
   it('keeps the Eerie Melody bucket intact during the event and shows damage afterward', async () => {
     const rig = createSessionRig(new SurvivalSession([{ type: 'bucket', instanceId: 'bucket-1' }], {

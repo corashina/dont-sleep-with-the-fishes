@@ -26,6 +26,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   'tentacle-attack': { models: ['snatcher'], sounds: ['tentacleMovement', 'netImpact'] },
   'death-stare': { models: ['deathStareBlob'], sounds: ['fogMonsterBite'] },
   'swarm-of-sharks': { models: ['shark'], sounds: ['midnightMonsterAttack'] },
+  'crab-swarm': { models: ['crab'], sounds: [] },
   tornado: { models: [], sounds: ['tornadoWind'] },
   whirlpool: { models: [], sounds: ['stormRumble'] },
   'monster-in-the-fog': { models: ['fogMonster'], sounds: ['fogMonsterBite'] },
@@ -33,6 +34,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   'flying-saucer': { models: [], sounds: ['ufoFlyby'] },
   'something-under-us': { models: [], sounds: ['underUsPresence'] },
   'ghost-ship': { models: [], sounds: ['cannonFire', 'cannonImpact', 'anchorSplash'] },
+  mimic: { models: [], sounds: ['underUsPresence'] },
   ghosts: { models: ['ghost'], sounds: ['ghostSpiritBreath', 'ghostScream'] },
   'eerie-melody': {
     models: ['siren'],
@@ -61,7 +63,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
     models: ['checkBackFish', 'checkBackAnglerfish'],
     sounds: ['checkBackFish', 'checkBackAnglerfish'],
   },
-  flowers: { models: ['flowers', 'flowersHeart'], sounds: [] },
+  flowers: { models: ['flowersHeart'], sounds: [] },
   'chest-attack': {
     models: [],
     sounds: ['chest', 'midnightMonsterAttack'],

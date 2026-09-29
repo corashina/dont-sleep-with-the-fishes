@@ -16,7 +16,6 @@ export const SURVIVAL_EVENT_MODEL_IDS = [
   'checkBackAnglerfish',
   'anglerFish',
   'mysteryChest',
-  'flowers',
   'bloodHeart',
   'flowersHeart',
   'chestHeart',
@@ -128,17 +127,11 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
     rotation: NO_ROTATION,
     maxTriangles: generatedMetadataJson.wreckagePallet.triangles,
   }),
-  flowers: Object.freeze({
-    url: new URL('../assets/models/events/flowers.glb', import.meta.url).href,
-    targetLongestDimension: 0.9,
-    rotation: NO_ROTATION,
-    maxTriangles: generatedMetadataJson.flowers.triangles,
-  }),
 });
 
 export const EVENT_MODEL_IDS = Object.freeze([
   'fogMonster', 'ghost', 'siren', 'sirenRock',
-  'leakPlanks', 'schoolFish', 'cod', 'bass', 'redSnapper',
+  'leakPlanks', 'schoolFish', 'cod', 'bass', 'redSnapper', 'crab',
   'snatcher', 'anglerFish', 'shark', 'deathStareBlob',
 ] as const);
 
@@ -167,6 +160,12 @@ export interface EventModelSpec {
 }
 
 const PRESENTATION = {
+  crab: {
+    targetLongestDimension: 0.58,
+    rotation: [0, 0, 0],
+    offset: [0, 0, 0],
+    maxTriangles: FISHING_CATCH_MODEL_SPECS.crab.maxTriangles,
+  },
   fogMonster: {
     targetLongestDimension: 2.4,
     rotation: [0, 0, 0],
@@ -291,6 +290,7 @@ function checkedMetadata(
 }
 
 const generatedMetadata = {
+  crab: checkedMetadata('crab', fishingMetadataJson.crab),
   fogMonster: checkedMetadata('fogMonster', generatedMetadataJson.fogMonster),
   ghost: checkedMetadata('ghost', generatedMetadataJson.ghost),
   siren: checkedMetadata('siren', generatedMetadataJson.siren),
@@ -307,7 +307,7 @@ const generatedMetadata = {
 } satisfies Readonly<Record<EventModelId, EventModelMetadata>>;
 
 function modelUrl(id: EventModelId): string {
-  if (id === 'cod' || id === 'bass' || id === 'redSnapper') {
+  if (id === 'cod' || id === 'bass' || id === 'redSnapper' || id === 'crab') {
     return FISHING_CATCH_MODEL_SPECS[id].url;
   }
   const url = urls[`../assets/models/events/${id}.glb`];

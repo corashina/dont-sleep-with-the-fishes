@@ -1,6 +1,7 @@
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, PerspectiveCamera } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { GhostShipPresentation } from '../src/survival/GhostShipPresentation';
+import { FlashlightBeam } from '../src/survival/FlashlightBeam';
 import type { FocusedEventPresentationDependencies } from '../src/survival/FocusedEventPresentation';
 import type { ActionOutcome, EventResultPresentation } from '../src/survival/survivalTypes';
 
@@ -19,6 +20,31 @@ const result = (resultId: string): EventResultPresentation => ({ eventId: 'ghost
 const outcome: ActionOutcome = { accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'none' };
 
 describe('ghost ship presentation', () => {
+  // Importance: 95/100. A meshless aim marker must not suppress the flashlight signal.
+  it('shows the flashlight beam toward the moving ship and hides it after clearing', () => {
+    const { presentation } = fixture();
+    const beam = new FlashlightBeam();
+    const actor = new Group();
+    try {
+      presentation.stage();
+      beam.setTarget(presentation.itemAimTarget());
+      for (const time of [0, 2, 4]) {
+        presentation.update(time, 2);
+        beam.updateTarget();
+        beam.apply(actor, 1, 0);
+        expect(beam.beam.visible).toBe(true);
+        expect(beam.light.intensity).toBeGreaterThan(0);
+      }
+      presentation.clear();
+      beam.updateTarget();
+      beam.apply(actor, 1, 0);
+      expect(beam.beam.visible).toBe(false);
+    } finally {
+      beam.dispose();
+      presentation.dispose();
+    }
+  });
+
   it.each(['clear', 'dispose'] as const)('releases pending reactions on %s and supports a fresh stage', async (action) => {
     const { presentation, mesh } = fixture();
     const dispose = vi.fn();

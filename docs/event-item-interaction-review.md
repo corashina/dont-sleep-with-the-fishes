@@ -7,7 +7,7 @@ Review date: 2026-09-24. Scope: current working tree, including existing local e
 The owner requested a one-Food Death Stare cost and fixes for the mismatched animations.
 Death Stare now spends one Food on either outcome. Its choice and success text were updated in all three languages.
 
-Flowers bucket use now scoops and carries the heart piece through the item return.
+Jellyfish bucket use now scoops and carries the heart piece through the item return.
 Rain map use places the map over supplies. Wind net use places the net over supplies.
 Wind map use shows the map caught by a gust, then blown away.
 Rain and thunderstorm bucket uses now bail from the boat and tip over the side.
@@ -72,7 +72,7 @@ If cans are intentionally required, rename these choices and explain why caught 
 
 | Action | Current code path | Proposal |
 | --- | --- | --- |
-| Flowers / Bucket | `BoatWorld.blocksEventItemUse` skips bucket use. The shared resolver also has no Flowers bucket context. | Scoop the heart piece into the bucket, then tip it into storage. |
+| Jellyfish / Bucket | `BoatWorld.blocksEventItemUse` skips bucket use. The shared resolver also has no Jellyfish bucket context. | Scoop the heart piece into the bucket, then tip it into storage. |
 | Shower Night / Map | Uses `map-read`, while result text says the map covers supplies. | Spread it across supplies. Show water soaking and folding it. |
 | Windy Night / Map | Uses `map-read`, then loses the map and grants Food. | Show the map escaping and the food discovery as connected beats. |
 | Windy Night / Net | Shared item use is explicitly skipped. | Stretch the net over cargo and pull its corners tight. |
@@ -80,7 +80,7 @@ If cans are intentionally required, rename these choices and explain why caught 
 These are presentation gaps. The underlying outcomes still resolve.
 Rain Bucket uses a helmet context. Either clarify that purpose or change it to bailing to match the description.
 
-Sources: [BoatWorld.ts](../../src/survival/BoatWorld.ts), [eventItemUseChoreography.ts](../../src/survival/eventItemUseChoreography.ts), [FlowersPresentation.ts](../../src/survival/FlowersPresentation.ts), [eventMessages.ts](../../src/i18n/eventMessages.ts).
+Sources: [BoatWorld.ts](../../src/survival/BoatWorld.ts), [eventItemUseChoreography.ts](../../src/survival/eventItemUseChoreography.ts), [JellyfishPresentation.ts](../../src/survival/JellyfishPresentation.ts), [eventMessages.ts](../../src/i18n/eventMessages.ts).
 
 ## Correct behavior worth keeping
 
@@ -103,7 +103,7 @@ Use percentages derived from weights in future labels or balance reports.
 
 ## Design concerns, not implementation defects
 
-**Identical choices reduce useful decisions.** Flowers grants the same heart piece through hands, net, or bucket, without a mechanical cost.
+**Identical choices reduce useful decisions.** Jellyfish grants the same heart piece through hands, net, or bucket, without a mechanical cost.
 Ocean of Blood gives identical salvage rewards through net and bucket.
 
 **Some choices only punish the player.** Death Stare net always breaks and causes severe damage.
@@ -151,7 +151,7 @@ The proposal column contains new design options. None are implemented by this re
 | Drifting Chest | Retrieve for one Energy, delegate to Carlitos, or pass. No equipment response. | Binoculars inspect the seam and movement before retrieval. Reveal clues, not a guaranteed mimic label. |
 | Seagull Theft | Automatic loss of one Food. No defensive item choice. | Allow a brief umbrella shoo or net block. Failure still loses Food; successful defense saves it. |
 | Check the Back | Investigate or ignore. Investigating automatically uses an available knife. Knife can break; unarmed failure injures the player. | Flashlight reveals the stern silhouette before the player chooses to touch it. |
-| Flowers | Hands, net, or bucket grant the same flower heart piece. Passing loses the opportunity. | Give each collection method a distinct physical action. Preserve the free hand option for ending access. |
+| Jellyfish | Hands, net, or bucket grant the same flower heart piece. Passing loses the opportunity. | Give each collection method a distinct physical action. Preserve the free hand option for ending access. |
 | Chest Attack | Automatic knife defense costs 10 Health. Automatic unarmed defense costs 25. The chest is destroyed. | Let an available bucket block the bite, with break risk. Make the defense choice before opening the chest. |
 | Midnight Tour | Visit or pass. No equipment response. Visit can produce chest, grave, camp, or attack outcomes. | Flashlight reveals tracks. Compass marks the return bearing. Knife clears a blocked route with a stated risk. |
 | Night Trader | Five offers drawn from the fixed trade list below. Payments include supplies and equipment. | Let binoculars inspect the offered item's condition before handover. Show payment and reward together. |
@@ -216,7 +216,7 @@ The following proposals add context or clearer results. They do not replace all 
 | Binoculars | Add a short focus adjustment. Reveal a specific clue, then lower them while the target remains visible. |
 | Net | Add cargo tie-down motion. During retrieval, let the catch load the mesh before water drains away. |
 | Knife | Add cutting and trimming strokes for plugs or tangled material. Keep thrusts for defense. Show resistance before a blade breaks. |
-| Bucket | Separate bailing, collection, and helmet poses. For Flowers, hold the heart piece inside until it reaches the boat. |
+| Bucket | Separate bailing, collection, and helmet poses. For Jellyfish, hold the heart piece inside until it reaches the boat. |
 | Flare Gun | Expand the existing shot with a descending flare, wind drift, and a distant response where appropriate. |
 | Scuba gear | Check the mask seal and regulator before entry. Use a bubble trail during descent and a heavy wet return. |
 | Anchor | Add a clear retrieval sequence after deployment. Show chain load before a slip or break, and slack after release. |
@@ -261,7 +261,7 @@ Passed test files:
 
 `eventResolver`, `survivalEvents`, `survivalInventory`, `SurvivalSession`, `SurvivalEventFlow`,
 `EventPlayerOptions`, `EventItemUseController`, `EventItemReturn`, `ConsumedItemReturn`,
-`NightTraderTrades`, `tradeRules`, `StarryNight`, `FlowersCatch`, `GhostShipEvent`,
+`NightTraderTrades`, `tradeRules`, `StarryNight`, `JellyfishCatch`, `GhostShipEvent`,
 `SwimRingWavesPresentation`, `ItemCirculation`, and `SurvivalUI`.
 
 Direct probes used `SurvivalSession` and `eventChoiceDecision` with fixed resources and deterministic rolls.

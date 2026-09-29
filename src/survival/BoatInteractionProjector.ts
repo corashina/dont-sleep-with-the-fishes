@@ -81,6 +81,7 @@ const EMPTY_FOCUSED_ENTRIES: readonly FocusedProjectionEntry[] = Object.freeze([
 const FISHING_POINTER_PADDING = 18;
 
 interface FeaturedProjectionEntry {
+  root: Object3D | null;
   readonly eventId: FeaturedEventId;
   readonly projection: ProjectedBoatBounds;
   readonly anchor: MutableAnchor;
@@ -94,13 +95,15 @@ function hitArea(width = 0, height = 0, depth = 0): BoatInteractionHitArea {
   return { width, height, depth };
 }
 
-function featuredAnchorLabel(eventId: FeaturedEventId): string {
+function featuredAnchorLabel(eventId: FeaturedEventId, root: Object3D | null): string {
+  if (root?.userData.supplyKind === 'whale') return presentationUiText('whaleCarcass');
   if (eventId === 'drifting-supplies') return presentationUiText('salvage');
   if (eventId === 'drifting-chest') return presentationUiText('chest');
   return presentationUiText('flowers');
 }
 
-function featuredAnchorDescription(eventId: FeaturedEventId): string {
+function featuredAnchorDescription(eventId: FeaturedEventId, root: Object3D | null): string {
+  if (root?.userData.supplyKind === 'whale') return presentationUiText('whaleCarcassDescription');
   if (isDriftingItemEventId(eventId)) return presentationUiText('salvageDescription');
   return presentationUiText('flowersDescription');
 }
@@ -311,8 +314,8 @@ export class BoatInteractionProjector {
     this.featuredEntries = FEATURED_EVENT_IDS.map((eventId) => {
       const anchor: MutableAnchor = {
         id: `event:${eventId}`,
-        get label() { return featuredAnchorLabel(eventId); },
-        get description() { return featuredAnchorDescription(eventId); },
+        get label() { return featuredAnchorLabel(eventId, entry.root); },
+        get description() { return featuredAnchorDescription(eventId, entry.root); },
         itemType: null,
         toolId: null,
         action: null,
@@ -334,7 +337,8 @@ export class BoatInteractionProjector {
         const choice = featuredAnchorChoice(eventId);
         if (choice !== null) anchor.eventChoiceId = choice;
       }
-      return { eventId, projection: projectionOutput(), anchor };
+      const entry: FeaturedProjectionEntry = { eventId, projection: projectionOutput(), anchor, root: null };
+      return entry;
     });
   }
 
@@ -529,6 +533,7 @@ export class BoatInteractionProjector {
     const root = this.eventHost.interactionRoot(featuredEventId);
     const entry = root === null ? null : this.featuredEntry(featuredEventId);
     if (root === null || entry === null) return null;
+    entry.root = root;
     projectBoatObjectBoundsInto(entry.projection, root, this.camera, width, height);
     updatePoint(entry.anchor, entry.projection, entry.projection.visible);
     updateHitArea(entry.anchor, entry.projection, 64, 64);

@@ -1,5 +1,6 @@
 import { eventAcceptsItemCondition, eventChoiceDecision, type EventChoiceFailure } from './eventChoiceRules';
 import { isHeartComplete } from './heartOfTheSea';
+import { driftingSupplyKindFromSeed } from './driftingSupplies';
 import { carlitosHelpUnavailableMessage } from './CarlitosState';
 import { domainMessage } from '../i18n/domainMessages';
 import { flowText } from '../i18n/flowMessages';
@@ -566,8 +567,12 @@ export class SurvivalEventFlow {
   private showFocus(): void {
     if (this.focusedEventId === null) return;
     const event = survivalEventById(this.focusedEventId);
+    const snapshot = this.dependencies.session.snapshot();
+    const supplyKind = this.focusedEventId === 'drifting-supplies'
+      ? driftingSupplyKindFromSeed(deriveEventVariantSeed(snapshot.seed, snapshot.day, this.focusedEventId))
+      : undefined;
     if (event !== undefined) this.focusedView.show(this.focusedEventId,
-      focusedChoicesFor(event, this.dependencies.session.snapshot()));
+      focusedChoicesFor(event, snapshot), supplyKind);
   }
 
   private clearFocus(): void {
@@ -1083,7 +1088,7 @@ export class SurvivalEventFlow {
     )) return;
     const resolved = this.dependencies.session.snapshot();
     this.finishDeferredChoiceSync(
-      focusedResult || (eventId === 'ocean-of-blood' && choiceId === 'scubaSet')
+      focusedResult || eventId === 'crab-swarm' || (eventId === 'ocean-of-blood' && choiceId === 'scubaSet')
         || (eventId === 'eerie-melody' && choiceId === 'bucket'),
       resolved,
       generation,
@@ -1303,7 +1308,7 @@ export class SurvivalEventFlow {
       ? choice
       : choice.choiceId;
     await Promise.all([
-      choice.choiceId === 'sleep' || eventId === 'starry-night'
+      (choice.choiceId === 'sleep' && eventId !== 'crab-swarm') || eventId === 'starry-night'
         ? this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve()
         : Promise.resolve(),
       this.dependencies.ui.playEventChoiceBeat?.(choice.choiceId) ?? Promise.resolve(),
@@ -1353,7 +1358,7 @@ export class SurvivalEventFlow {
     )) return;
     const resolved = this.dependencies.session.snapshot();
     this.finishDeferredChoiceSync(
-      focusedResult || eventId === 'check-the-back',
+      focusedResult || eventId === 'check-the-back' || eventId === 'crab-swarm',
       resolved,
       generation,
     );
@@ -1890,7 +1895,7 @@ export class SurvivalEventFlow {
       operation,
     )) return;
     const resolved = this.dependencies.session.snapshot();
-    this.finishDeferredChoiceSync(focusedResult, resolved, generation);
+    this.finishDeferredChoiceSync(focusedResult || eventId === 'crab-swarm', resolved, generation);
     const presentation = deriveEventOutcomePresentation(pending, resolved, outcome, null);
     await this.runEventResolution(
       eventId,

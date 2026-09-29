@@ -33,7 +33,7 @@ it.each([['flowers', 8], ['ocean-of-blood', 18]] as const)(
   },
 );
 
-it.each(['fishingNet', 'bucket'] as const)('collects the Flowers piece with %s once', (tool) => {
+it.each(['fishingNet', 'bucket'] as const)('collects the Jellyfish piece with %s once', (tool) => {
   const instanceId = `${tool}-1` as const;
   const session = new SurvivalSession([{ type: tool, instanceId }], { seed: 41, initialEventId: 'flowers' });
   const response = { kind: 'item', choiceId: tool, instanceId } as const;
@@ -45,7 +45,7 @@ it.each(['fishingNet', 'bucket'] as const)('collects the Flowers piece with %s o
 });
 
 // Importance: 98/100. Collection must require a tool and reject the removed shortcut.
-it('requires a net or bucket to collect the Flowers piece', () => {
+it('requires a net or bucket to collect the Jellyfish piece', () => {
   const session = new SurvivalSession([], { seed: 41, initialEventId: 'flowers' });
   const before = session.snapshot();
   expect(survivalEventById('flowers')!.choices.map(({ id }) => id)).toEqual(['fishingNet', 'bucket', 'sleep']);

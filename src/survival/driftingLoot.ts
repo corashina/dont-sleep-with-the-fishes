@@ -10,6 +10,11 @@ interface LootPool {
 }
 
 export const DRIFTING_LOOT_POOLS: Readonly<Record<DriftingSupplyKind, LootPool>> = {
+  whale: {
+    supplies: [30, 30, 40],
+    common: [],
+    valuable: [],
+  },
   barrel: {
     supplies: [30, 20, 50],
     common: [['ductTape', 20], ['energyBar', 25]],

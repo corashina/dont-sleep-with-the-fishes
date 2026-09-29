@@ -4,6 +4,41 @@ import {
   Float32BufferAttribute,
 } from 'three';
 
+/** Close the underside with a rounded belly that meets the lowest strake. */
+export function createLifeboatBottomGeometry(outline: CatmullRomCurve3): BufferGeometry {
+  const segments = 128;
+  const rings = 16;
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const centerZ = -0.3;
+  for (let ring = 0; ring < rings; ring += 1) {
+    const angle = ring / rings * Math.PI / 2;
+    const radius = Math.cos(angle);
+    for (let segment = 0; segment < segments; segment += 1) {
+      const point = outline.getPointAt(segment / segments);
+      positions.push(point.x * radius, point.y - 0.62 * Math.sin(angle),
+        centerZ + (point.z - centerZ) * radius);
+      if (ring === 0) continue;
+      const a = (ring - 1) * segments + segment;
+      const b = (ring - 1) * segments + (segment + 1) % segments;
+      indices.push(a, b, a + segments, b, b + segments, a + segments);
+    }
+  }
+  const pole = positions.length / 3;
+  positions.push(0, outline.points[0]!.y - 0.62, centerZ);
+  for (let segment = 0; segment < segments; segment += 1) {
+    indices.push((rings - 1) * segments + segment,
+      (rings - 1) * segments + (segment + 1) % segments, pole);
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new Float32BufferAttribute(new Float32Array(pole * 2 + 2), 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  mapLifeboatWoodGrain(geometry, 'z', 3.26, 0.143);
+  return geometry;
+}
+
 /** Sweep a bevelled timber section around the boat, with grain along its length. */
 export function createLifeboatRailGeometry(
   curve: CatmullRomCurve3,

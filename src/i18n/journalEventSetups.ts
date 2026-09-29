@@ -2,6 +2,8 @@ import { getLanguage } from './language';
 import type { EventTextId } from './eventMessages';
 
 const situations: Record<string, readonly [string, string, string]> = {
+  'crab-swarm': ['Eight crabs climbed over both sides of the boat and reached for my things.', 'Osiem krabów wspięło się przez obie burty i sięgnęło po moje rzeczy.', 'Ocho cangrejos treparon por ambos costados del bote y buscaron mis cosas.'],
+  mimic: ['My own boat waited ahead, empty. Every plank matched. It copied each movement of my hull.', 'Przede mną czekała moja własna łódź, pusta. Każda deska była taka sama. Powtarzała każdy ruch mojego kadłuba.', 'Mi propio bote me esperaba adelante, vacío. Cada tabla era igual. Copiaba cada movimiento de mi casco.'],
   'seagull-theft': ['A few gulls crossed the morning sky, far from the boat.', 'Kilka mew przecinało poranne niebo, daleko od łodzi.', 'Unas gaviotas cruzaban el cielo de la mañana, lejos del bote.'],
   'starry-night': ["Two constellations formed familiar objects above the sea. I could choose one gift.","Dwie konstelacje utworzyły znajome przedmioty nad morzem. Mogłem wybrać jeden dar.","Dos constelaciones formaron objetos conocidos sobre el mar. Podía elegir un regalo."],
   'flying-saucer': ['A low hum rolled across the sea. A disc moved across the stars, its lights searching the water.', 'Niski pomruk niósł się nad morzem. Dysk sunął pośród gwiazd, a jego światła przeszukiwały wodę.', 'Un zumbido grave recorría el mar. Un disco cruzaba las estrellas; sus luces registraban el agua.'],

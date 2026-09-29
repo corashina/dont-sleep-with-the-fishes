@@ -1,5 +1,6 @@
 import { onLanguageChange } from '../i18n/language';
 import { EventReactionControls } from './EventReactionControls';
+import { sortSelectOptions } from './sortSelectOptions';
 import type { EventReactionPreviewRequest } from '../survival/EventReactionPreview';
 import { settingsText, refreshSettingsText } from '../i18n/settingsMessages';
 import type { EventTestOption } from '../app/EventTest';
@@ -299,6 +300,7 @@ export class PostProcessingConsole {
     }
     this.refreshEventTestLanguage();
     this.reactionControls?.refreshLanguage();
+    for (const select of this.element.querySelectorAll('select')) sortSelectOptions(select);
   };
 
   private refreshEventTestLanguage(): void {

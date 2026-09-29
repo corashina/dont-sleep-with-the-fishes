@@ -54,7 +54,7 @@ Throwing one Food also diverts the shadow and preserves sleep.
 The event has a seven-day cooldown and can appear twice per run.
 Use System Tuning → Event Test → Something Under Us to inspect it.
 
-Flowers accepts Fishing Net or Bucket. It records the choice without a large reward.
+Jellyfish accepts Fishing Net or Bucket. It records the choice without a large reward.
 
 Additional event responses use recovered equipment:
 
@@ -243,8 +243,8 @@ In the lifeboat, each day gives three energy for daytime actions:
 - **Eat Energy Bar** consumes the bar and restores energy to three.
 - **Open chest** costs three energy. The first chest gives a Heart of the Sea piece. Later chests recover tools or resources.
 
-Collect one Heart of the Sea piece from each source: Flowers, Ocean of Blood, and a chest.
-Collect the brain at Flowers by hand, with a Net, or with a Bucket. Use Scuba Gear in the Ocean of Blood.
+Collect one Heart of the Sea piece from each source: Jellyfish, Ocean of Blood, and a chest.
+Collect the brain at Jellyfish by hand, with a Net, or with a Bucket. Use Scuba Gear in the Ocean of Blood.
 Both events reward only their Heart of the Sea piece, without food or other items.
 Missed sources can return. Collected sources stop appearing. Heart pieces stay separate from tools.
 The complete heart guarantees a Kraken encounter at the next nightfall.

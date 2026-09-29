@@ -80,7 +80,8 @@ describe('drifting supplies', () => {
     expect(distinct.snapshot().pendingEventId).toBe('drifting-supplies');
   });
 
-  it.each(['barrel'] as const)('grants bundles from %s to the player and Carlitos', (kind) => {
+  // Importance: 95/100. Collection must charge once and preserve companion rules.
+  it.each(['barrel', 'whale'] as const)('grants bundles from %s to the player and Carlitos', (kind) => {
     for (const choiceId of ['retrieve', 'delegate-carlitos']) {
       const session = sessionFor(kind, 0.99, 3, 'rested');
       const outcome = session.resolveEvent({ kind: 'choice', choiceId });
@@ -92,6 +93,17 @@ describe('drifting supplies', () => {
       expect(session.snapshot().energy).toBe(choiceId === 'retrieve' ? 2 : 3);
       expect(session.snapshot().carlitos?.rest).toBe(choiceId === 'retrieve' ? 'rested' : 'exhausted');
     }
+  });
+
+  it('keeps whale collection in the day and permits leaving with no energy', () => {
+    const session = sessionFor('whale', 0.99, 0);
+    expect(session.snapshot().state).toBe('dayEvent');
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' }).accepted).toBe(false);
+    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
+    expect(outcome.accepted).toBe(true);
+    expect(outcome.deltas).toEqual({});
+    expect(session.snapshot().state).toBe('day');
+    expect(session.snapshot().energy).toBe(0);
   });
 
   it('saves and restores the last day for each supply type', () => {

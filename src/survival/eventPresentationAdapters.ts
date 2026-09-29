@@ -1,5 +1,5 @@
 import { KrakenPresentation } from './events/KrakenPresentation';
-import { type Object3D } from 'three';
+import { type Object3D, type Vector4 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { runCleanupSteps } from '../world/SceneResources';
 import type {
@@ -38,6 +38,7 @@ import type {
   DedicatedEventPresentation,
 } from './eventPresentationTypes';
 import { SharkSwarmPresentation } from './events/SharkSwarmPresentation';
+import { CrabSwarmPresentation } from './events/CrabSwarmPresentation';
 import { SomethingUnderUsPresentation } from './events/SomethingUnderUsPresentation';
 import { CarlitosEventPresentation } from './events/CarlitosEventPresentation';
 import { DeathStarePresentation } from './events/DeathStarePresentation';
@@ -69,6 +70,7 @@ export interface EventPresentationAdapterDependencies {
   readonly featuredModels: SurvivalEventModels;
   readonly featuredTargets: FeaturedEventPresentationTargets;
   readonly driftingWater: DriftingWater;
+  readonly setBioluminescence: (sources: readonly Vector4[]) => void;
   readonly moon: MoonEventPresentationEnvironment;
   readonly applyDangerousWatersReaction: (
     reaction: Readonly<DangerousWatersBoatReaction>,
@@ -214,6 +216,7 @@ function createDedicatedPresentation(
     case 'tentacle-attack': return new SnatcherPresentation(environment);
     case 'death-stare': return new DeathStarePresentation(environment);
     case 'swarm-of-sharks': return new SharkSwarmPresentation(environment);
+    case 'crab-swarm': return new CrabSwarmPresentation(environment);
     case 'something-under-us': return new SomethingUnderUsPresentation(environment);
     case 'tornado': return new TornadoPresentation(environment);
     case 'whirlpool': return new WhirlpoolPresentation(environment);
@@ -405,10 +408,17 @@ export const createFeaturedAdapter: EventPresentationAdapterFactory = (
     eventId,
     dependencies.driftingWater,
   );
+  const syncWaterGlow = (): void => {
+    if (eventId === 'flowers') dependencies.setBioluminescence(featured.waterGlow());
+  };
+  const clear = (): void => {
+    featured.clear();
+    syncWaterGlow();
+  };
   return createAdapter(eventId, [
     { parent: dependencies.worldParent, root: featured.root },
   ], {
-    stage: (context) => featured.stage(eventId, context.variantSeed),
+    stage: (context) => { featured.stage(eventId, context.variantSeed); syncWaterGlow(); },
     reveal: () => featured.reveal(eventId),
     playChoice: noChoice,
     playItemUse: noItemUse,
@@ -420,10 +430,10 @@ export const createFeaturedAdapter: EventPresentationAdapterFactory = (
     react: ({ outcome }) => outcome.eventPresentationKey === undefined
       ? Promise.resolve()
       : featured.react(eventId, outcome.eventPresentationKey),
-    update: (time, delta) => featured.update(time, delta),
+    update: (time, delta) => { featured.update(time, delta); syncWaterGlow(); },
     settleForVisibilityChange: () => featured.settleForVisibilityChange(),
-    clear: () => featured.clear(),
-  }, [() => featured.dispose()]);
+    clear,
+  }, [clear, () => featured.dispose()]);
 };
 
 export const createWeatherAdapter: EventPresentationAdapterFactory = (eventId, dependencies) => {

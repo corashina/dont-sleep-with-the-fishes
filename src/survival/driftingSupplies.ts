@@ -5,6 +5,7 @@ export const DRIFTING_SUPPLY_KINDS = Object.freeze([
   'lifeboat',
   'container',
   'debris',
+  'whale',
 ] as const);
 
 export type DriftingSupplyKind = typeof DRIFTING_SUPPLY_KINDS[number];

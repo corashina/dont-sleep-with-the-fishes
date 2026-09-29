@@ -4,6 +4,7 @@ import { MidnightTourPresentation } from './MidnightTourPresentation';
 import { NightTraderPresentation } from './NightTraderPresentation';
 import { OtherPeoplePresentation } from './OtherPeoplePresentation';
 import { GhostShipPresentation } from './GhostShipPresentation';
+import { MimicPresentation } from './MimicPresentation';
 import { PlanePresentation } from './PlanePresentation';
 import { FlyingSaucerPresentation } from './FlyingSaucerPresentation';
 import { LighthousePresentation } from './LighthousePresentation';
@@ -16,6 +17,7 @@ export const AUTHORED_EVENT_PRESENTATION_FACTORIES: FocusedEventPresentationFact
   handyman: (dependencies) => new HandymanPresentation(dependencies),
   'other-people': (dependencies) => new OtherPeoplePresentation(dependencies),
   'ghost-ship': (dependencies) => new GhostShipPresentation(dependencies),
+  mimic: (dependencies) => new MimicPresentation(dependencies),
   plane: (dependencies) => new PlanePresentation(dependencies),
   'flying-saucer': (dependencies) => new FlyingSaucerPresentation(dependencies),
   lighthouse: (dependencies) => new LighthousePresentation(dependencies),

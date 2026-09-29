@@ -49,7 +49,7 @@ export interface ResourceDelta {
   rescueLead?: number;
 }
 
-export type DriftingCargoKind = 'barrel' | 'chest' | 'lifeboat' | 'container' | 'debris';
+export type DriftingCargoKind = 'barrel' | 'chest' | 'lifeboat' | 'container' | 'debris' | 'whale';
 
 export type EventPresentationKey =
   | 'drifting-supplies.retrieve'

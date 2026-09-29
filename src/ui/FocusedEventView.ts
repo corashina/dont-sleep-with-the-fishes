@@ -2,6 +2,8 @@ import { uiDynamic } from '../i18n/uiDynamicMessages';
 import { onLanguageChange } from '../i18n/language';
 import { refreshUiText } from './translatedText';
 import { uiText } from '../i18n/uiMessages';
+import { presentationUiText } from '../i18n/presentationUiMessages';
+import type { DriftingSupplyKind } from '../survival/driftingSupplies';
 import type { EventResponseId } from '../survival/survivalTypes';
 import type { InspectableEventId } from '../survival/eventCatalog';
 import { createElementRequirement } from './dom';
@@ -36,6 +38,7 @@ export class FocusedEventView {
   private readonly title: HTMLElement;
   private readonly closeButton: HTMLButtonElement;
   private currentEventId: InspectableEventId | null = null;
+  private supplyKind: DriftingSupplyKind | undefined;
   private readonly choicesById = new Map<EventResponseId, FocusedEventChoiceView>();
   private selectedChoiceId: EventResponseId | null = null;
   private busy = false;
@@ -44,7 +47,7 @@ export class FocusedEventView {
   private refreshLanguage(): void {
     refreshUiText(this.root);
     if (this.currentEventId !== null) {
-      this.title.textContent = FOCUSED_EVENT_TITLES[this.currentEventId];
+      this.title.textContent = this.eventTitle(this.currentEventId);
     }
     for (const choice of this.choicesById.values()) {
       const button = this.choiceButton(choice.id);
@@ -92,8 +95,9 @@ export class FocusedEventView {
   show(view: FocusedEventFocusView): void {
     if (this.disposed) return;
     this.currentEventId = view.eventId;
+    this.supplyKind = view.supplyKind;
     this.backButton.setAttribute('aria-label', uiText('returnBoat'));
-    this.title.textContent = FOCUSED_EVENT_TITLES[view.eventId];
+    this.title.textContent = this.eventTitle(view.eventId);
     this.choicesById.clear();
     for (const choice of view.choices) this.choicesById.set(choice.id, choice);
     this.selectedChoiceId = null;
@@ -108,11 +112,16 @@ export class FocusedEventView {
     this.onHide();
     this.visible = false;
     this.currentEventId = null;
+    this.supplyKind = undefined;
     this.choicesById.clear();
     this.selectedChoiceId = null;
     this.title.textContent = '';
     this.choicesRoot.replaceChildren();
     this.choicesRoot.hidden = false;
+  }
+
+  private eventTitle(eventId: InspectableEventId): string {
+    return this.supplyKind === 'whale' ? presentationUiText('whaleCarcass') : FOCUSED_EVENT_TITLES[eventId];
   }
 
   updateTarget(target: FocusedEventFocusView['target']): void {

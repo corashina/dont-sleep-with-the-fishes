@@ -88,10 +88,11 @@ export const EVENT_TEST_OPTIONS: readonly EventTestOption[] = Object.freeze([
       if (id === 'drifting-supplies') {
         // Fixed day-one session seeds keep each supply preview repeatable.
         return ([
-          ['barrel', 3, 'eventTestSupplyBarrel'],
-          ['lifeboat', 0, 'eventTestSupplyLifeboat'],
-          ['container', 5, 'eventTestSupplyContainer'],
-          ['debris', 1, 'eventTestSupplyDebris'],
+          ['barrel', 8, 'eventTestSupplyBarrel'],
+          ['lifeboat', 1, 'eventTestSupplyLifeboat'],
+          ['container', 2, 'eventTestSupplyContainer'],
+          ['debris', 0, 'eventTestSupplyDebris'],
+          ['whale', 10, 'eventTestSupplyWhale'],
         ] as const).map(([kind, seed, titleId]) => eventSceneOption({
           id: `${id}-${kind}`,
           phase,

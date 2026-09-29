@@ -80,6 +80,30 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
+  // Importance: 95/100. Mimic must restore weather sound after leaving and must not leak its ambient loop.
+  it('keeps Mimic quiet and restores the latest weather on exit', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.start();
+    audio.beginEvent('mimic');
+    audio.eventReveal('mimic');
+    audio.setWeather('fog');
+    const ocean = backend.voices.find(({ id }) => id === 'calmOcean')!;
+    const creak = backend.voices.find(({ id }) => id === 'boatCreak')!;
+    const presence = backend.voices.find(({ id }) => id === 'underUsPresence')!;
+    expect(ocean.setGain).toHaveBeenLastCalledWith(0.65 * 0.12, 1.5);
+    expect(creak.setGain).toHaveBeenLastCalledWith(0.8, 1.5);
+    audio.update(30);
+    expect(backend.voices.some(({ id }) => id === 'lightWaveImpact' || id === 'eventReveal')).toBe(false);
+    audio.clearEvent();
+    expect(presence.stop).toHaveBeenCalledOnce();
+    expect(ocean.setGain).toHaveBeenLastCalledWith(0.65, 1.5);
+    expect(creak.setGain).toHaveBeenLastCalledWith(0.22, 1.5);
+    audio.update(8);
+    expect(backend.voices.at(-1)?.id).toBe('lightWaveImpact');
+    audio.dispose();
+  });
+
   // Importance: 98/100. Phase loading must not leave survival audio muted until a tab switch.
   it('keeps survival output audible after disposing paused scavenging audio', async () => {
     const gains: { value: number }[] = [];

@@ -1,8 +1,10 @@
 import { settingsText, refreshSettingsText } from '../i18n/settingsMessages';
+import { reactionChoiceLabel, reactionResultLabel } from '../i18n/eventReactionMessages';
 import {
   REACTION_PREVIEW_EVENTS, reactionPreviewSetup, type EventReactionPreviewRequest,
 } from '../survival/EventReactionPreview';
 import type { SurvivalEventId } from '../survival/eventCatalog';
+import { sortSelectOptions } from './sortSelectOptions';
 
 export class EventReactionControls {
   readonly element = document.createElement('section');
@@ -38,9 +40,9 @@ export class EventReactionControls {
     }
     this.refreshLanguage();
     this.event.value = 'monster-in-the-fog';
-    this.updateChoices('flashlight');
-    if (this.result.options.length > 1) this.result.selectedIndex = 1;
-    this.updateDescription();
+    const defaultResult = reactionPreviewSetup(this.event.value).choices
+      .find(({ choice }) => choice.id === 'flashlight')?.choice.outcomes[1]?.resultId;
+    this.updateChoices('flashlight', defaultResult);
   }
 
   refreshLanguage(): void {
@@ -50,6 +52,7 @@ export class EventReactionControls {
     refreshSettingsText(this.element);
     this.event.replaceChildren(...REACTION_PREVIEW_EVENTS.map(event => this.option(event.id, event.title)));
     if (event) this.event.value = event;
+    sortSelectOptions(this.event);
     this.updateChoices(choice, result);
   }
 
@@ -66,26 +69,30 @@ export class EventReactionControls {
   private updateChoices(selected?: string, result?: string): void {
     const { choices } = reactionPreviewSetup(this.event.value);
     this.choice.replaceChildren(...choices.map(({ choice, failures }) => this.option(
-      choice.id, choice.label, failures.length > 0,
+      choice.id, reactionChoiceLabel(this.event.value, choice), failures.length > 0,
     )));
     this.choice.value = choices.find(d => d.choice.id === selected && d.failures.length === 0)?.choice.id
       ?? choices.find(d => d.failures.length === 0)?.choice.id ?? '';
+    sortSelectOptions(this.choice);
     this.updateResults(result);
   }
 
   private updateResults(selected?: string): void {
     const decision = reactionPreviewSetup(this.event.value).choices.find(d => d.choice.id === this.choice.value);
     const outcomes = decision?.choice.outcomes ?? [];
-    this.result.replaceChildren(...outcomes.map((outcome, index) => this.option(
-      outcome.resultId!, `${index + 1}. ${outcome.message}`,
-    )));
+    this.result.replaceChildren(...outcomes.map(outcome => {
+      const option = this.option(outcome.resultId!, reactionResultLabel(outcome));
+      option.title = outcome.message;
+      return option;
+    }));
     if (outcomes.some(outcome => outcome.resultId === selected)) this.result.value = selected!;
+    sortSelectOptions(this.result);
     this.updateDescription();
     this.setDisabled(this.busy);
   }
 
   private updateDescription(): void {
-    this.description.textContent = this.result.selectedOptions[0]?.textContent?.replace(/^\d+\. /, '') ?? '';
+    this.description.textContent = this.result.options[this.result.selectedIndex]?.title ?? '';
   }
 
   private setDisabled(busy: boolean): void {

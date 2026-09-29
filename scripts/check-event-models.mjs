@@ -35,16 +35,6 @@ const EVENT_SOURCES = Object.freeze({
     creator: 'Quaternius',
     license: 'CC0 1.0',
   }),
-  flowers: Object.freeze({
-    publicId: '1FMGb52XdD-',
-    resourceId: 'e038aa13-5138-4504-9737-a9e90539275f',
-    sha256: '7CB57FE979D7D6FD71DED0787C91C1EC61B75B9EF2C28F32F9C5034E18E292E0',
-    triangles: 1024,
-    maxTriangles: 2_000,
-    title: 'Anemone',
-    creator: 'Poly by Google',
-    license: 'CC BY 3.0',
-  }),
   fogMonster: Object.freeze({
     publicId: '6O6XUMssAW',
     resourceId: 'd0bb28aa-deb9-4c66-a7b6-de1461137cf6',

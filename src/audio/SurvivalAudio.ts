@@ -132,6 +132,10 @@ const CAT_MEOW_SOUNDS = Object.freeze([
 ] as const satisfies readonly SoundId[]);
 
 const SHADOW_MEOW_DELAY_SECONDS = 0.12;
+const QUIET_EVENT_REVEALS = new Set([
+  'drifting-supplies', 'seagull-theft', 'drifting-chest', 'flying-saucer',
+  'something-under-us', 'kraken', 'mimic',
+]);
 
 const YAWN_SOUNDS = Object.freeze([
   'yawn',
@@ -145,6 +149,7 @@ export class SurvivalAudio {
   private thunderSoundIndex = 0;
   private diveActive = false;
   private eventMelodyActive = false;
+  private mimicActive = false;
   private midnightDigVoice: AudioVoice | null = null;
   private midnightDigRemaining = 0;
   private midnightAttackPlayed = false;
@@ -185,7 +190,6 @@ export class SurvivalAudio {
     if (this.disposed || this.paused || this.sinkingActive || this.worldAudioMuted) return;
     const elapsed = Math.max(0, deltaSeconds);
     this.updateRadioSignal(elapsed);
-    this.waveClock += elapsed;
     if (this.midnightDigVoice !== null) {
       this.midnightDigRemaining -= elapsed;
       if (this.midnightDigRemaining <= 0) {
@@ -202,6 +206,12 @@ export class SurvivalAudio {
         this.shadowMeowDelay = 0;
       }
     }
+    this.updateWaveImpacts(elapsed);
+  }
+
+  private updateWaveImpacts(elapsed: number): void {
+    if (this.mimicActive) { this.waveClock = 0; return; }
+    this.waveClock += elapsed;
     const rough = ROUGH_WEATHER.has(this.weather);
     const interval = rough ? 4 : 8;
     while (this.waveClock >= interval) {
@@ -216,7 +226,8 @@ export class SurvivalAudio {
     if (this.completionVoice !== null) return;
     const gains = WEATHER_GAINS[id];
     for (const loop of WEATHER_LOOPS) {
-      this.scope.setLoopGain(loop, gains[loop], rampSeconds);
+      const gain = this.mimicActive ? (loop === 'boatCreak' ? 0.8 : gains[loop] * 0.12) : gains[loop];
+      this.scope.setLoopGain(loop, gain, rampSeconds);
     }
   }
 
@@ -403,14 +414,7 @@ export class SurvivalAudio {
 
   eventReveal(eventId: string): void {
     if (this.disposed) return;
-    if (
-      eventId === 'drifting-supplies'
-      || eventId === 'seagull-theft'
-      || eventId === 'drifting-chest'
-      || eventId === 'flying-saucer'
-      || eventId === 'something-under-us'
-      || eventId === 'kraken'
-    ) return;
+    if (QUIET_EVENT_REVEALS.has(eventId)) return;
     if (eventId === 'bad-sleep') {
       this.scope.play('yawn');
       return;
@@ -434,6 +438,14 @@ export class SurvivalAudio {
     this.clearEvent();
     if (this.disposed || this.endingStopped) return;
     this.completionVoice?.stop(0.08);
+    if (eventId === 'mimic') {
+      this.mimicActive = true;
+      this.setWeather(this.weather, 2.5);
+      this.scope.startLoop('underUsPresence');
+      this.scope.setLoopGain('underUsPresence', 0, 0);
+      this.scope.setLoopGain('underUsPresence', 0.3, 4);
+      return;
+    }
     this.playEventAmbience(eventId);
   }
 
@@ -503,6 +515,7 @@ export class SurvivalAudio {
 
   beginEventReaction(eventId: string, outcome: ActionOutcome): void {
     this.beginDeepEventReaction(eventId);
+    if (!this.disposed && eventId === 'mimic') this.scope.setLoopGain('underUsPresence', 0, 5);
     if (!this.disposed && eventId === 'flying-saucer') {
       this.scope.setLoopGain('ufoFlyby', 0, 5);
     }
@@ -605,6 +618,10 @@ export class SurvivalAudio {
   }
 
   clearEvent(): void {
+    if (this.mimicActive) {
+      this.mimicActive = false;
+      this.setWeather(this.weather, 1.5);
+    }
     this.clearRadioSignal();
     if (this.diveActive) this.cancelDive();
     this.scope.stopLoop('underwaterMovement', 0.3);

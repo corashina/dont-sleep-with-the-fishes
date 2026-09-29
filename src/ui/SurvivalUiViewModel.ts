@@ -1,6 +1,7 @@
 import type { ItemInstanceId } from '../game/ItemState';
 import type { ProjectedBoatBounds } from '../survival/BoatInteraction';
 import type { InspectableEventId } from '../survival/eventCatalog';
+import type { DriftingSupplyKind } from '../survival/driftingSupplies';
 import type { DayActionId, EventResponseId } from '../survival/survivalTypes';
 
 export const DAY_ACTION_IDS = [
@@ -37,6 +38,7 @@ export type FocusedEventChoiceSelection = Pick<
 >;
 
 export interface FocusedEventFocusView {
+  readonly supplyKind?: DriftingSupplyKind;
   readonly eventId: InspectableEventId;
   readonly choices: readonly FocusedEventChoiceView[];
   readonly target: ProjectedBoatBounds | null;

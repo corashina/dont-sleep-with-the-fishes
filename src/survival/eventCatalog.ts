@@ -1,5 +1,6 @@
 import { starryNightChoices } from './starryNight';
 import type { ItemId } from '../game/ItemState';
+import { ITEM_IDS } from '../game/itemCatalog';
 import { nightTraderChoices, nightTraderEventForSeed } from './nightTraderTrades';
 import { HANDYMAN_ITEM_IDS } from './tradeRules';
 import {
@@ -35,9 +36,11 @@ export const SURVIVAL_EVENT_IDS = Object.freeze([
   'dangerous-waters', 'leak', 'school-of-fish', 'tentacle-attack',
   'death-stare', 'swarm-of-sharks', 'tornado', 'whirlpool', 'shower-night',
   'something-under-us',
+  'crab-swarm',
   'windy-night', 'bad-sleep', 'thunderstorm', 'restless-waves',
   'monster-in-the-fog', 'ghosts', 'eerie-melody', 'face-on-the-moon',
   'shadow-figure', 'guarded-sleep',
+  'mimic',
   'drifting-supplies', 'drifting-chest', 'seagull-theft',
   'check-the-back',
   'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
@@ -93,6 +96,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   'tentacle-attack': 'eventText005',
   'death-stare': 'eventText006',
   'swarm-of-sharks': 'eventText007',
+  'crab-swarm': 'crabSwarmReveal',
   'something-under-us': 'underUsReveal',
   tornado: 'eventText008',
   whirlpool: 'whirlpoolReveal',
@@ -118,6 +122,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   handyman: 'eventText028',
   'other-people': 'eventText029',
   'ghost-ship': 'ghostShipReveal',
+  mimic: 'mimicReveal',
   plane: 'eventText030',
   'flying-saucer': 'ufoReveal',
   lighthouse: 'lighthouseReveal',
@@ -212,7 +217,9 @@ function driftingOutcomes(delegated: boolean): [WeightedEventOutcome, ...Weighte
     `drifting-supplies-${kind}-loot`,
     'drifting-supplies.retrieve',
     1,
-    delegated ? 'driftingLootDelegated' : 'driftingLootRetrieved',
+    kind === 'whale'
+      ? (delegated ? 'whaleLootDelegated' : 'whaleLootRetrieved')
+      : (delegated ? 'driftingLootDelegated' : 'driftingLootRetrieved'),
     effects(delegated ? [] : [subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST)]),
   )) as [WeightedEventOutcome, ...WeightedEventOutcome[]];
 }
@@ -356,6 +363,18 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'anchor', 'bucket', 'medicalKit', 'flareGun', 'flashlight',
       'map', 'scubaSet', 'umbrella', 'cannedFood',
     ],
+  },
+  {
+    ...event('crab-swarm', 'night', 'crabSwarmTitle', 'uncertain', 'impact', 3, 4, 4, [
+      choice('fishingNet', 'crabSwarmNetChoice', 'fishingNet', outcome(1, 'crabSwarmNetResult')),
+      choice('bucket', 'crabSwarmBucketChoice', 'bucket', outcome(1, 'crabSwarmBucketResult')),
+      choice('knife', 'crabSwarmKnifeChoice', 'knife', outcome(1, 'crabSwarmKnifeResult')),
+      choice('flashlight', 'eventText071', 'flashlight',
+        outcome(1, 'crabSwarmLightResult', effects(undefined, [loseEventTarget()]))),
+      choice('sleep', 'eventText063', undefined,
+        outcome(1, 'crabSwarmTheftResult', effects(undefined, [loseEventTarget()]))),
+    ]),
+    targetItemIds: ITEM_IDS.filter(id => id !== 'carlitos'),
   },
   event('death-stare', 'night', 'eventText035', 'dangerous', 'impact', 1, 9, 4, [
     choice('flareGun', 'deathStareFlareChoice', 'flareGun',
@@ -710,6 +729,10 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'people-pass',
     )),
   ], undefined, { minimumRescueLead: 2, maximumAppearances: 2 }),
+  event('mimic', 'night', 'mimicTitle', 'uncertain', 'darkness', 1, 8, 8, [
+    choice('flashlight', 'mimicLightChoice', 'flashlight', outcome(1, 'mimicLit', {}, 'mimic-lit')),
+    contextualChoice('sleep', 'mimicSilentChoice', outcome(1, 'mimicPassed', {}, 'mimic-pass')),
+  ]),
   event('ghost-ship', 'night', 'ghostShipTitle', 'dangerous', 'sighting', 1, 8, 8, [
     choice('spyglass', 'eventText067', 'spyglass', outcome(1, 'ghostShipPassed', {}, 'ghost-ship-pass')),
     choice('flashlight', 'ghostShipLightChoice', 'flashlight', outcome(

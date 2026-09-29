@@ -2,6 +2,7 @@ import type { SurvivalUI } from '../ui/SurvivalUI';
 import type { FocusedEventChoiceSelection, FocusedEventChoiceView } from '../ui/SurvivalUiViewModel';
 import type { BoatWorld } from './BoatWorld';
 import type { InspectableEventId } from './eventCatalog';
+import type { DriftingSupplyKind } from './driftingSupplies';
 
 export type FocusedEventWorldPort = Pick<BoatWorld, 'projectEventInteractionBounds'>;
 export type FocusedEventUiPort = Pick<SurvivalUI,
@@ -14,11 +15,11 @@ export class FocusedEventView {
   private height = 1;
   constructor(private readonly world: FocusedEventWorldPort, private readonly ui: FocusedEventUiPort) {}
 
-  show(eventId: InspectableEventId, choices: readonly FocusedEventChoiceView[]): void {
+  show(eventId: InspectableEventId, choices: readonly FocusedEventChoiceView[], supplyKind?: DriftingSupplyKind): void {
     this.eventId = eventId;
     this.choices = choices;
     this.ui.setEventSelection(new Map(), []);
-    this.ui.showFocusedEvent({ eventId, choices,
+    this.ui.showFocusedEvent({ eventId, choices, ...(supplyKind === undefined ? {} : { supplyKind }),
       target: this.world.projectEventInteractionBounds(eventId, this.width, this.height) });
   }
 

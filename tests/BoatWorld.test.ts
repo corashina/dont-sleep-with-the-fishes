@@ -296,6 +296,35 @@ describe('BoatWorld helpers', () => {
       propModels.dispose();
     }
   });
+  // Importance: 95/100. The stolen tool must return before the crabs borrow it. Cancellation must prevent theft animation.
+  it.each([false, true])('returns the selected tool before crab theft, cancelled=%s', async cancelled => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(new PerspectiveCamera(), propModels, ...createTestSkyTextures(), [],
+      undefined, undefined, 'low', createTestEventModels());
+    const adapter = eventAdapterTestDouble('crab-swarm');
+    const registry = vi.spyOn(EventPresentationRegistry.prototype, 'create').mockReturnValue(adapter);
+    let finishRecovery!: () => void;
+    const recovery = vi.spyOn(EventItemUseController.prototype, 'recover').mockImplementation(
+      () => new Promise<void>(resolve => { finishRecovery = resolve; }),
+    );
+    try {
+      world.stageEvent('crab-swarm');
+      const outcome = { accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'none' as const };
+      const reaction = world.reactToEventOutcome('crab-swarm', outcome, undefined, {
+        outcome, resourceDeltas: {}, gainedInstanceIds: [], brokenInstanceIds: [], lostInstanceIds: ['flashlight-1'],
+        consumedInstanceIds: [], selectedInstanceId: 'flashlight-1', selectedCondition: 'lost', targetInstanceId: 'flashlight-1',
+      });
+      expect(recovery).toHaveBeenCalledOnce();
+      expect(adapter.react).not.toHaveBeenCalled();
+      if (cancelled) world.clearEvent();
+      finishRecovery();
+      await reaction;
+      expect(adapter.react).toHaveBeenCalledTimes(cancelled ? 0 : 1);
+    } finally {
+      world.dispose(); recovery.mockRestore(); registry.mockRestore(); propModels.dispose();
+    }
+  });
+
   // Importance: 98/100. Item recovery must not delay the bite blackout or start a bite after cancellation.
   it.each([false, true])('finishes item recovery before the shark bite, cancelled=%s', async (cancelled) => {
     const propModels = createTestPropModels();
@@ -991,7 +1020,9 @@ describe('BoatWorld helpers', () => {
     try {
       world.syncInventory(snapshot([item]));
       world.stageEvent('flowers');
-      const flower = world.scene.getObjectByName('flowers:pad:0')!;
+      const flower = world.scene.getObjectByName('flowers-scoop-target')!;
+      const ocean = world.scene.getObjectByName('procedural-ocean') as Mesh<BufferGeometry, ShaderMaterial>;
+      expect(ocean.material.uniforms.uBioluminescenceCount!.value).toBe(30);
       const brain = flower.parent!.getObjectByName('flowers-heart-piece')!;
       const use = world.playEventItemUse('flowers', itemId, item.instanceId);
       const net = borrow.mock.results.at(-1)!.value.root as Group;
@@ -1027,6 +1058,7 @@ describe('BoatWorld helpers', () => {
       world.clearEvent();
       expect(flower.parent?.name).toBe('event-prop:flowers');
       expect(flower.visible).toBe(true);
+      expect(ocean.material.uniforms.uBioluminescenceCount!.value).toBe(0);
     } finally {
       world.dispose();
       borrow.mockRestore();

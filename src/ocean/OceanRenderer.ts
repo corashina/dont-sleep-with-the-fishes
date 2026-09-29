@@ -6,9 +6,11 @@ import {
   type Color,
   type Material,
   type Scene,
+  type Vector4,
   type WebGLRenderer,
 } from 'three';
 import { OceanCapture } from './OceanCapture';
+import { UnderwaterGlowCapture } from './UnderwaterGlowCapture';
 import { applyHighWaterLook } from './highWaterLook';
 import { DEFAULT_WAVES, type VortexWaveState } from './WaveField';
 import { WAVE_MODULATION } from './waveModulation';
@@ -88,6 +90,7 @@ export class OceanRenderer {
   private quality: WaterQuality;
   private disposed = false;
   private capture: OceanCapture | null = null;
+  private glowCapture: UnderwaterGlowCapture | null = null;
   private updateVersion = 0;
   private preparedVersion = -1;
   private preparedCamera: Camera | null = null;
@@ -96,6 +99,23 @@ export class OceanRenderer {
   private fogDensity = 0;
   private amplitudeScale = 1;
   private vortexBound = 0;
+
+  setBioluminescence(sources: readonly Vector4[]): void {
+    if (this.disposed) return;
+    const count = Math.min(sources.length, this.uniforms.uBioluminescence.value.length);
+    if (count > 0 && this.glowCapture === null) {
+      this.glowCapture = new UnderwaterGlowCapture();
+      this.uniforms.uGlowColor.value = this.glowCapture.colorTexture;
+      this.uniforms.uGlowDepth.value = this.glowCapture.depthTexture;
+      this.preparedVersion = -1;
+    } else if (count === 0 && this.glowCapture !== null) {
+      this.releaseGlowResources();
+    }
+    this.uniforms.uBioluminescenceCount.value = count;
+    for (let i = 0; i < count; i += 1) {
+      this.uniforms.uBioluminescence.value[i]!.copy(sources[i]!);
+    }
+  }
 
   constructor(
     quality: WaterQuality = 'low',
@@ -334,6 +354,13 @@ export class OceanRenderer {
     this.preparing = true;
     try {
       this.material.uniformsNeedUpdate = true;
+      if (this.glowCapture !== null) {
+        this.glowCapture.update(renderer, scene, camera);
+        this.uniforms.uGlowInverseProjection.value.copy(this.glowCapture.inverseProjection);
+        this.uniforms.uGlowViewMatrix.value.copy(this.glowCapture.viewMatrix);
+        this.uniforms.uGlowViewport.value.copy(this.glowCapture.viewport);
+        this.uniforms.uGlowReady.value = 1;
+      }
       if (!this.capture) {
         this.preparedVersion = this.updateVersion; this.preparedCamera = camera;
         return;
@@ -363,11 +390,20 @@ export class OceanRenderer {
     capture?.dispose();
   }
 
+  private releaseGlowResources(): void {
+    this.glowCapture?.dispose();
+    this.glowCapture = null;
+    this.uniforms.uGlowColor.value = null;
+    this.uniforms.uGlowDepth.value = null;
+    this.uniforms.uGlowReady.value = 0;
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     runCleanupSteps([
       () => this.releaseHighResources(),
+      () => this.releaseGlowResources(),
       () => this.mesh.geometry.dispose(),
       ...this.horizonMeshes.map((panel) => () => panel.geometry.dispose()),
       () => this.material.dispose(),

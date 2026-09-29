@@ -12,6 +12,28 @@ function buildBoat() {
 }
 
 describe('lifeboat visual geometry', () => {
+  // Importance: 95/100. The underside must close the hull with outward faces and a convex profile.
+  it('has a closed rounded underside with raised sides and ends', () => {
+    const boat = buildBoat();
+    const bottom = boat.root.getObjectByName('lifeboat-rounded-bottom')!;
+    const ray = new Raycaster();
+    const height = (x: number, z: number): number => {
+      ray.ray.origin.set(x, -2, z);
+      ray.ray.direction.set(0, 1, 0);
+      const hit = ray.intersectObject(bottom)[0];
+      expect(hit, `Open underside at ${x}, ${z}`).toBeDefined();
+      expect(hit!.face!.normal.y).toBeLessThan(0);
+      return hit!.point.y;
+    };
+    const center = height(0, -0.3);
+    expect(center).toBeLessThan(-0.9);
+    expect(height(0.7, -0.3)).toBeGreaterThan(center + 0.04);
+    expect(height(1.3, -0.3)).toBeGreaterThan(height(0.7, -0.3) + 0.1);
+    expect(height(0, -2.7)).toBeGreaterThan(center + 0.2);
+    expect(height(0, 2.1)).toBeGreaterThan(center + 0.2);
+    for (let z = -2.8; z <= 2.2; z += 0.2) height(0, z);
+  });
+
   // Importance: 95/100. A water cut outside the timber reveals an open gap during large waves.
   it('keeps the water cut inside the solid hull and caps it at the rim', () => {
     const boat = buildBoat();

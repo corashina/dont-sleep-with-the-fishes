@@ -1,4 +1,5 @@
 import { DriftingDebris } from './DriftingDebris';
+import { WhaleCarcassModel } from './WhaleCarcassModel';
 import { SceneFade } from '../rendering/SceneFade';
 import {
   Box3,
@@ -20,6 +21,7 @@ import {
 import { CHEST_DISPLAY_SCALE } from './ChestDisplay';
 import {
   applyDriftingWavePose,
+  HeavyDriftingFloat,
   type DriftingWater,
 } from './DriftingWaveMotion';
 import {
@@ -62,6 +64,7 @@ const WATERLINE_Y: Readonly<Record<DriftingSupplyKind, number>> = Object.freeze(
   lifeboat: 0.24,
   container: 0.08,
   debris: 0.02,
+  whale: 0.02,
 });
 const LIFEBOAT_COOLER_POSITION = Object.freeze({ x: 0, y: 0.18, z: 0.65 });
 const LIFEBOAT_FLOOR_Y = -0.1;
@@ -80,8 +83,10 @@ const LIFEBOAT_FLOOR_OUTLINE = Object.freeze([
   Object.freeze({ x: -0.88, z: -0.6 }),
   Object.freeze({ x: -0.82, z: -1.35 }),
 ]);
+const WHALE_FOOTPRINT = Object.freeze({ length: 6.4, width: 2.2 });
+const WHALE_DAMPING = 1.3;
 const RETRIEVE_DURATIONS: Readonly<Record<DriftingCargoKind, number>> =
-  Object.freeze({ barrel: 1.35, chest: 1.55, lifeboat: 1.8, container: 1.8, debris: 2 });
+  Object.freeze({ barrel: 1.35, chest: 1.55, lifeboat: 1.8, container: 1.8, debris: 2, whale: 1.8 });
 
 function keyedRetrieveProgress(progress: number): number {
   if (progress < 0.14) return -0.045 * smoothstep(progress / 0.14);
@@ -139,6 +144,8 @@ export class DriftingItemPresentation {
   private readonly baseScales: Readonly<Record<DriftingCargoKind, number>>;
   private readonly lifeboatCooler: Group;
   private readonly debris: DriftingDebris;
+  private readonly whale = new WhaleCarcassModel();
+  private readonly whaleFloat = new HeavyDriftingFloat(WHALE_FOOTPRINT, WHALE_DAMPING);
   private readonly lifeboatFloor: Mesh<ExtrudeGeometry, MeshStandardMaterial>;
   private readonly coolerBaseScale: number;
   private readonly targetPositionScratch = new Vector3();
@@ -203,13 +210,16 @@ export class DriftingItemPresentation {
 
     this.debris = new DriftingDebris(models.debrisBox, models.debrisCrate, models.debrisPallet);
     const debris = this.createRoot('drifting-supplies:debris', this.debris.root);
-    this.roots = { barrel, chest, lifeboat, container, debris };
+    const whale = this.createRoot('drifting-supplies:whale', this.whale.root);
+    whale.userData.supplyKind = 'whale';
+    this.roots = { barrel, chest, lifeboat, container, debris, whale };
     this.basePositions = {
       barrel: barrel.position.clone(),
       chest: chest.position.clone(),
       lifeboat: lifeboat.position.clone(),
       container: container.position.clone(),
       debris: debris.position.clone(),
+      whale: whale.position.clone(),
     };
     this.baseQuaternions = {
       barrel: barrel.quaternion.clone(),
@@ -217,6 +227,7 @@ export class DriftingItemPresentation {
       lifeboat: lifeboat.quaternion.clone(),
       container: container.quaternion.clone(),
       debris: debris.quaternion.clone(),
+      whale: whale.quaternion.clone(),
     };
     this.baseScales = {
       barrel: barrel.scale.x,
@@ -224,9 +235,10 @@ export class DriftingItemPresentation {
       lifeboat: lifeboat.scale.x,
       container: container.scale.x,
       debris: debris.scale.x,
+      whale: whale.scale.x,
     };
     this.coolerBaseScale = this.lifeboatCooler.scale.x;
-    this.root.add(barrel, chest, lifeboat, container, debris);
+    this.root.add(barrel, chest, lifeboat, container, debris, whale);
     this.resetAll();
   }
 
@@ -242,7 +254,7 @@ export class DriftingItemPresentation {
       const distance = driftingSupplyDistanceFromSeed(variantSeed);
       const position = SUPPLY_POSITIONS[distance];
       const basePosition = this.basePositions[supplyKind!];
-      const distanceScale = supplyKind === 'container' || supplyKind === 'debris'
+      const distanceScale = supplyKind === 'container' || supplyKind === 'debris' || supplyKind === 'whale'
         ? CONTAINER_DISTANCE_SCALE
         : 1;
       basePosition.set(
@@ -252,6 +264,11 @@ export class DriftingItemPresentation {
       );
       this.root.userData.supplyKind = supplyKind;
       this.root.userData.supplyDistance = distance;
+      if (supplyKind === 'whale') {
+        basePosition.x += this.side * 1.2;
+        this.roots.whale.rotation.set(0, this.side === -1 ? -0.2 : Math.PI + 0.2, 0);
+        this.baseQuaternions.whale.copy(this.roots.whale.quaternion);
+      }
     } else {
       this.basePositions.chest.set(
         CHEST_POSITION.x * this.side,
@@ -264,7 +281,7 @@ export class DriftingItemPresentation {
     this.state = 'floating';
     this.resetAll();
     this.roots[this.activeVariant].visible = true;
-    this.applyFloatingPose(this.activeVariant, 0);
+    this.applyFloatingPose(this.activeVariant, 0, Infinity);
     this.debris.setPose(this.side);
   }
 
@@ -275,13 +292,16 @@ export class DriftingItemPresentation {
   retrieve(): Promise<void> {
     const variant = this.activeVariant;
     if (this.disposed || variant === null) return Promise.resolve();
-    const target = variant === 'lifeboat' ? this.lifeboatCooler : this.roots[variant];
+    const target = this.retrievalTarget(variant);
     if (variant === 'lifeboat') {
       this.root.updateMatrixWorld(true);
       this.root.attach(this.lifeboatCooler);
       this.retrievalFade.begin([this.roots.lifeboat]);
     } else if (variant === 'debris' || variant === 'container') {
       this.retrievalFade.begin([this.roots[variant]]);
+    } else if (variant === 'whale') {
+      this.root.updateMatrixWorld(true);
+      this.root.attach(this.whale.scraps);
     }
     this.animationStartPosition.copy(target.position);
     this.animationStartQuaternion.copy(target.quaternion);
@@ -312,9 +332,12 @@ export class DriftingItemPresentation {
 
   resultRoot(): Group | null {
     if (this.disposed || this.activeVariant === null) return null;
-    return this.activeVariant === 'lifeboat'
-      ? this.lifeboatCooler
-      : this.roots[this.activeVariant];
+    return this.retrievalTarget(this.activeVariant);
+  }
+
+  private retrievalTarget(variant: DriftingCargoKind): Group {
+    if (variant === 'whale') return this.whale.scraps;
+    return variant === 'lifeboat' ? this.lifeboatCooler : this.roots[variant];
   }
 
   settleForVisibilityChange(): void {
@@ -339,14 +362,14 @@ export class DriftingItemPresentation {
     const variant = this.activeVariant;
     const animation = this.activeAnimation;
     if (animation === null) {
-      this.updateIdlePose(variant, time);
+      this.updateIdlePose(variant, time, delta);
       return;
     }
 
     animation.elapsed = Math.min(animation.duration, animation.elapsed + Math.max(0, delta));
     const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
-    if (variant === 'debris' || variant === 'lifeboat' || variant === 'container') {
-      this.applyFloatingPose(variant, time);
+    if (variant === 'debris' || variant === 'lifeboat' || variant === 'container' || variant === 'whale') {
+      this.applyFloatingPose(variant, time, delta);
     }
     this.applyRetrievePose(variant, progress);
     if (progress < 1) return;
@@ -354,8 +377,8 @@ export class DriftingItemPresentation {
     this.finishAnimation(animation, variant);
   }
 
-  private updateIdlePose(variant: DriftingCargoKind, time: number): void {
-    if (this.state === 'floating') this.applyFloatingPose(variant, time);
+  private updateIdlePose(variant: DriftingCargoKind, time: number, delta: number): void {
+    if (this.state === 'floating' || variant === 'whale') this.applyFloatingPose(variant, time, delta);
     else if (this.state === 'held' && variant === 'chest') this.applyHeldPose(variant);
   }
 
@@ -376,6 +399,7 @@ export class DriftingItemPresentation {
     this.root.removeFromParent();
     runCleanupSteps([
       () => this.debris.dispose(),
+      () => this.whale.dispose(),
       () => this.lifeboatFloor.geometry.dispose(),
       () => this.lifeboatFloor.material.dispose(),
     ]);
@@ -398,7 +422,18 @@ export class DriftingItemPresentation {
     });
   }
 
-  private applyFloatingPose(variant: DriftingCargoKind, time: number): void {
+  private applyFloatingPose(variant: DriftingCargoKind, time: number, delta: number): void {
+    if (variant === 'whale') {
+      this.whaleFloat.apply(
+        this.roots.whale,
+        this.basePositions.whale,
+        this.baseQuaternions.whale,
+        time,
+        delta,
+        this.water,
+      );
+      return;
+    }
     applyDriftingWavePose(
       this.roots[variant],
       this.basePositions[variant],
@@ -419,7 +454,7 @@ export class DriftingItemPresentation {
     const travel = variant === 'chest'
       ? keyedRetrieveProgress(clampedProgress)
       : smoothstep(clampedProgress);
-    const target = variant === 'lifeboat' ? this.lifeboatCooler : this.roots[variant];
+    const target = this.retrievalTarget(variant);
     target.position.lerpVectors(this.animationStartPosition, this.targetPositionScratch, travel);
     target.quaternion.slerpQuaternions(
       this.animationStartQuaternion,
@@ -445,7 +480,7 @@ export class DriftingItemPresentation {
 
   private applyHeldPose(variant: DriftingCargoKind): void {
     this.readTargetPose(variant);
-    const target = variant === 'lifeboat' ? this.lifeboatCooler : this.roots[variant];
+    const target = this.retrievalTarget(variant);
     target.position.copy(this.targetPositionScratch);
     target.quaternion.copy(this.targetQuaternionScratch);
     target.scale.setScalar(this.targetScale(variant));
@@ -475,17 +510,20 @@ export class DriftingItemPresentation {
   private resetAll(): void {
     this.retrievalFade.reset();
     this.resetCooler();
+    this.whale.resetScraps();
     this.resetPose('barrel');
     this.resetPose('chest');
     this.resetPose('lifeboat');
     this.resetPose('container');
     this.resetPose('debris');
+    this.resetPose('whale');
     this.debris.setPose(this.side);
     this.roots.barrel.visible = false;
     this.roots.chest.visible = false;
     this.roots.lifeboat.visible = false;
     this.roots.container.visible = false;
     this.roots.debris.visible = false;
+    this.roots.whale.visible = false;
   }
 
   private resetCooler(): void {

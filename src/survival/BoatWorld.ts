@@ -366,7 +366,8 @@ export class BoatWorld {
     sunVisibility: 1,
   };
   private readonly oceanExclusion: WaterExclusionRegion;
-  private readonly oceanExclusions: readonly WaterExclusionRegion[];
+  private readonly oceanExclusions: WaterExclusionRegion[];
+  private readonly lifeboatAssets: LifeboatAssets;
   private readonly originalCameraParent: Object3D | null;
   private readonly originalCameraPosition: Vector3;
   private readonly originalCameraQuaternion: Quaternion;
@@ -557,6 +558,7 @@ export class BoatWorld {
       weatherEffects.setThunderListener(this.queueThunder);
 
       const resolvedLifeboatAssets = this.resolveLifeboatAssets(lifeboatAssets);
+      this.lifeboatAssets = resolvedLifeboatAssets;
       const build = createLifeboat(resolvedLifeboatAssets);
       this.boat = build.root;
       this.supplyCargoAimTarget.name = 'event-cargo-target';
@@ -845,6 +847,8 @@ export class BoatWorld {
         cameraRig: this.cameraRig,
         camera: this.camera,
         boatMotionRoot: this.motionRig,
+        lifeboatAssets: this.lifeboatAssets,
+        waterExclusions: this.oceanExclusions,
         supplyDisplay: this.supplyDisplay,
         chestDisplay: this.chestDisplay,
         emitCue: (cue) => this.eventCueHandler(cue),
@@ -852,6 +856,7 @@ export class BoatWorld {
       },
       focusedFactories: this.focusedEventFactories,
       featuredModels,
+      setBioluminescence: (sources) => this.ocean.setBioluminescence(sources),
       featuredTargets: {
         driftingCargoStern: this.chestDisplay.root,
         flowersDeck: this.flowersDeckTarget,
@@ -1493,6 +1498,13 @@ export class BoatWorld {
     reaction: Parameters<EventPresentationHost['react']>[0],
   ): Promise<void> {
     const operation = this.weatherEventOperation;
+    if (eventId === 'crab-swarm') {
+      // Return the chosen tool before the crabs borrow the exact stolen item.
+      await this.itemUseController.recover();
+      if (this.disposed || operation !== this.weatherEventOperation) return;
+      await this.eventPresentationHost.react(reaction);
+      return;
+    }
     const itemReaction = reaction.result === null
       ? Promise.resolve()
       : this.itemUseController.react(reaction.result);
@@ -1794,7 +1806,7 @@ export class BoatWorld {
 
   private updateAmbientScenePresentation(time: number): void {
     const activeEventId = this.eventPresentationHost.activeEventId();
-    if (activeEventId !== null && (eventPresentationRoute(activeEventId) === 'moon' || activeEventId === 'flying-saucer')) {
+    if (activeEventId !== null && (eventPresentationRoute(activeEventId) === 'moon' || activeEventId === 'flying-saucer' || activeEventId === 'mimic')) {
       this.eventPresentationHost.update(time, 0);
     }
     this.cameraController.applyFocusedEventView(

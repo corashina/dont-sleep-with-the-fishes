@@ -5,6 +5,8 @@ import type {
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveComponent } from '../ocean/WaveField';
+import type { WaterExclusionRegion } from '../ocean/WaterExclusion';
+import type { LifeboatAssets } from '../world/LifeboatAssets';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { ChestDisplay } from './ChestDisplay';
@@ -66,6 +68,8 @@ export interface FocusedEventPresentationDependencies {
   readonly cameraRig: Group;
   readonly camera: PerspectiveCamera;
   readonly boatMotionRoot?: Group;
+  readonly lifeboatAssets?: LifeboatAssets;
+  readonly waterExclusions?: WaterExclusionRegion[];
   readonly supplyDisplay: BoatSupplyDisplay;
   readonly chestDisplay: ChestDisplay;
   readonly emitCue: (cue: EventPresentationCue) => void;

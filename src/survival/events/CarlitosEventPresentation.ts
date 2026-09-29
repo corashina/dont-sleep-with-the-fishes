@@ -32,6 +32,7 @@ import {
   type ShadowFigureReaction,
   type ShadowFigureWeapon,
 } from './shadowFigureChoreography';
+import { ItemAimTarget } from '../ItemAimTarget';
 
 export const CARLITOS_EVENT_IDS = [
   'shadow-figure',
@@ -61,7 +62,7 @@ function isCarlitosEventId(id: DedicatedEventId): id is CarlitosEventId {
 export class CarlitosEventPresentation implements DedicatedEventPresentation {
   readonly worldRoot = new Group();
   readonly boatRoot = new Group();
-  readonly itemAimTarget = new Group();
+  readonly itemAimTarget: ItemAimTarget;
 
   private readonly ownedMaterials = new Set<Material>();
   private readonly cameraLook: StationaryEventCamera | null;
@@ -101,6 +102,7 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
     }
     this.poseRoot = poseRoot;
     this.headRoot = headRoot;
+    this.itemAimTarget = new ItemAimTarget(eventId === 'shadow-figure' ? this.boatRoot : poseRoot);
     this.cameraLook = environment.camera === undefined
       ? null
       : new StationaryEventCamera(environment.camera);
@@ -113,9 +115,7 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
       if (eventId === 'shadow-figure') falseCat = this.createFalseCat();
       this.falseCat = falseCat;
       this.itemAimTarget.name = `${eventId}-item-aim-target`;
-      if (eventId === 'guarded-sleep' || eventId === 'shadow-figure') {
-        this.itemAimTarget.position.y = 0.3;
-      }
+      this.itemAimTarget.position.y = 0.3;
       if (eventId === 'shadow-figure' && this.falseCat !== null) {
         this.falseCat.add(this.itemAimTarget);
       } else {

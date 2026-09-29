@@ -28,6 +28,14 @@ import {
 export const MAX_OCEAN_EXCLUSIONS = 2;
 
 export interface OceanShaderUniforms {
+  uGlowColor: IUniform<Texture | null>;
+  uGlowDepth: IUniform<Texture | null>;
+  uGlowInverseProjection: IUniform<Matrix4>;
+  uGlowViewMatrix: IUniform<Matrix4>;
+  uGlowViewport: IUniform<Vector4>;
+  uGlowReady: IUniform<number>;
+  uBioluminescenceCount: IUniform<number>;
+  uBioluminescence: IUniform<Vector4[]>;
   uBloodOceanIntensity: IUniform<number>;
   [name: string]: IUniform;
   uWaterColor: IUniform<Texture | null>;
@@ -158,6 +166,14 @@ export const OCEAN_FRAGMENT_SHADER = `
   uniform float uVortexStrength;
   uniform vec3 uDeepColor;
   uniform float uBloodOceanIntensity;
+  uniform int uBioluminescenceCount;
+  uniform vec4 uBioluminescence[30];
+  uniform sampler2D uGlowColor;
+  uniform sampler2D uGlowDepth;
+  uniform mat4 uGlowInverseProjection;
+  uniform mat4 uGlowViewMatrix;
+  uniform vec4 uGlowViewport;
+  uniform float uGlowReady;
   uniform vec3 uShallowColor;
   uniform vec3 uFogColor;
   uniform vec3 uSkyColor;
@@ -359,6 +375,50 @@ export const OCEAN_FRAGMENT_SHADER = `
     float bloodLight = clamp(dot(color, vec3(0.2126, 0.7152, 0.0722)) * 2.4, 0.0, 1.0);
     vec3 bloodColor = mix(vec3(0.055, 0.0015, 0.002), vec3(0.42, 0.012, 0.012), bloodLight);
     color = mix(color, bloodColor, uBloodOceanIntensity);
+    if (uGlowReady > 0.5) {
+      vec2 glowUv = (gl_FragCoord.xy - uGlowViewport.xy) / uGlowViewport.zw;
+      float depth = texture2D(uGlowDepth, glowUv).r;
+      vec4 bodyPosition = uGlowInverseProjection * vec4(glowUv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+      bodyPosition /= bodyPosition.w;
+      float surfaceDepth = -(uGlowViewMatrix * vec4(vWorldPosition, 1.0)).z;
+      float thickness = -bodyPosition.z - surfaceDepth;
+      if (depth < 0.99999 && thickness > 0.0) {
+        float path = thickness * length(bodyPosition.xyz) / max(-bodyPosition.z, 0.01);
+        vec3 transmission = exp(-vec3(0.16, 0.055, 0.035) * min(path, 60.0));
+        // Emitted light travels through water independently of the reflected sky.
+        color += texture2D(uGlowColor, glowUv).rgb * transmission * 0.9;
+      }
+    }
+    if (uBioluminescenceCount > 0) {
+      float radiance = 0.0;
+      vec2 ripple = vec2(sin(vWorldPosition.z * 3.0 + uTime),
+        cos(vWorldPosition.x * 2.7 - uTime * 0.8)) * 0.12;
+      for (int i = 0; i < 30; i++) {
+        if (i >= uBioluminescenceCount) break;
+        vec4 source = uBioluminescence[i];
+        vec2 offset = (vWorldPosition.xz + ripple - source.xy) / source.z;
+        float falloff = max(0.0, 1.0 - dot(offset, offset));
+        radiance += falloff * falloff * source.w;
+      }
+      // Distant colonies use a spatial field instead of hundreds of light uniforms.
+      vec2 fieldPosition = vWorldPosition.xz - (uBioluminescence[0].xy - vec2(2.8, 0.55));
+      float row = floor((length(fieldPosition) - 6.0) / 9.5 + 0.5);
+      float stagger = mod(row, 2.0) * 0.5;
+      float column = mod(floor(atan(fieldPosition.y, fieldPosition.x) * 48.0 / 6.2831853 - stagger + 0.5), 48.0);
+      if (row >= 0.0 && row < 24.0) {
+        float index = row * 48.0 + column;
+        float angle = (column + stagger) * 6.2831853 / 48.0;
+        float radius = 6.0 + row * 9.5 + sin(index * 2.39996) * 1.2;
+        vec2 center = vec2(cos(angle), sin(angle)) * radius;
+        vec2 offset = (fieldPosition + ripple - center) / 2.6;
+        float halo = max(0.0, 1.0 - dot(offset, offset));
+        float fade = 1.0 - smoothstep(65.0, 250.0, length(cameraPosition.xz - center - (uBioluminescence[0].xy - vec2(2.8, 0.55))));
+        radiance += halo * halo * fade * (0.42 + sin(uTime * 1.45 + index) * 0.08);
+      }
+      float shimmer = 0.8 + 0.2 * sin(vWorldPosition.x * 9.0 + uTime * 1.4)
+        * sin(vWorldPosition.z * 11.0 - uTime);
+      color += vec3(0.025, 0.55, 0.48) * radiance * shimmer;
+    }
     float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vViewDepth * vViewDepth);
     float horizonFogProgress = smoothstep(
       uHorizonFog.x,
@@ -414,6 +474,14 @@ export function createOceanShaderDefinition(quality: WaterQuality): Readonly<{
 }> {
   const payload = createWaveUniformPayload(DEFAULT_WAVES);
   const uniforms: OceanShaderUniforms = {
+    uGlowColor: { value: null },
+    uGlowDepth: { value: null },
+    uGlowInverseProjection: { value: new Matrix4() },
+    uGlowViewMatrix: { value: new Matrix4() },
+    uGlowViewport: { value: new Vector4(0, 0, 1, 1) },
+    uGlowReady: { value: 0 },
+    uBioluminescenceCount: { value: 0 },
+    uBioluminescence: { value: Array.from({ length: 30 }, () => new Vector4()) },
     uWaterColor: { value: null },
     uWaterDepth: { value: null },
     uWaterReflection: { value: null },

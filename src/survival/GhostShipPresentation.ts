@@ -7,6 +7,7 @@ import type {
   EventChoicePresentation, FocusedEventPresentation, FocusedEventPresentationDependencies,
 } from './FocusedEventPresentation';
 import { GhostShipAppearance } from './GhostShipAppearance';
+import { ItemAimTarget } from './ItemAimTarget';
 import { CANNONADE_DURATION, GhostShipCannonade } from './GhostShipCannonade';
 import type { ActionOutcome, EventResultPresentation } from './survivalTypes';
 import { TimedPresentationAnimation } from './TimedPresentationAnimation';
@@ -23,7 +24,7 @@ type GhostShipReaction = 'signaled' | 'cannons';
 export class GhostShipPresentation implements FocusedEventPresentation {
   readonly root = new Group();
   private readonly ship = new Group();
-  private readonly aim = new Object3D();
+  private readonly aim = new ItemAimTarget(this.ship);
   private readonly wash = new PointLight(0x55ff8c, 0, 18, 1.5);
   private readonly appearance: GhostShipAppearance;
   private readonly geometries = new Set<BufferGeometry>();

@@ -96,6 +96,7 @@ function createDangerous() {
 
 function createFeatured() {
   return {
+    waterGlow: vi.fn(() => []),
     root: new Group(),
     stage: vi.fn(),
     reveal: asyncVoid(),
@@ -210,6 +211,7 @@ function createDependencies() {
         checkBackFishBench: new Group(),
       },
       driftingWater: {},
+      setBioluminescence: vi.fn(),
       moon: {},
       applyDangerousWatersReaction: vi.fn(),
     } as unknown as EventPresentationAdapterDependencies,

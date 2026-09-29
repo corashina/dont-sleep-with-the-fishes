@@ -153,7 +153,7 @@ export interface EventItemUseSample {
 }
 
 const BUCKET_SCOOP_EVENTS: ReadonlySet<string> = new Set([
-  'leak', 'school-of-fish', 'ocean-of-blood', 'flowers',
+  'leak', 'school-of-fish', 'ocean-of-blood', 'flowers', 'crab-swarm',
 ]);
 const BUCKET_HELMET_EVENTS: ReadonlySet<string> = new Set([
   'bad-sleep', 'eerie-melody', 'face-on-the-moon',
@@ -168,7 +168,7 @@ const FLARE_SKY_EVENTS: ReadonlySet<string> = new Set(['other-people', 'ghost-sh
 const FLARE_TARGET_EVENTS: ReadonlySet<string> = new Set(['ghosts', 'tentacle-attack', 'death-stare']);
 const TRADE_EVENTS: ReadonlySet<string> = new Set(['night-trader', 'handyman']);
 const NET_SLAP_EVENTS: ReadonlySet<string> = new Set([
-  'death-stare', 'swarm-of-sharks', 'tentacle-attack',
+  'death-stare', 'swarm-of-sharks', 'tentacle-attack', 'crab-swarm',
 ]);
 const FLASHLIGHT_SIGNAL_EVENTS: ReadonlySet<string> = new Set([
   'other-people', 'ghost-ship', 'plane', 'flying-saucer', 'lighthouse',

@@ -10,10 +10,11 @@ import {
   Shape,
   ShapeGeometry,
   TorusGeometry,
+  TubeGeometry,
   Vector3,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { createLifeboatRailGeometry, mapLifeboatWoodGrain } from './LifeboatGeometry';
+import { createLifeboatBottomGeometry, createLifeboatRailGeometry, mapLifeboatWoodGrain } from './LifeboatGeometry';
 import { mergeLifeboatFastenings } from './LifeboatFastenings';
 import type { LifeboatAssets } from './LifeboatAssets';
 import type { WaterExclusionHeightProfile, WaterExclusionLongitudinalProfile } from '../ocean/WaterExclusion';
@@ -188,6 +189,11 @@ function addHullPlanks(target: Group, materials: LifeboatMaterials): void {
     plankGroup.add(plank);
   }
   hull.add(plankGroup);
+  const bottom = new Mesh(createLifeboatBottomGeometry(
+    new CatmullRomCurve3(outlinePoints(-0.32), true, 'centripetal'),
+  ), materials.darkTimber);
+  bottom.name = 'lifeboat-rounded-bottom';
+  hull.add(bottom);
   target.add(hull);
 }
 
@@ -345,9 +351,14 @@ function addGunwalesAndKeel(target: Group, materials: LifeboatMaterials): void {
 
   target.add(gunwales);
 
-  const keel = new Mesh(new BoxGeometry(0.16, 0.16, 5.05), materials.darkTimber);
+  const keelPoints = Array.from({ length: 25 }, (_, index) => {
+    const angle = -Math.PI * 0.43 + index / 24 * Math.PI * 0.86;
+    return new Vector3(0, -0.32 - 0.62 * Math.cos(angle), -0.3 + 2.74 * Math.sin(angle));
+  });
+  const keelGeometry = new TubeGeometry(new CatmullRomCurve3(keelPoints), 64, 0.055, 8, false);
+  mapLifeboatWoodGrain(keelGeometry, 'z', 0.11, 0.018);
+  const keel = new Mesh(keelGeometry, materials.darkTimber);
   keel.name = 'lifeboat-keel-strip';
-  keel.position.set(0, -0.49, -0.3);
   target.add(keel);
 
   for (const [name, z] of [['bow', -3], ['stern', 2.4]] as const) {

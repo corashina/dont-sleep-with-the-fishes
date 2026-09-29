@@ -1,6 +1,8 @@
 import { defineMessages } from './messages';
 
 const catalog = {
+  whaleCarcass: { en: 'Drifting Loot: Whale Carcass', pl: 'Dryfujące łupy: truchło wieloryba', 'es-AR': 'Botín a la deriva: cadáver de ballena' },
+  whaleCarcassDescription: { en: 'A dead whale with a deep bite wound. Loose scraps could provide food and bait.', pl: 'Martwy wieloryb z głęboką raną po ugryzieniu. Luźne kawałki mogą posłużyć jako jedzenie i przynęta.', 'es-AR': 'Una ballena muerta con una mordida profunda. Los restos sueltos pueden servir de comida y carnada.' },
   brain: { en: 'Brain', pl: 'Mózg', 'es-AR': 'Cerebro' },
   heart: { en: 'Heart', pl: 'Serce', 'es-AR': 'Corazón' },
   kidneys: { en: 'Kidneys', pl: 'Nerki', 'es-AR': 'Riñones' },
@@ -10,9 +12,9 @@ const catalog = {
   scubaDive: { en: 'Dive', pl: 'Nurkuj', 'es-AR': 'Bucear' },
   salvage: { en: 'SALVAGE', pl: 'ZAPASY', 'es-AR': "SUMINISTROS" },
   chest: { en: 'CHEST', pl: 'SKRZYNIA', 'es-AR': "COFRE" },
-  flowers: { en: 'FLOWERS', pl: 'KWIATY', 'es-AR': "FLORES" },
+  flowers: { en: 'JELLYFISH', pl: 'MEDUZY', 'es-AR': "MEDUSAS" },
   salvageDescription: { en: 'Floating salvage within reach.', pl: 'Dryfujące zapasy w zasięgu ręki.', 'es-AR': "Suministros flotantes al alcance." },
-  flowersDescription: { en: 'Pale blooms pass in the dark water.', pl: 'Blade kwiaty przepływają przez ciemną wodę.', 'es-AR': "Flores pálidas pasan por el agua oscura." },
+  flowersDescription: { en: 'Jellyfish cast a turquoise glow across the dark water.', pl: 'Meduzy rozświetlają ciemną wodę turkusowym blaskiem.', 'es-AR': "Las medusas iluminan el agua oscura con un brillo turquesa." },
   open: { en: 'OPEN', pl: 'OTWÓRZ', 'es-AR': "ABRIR" },
   chestDescription: { en: 'A closed chest. Opening it costs 3 energy.', pl: 'Zamknięta skrzynia. Otwarcie kosztuje 3 punkty energii.', 'es-AR': "Un cofre cerrado. Abrirlo cuesta 3 puntos de energía." },
   carlitosDescription: { en: 'Check his hunger and happiness.', pl: 'Sprawdź jego głód i nastrój.', 'es-AR': "Revisá su hambre y felicidad." },
