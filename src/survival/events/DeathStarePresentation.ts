@@ -1,4 +1,5 @@
 import {
+  Box3,
   BufferGeometry,
   ConeGeometry,
   CylinderGeometry,
@@ -67,6 +68,8 @@ const FACE_PLAYER_YAW = 0;
 const FACE_PLAYER_PITCH = 0.04;
 const WATERLINE = 0.02;
 const WATER_STRAND_COUNT = 12;
+// Matches the lifeboat bow clearance used by the fog monster, plus a margin for boat motion.
+const BOW_CLEARANCE_Z = -3.08 - 0.15;
 const IDENTITY_ITEM_POSE: Readonly<SupplyAdditivePose> = {
   x: 0,
   y: 0,
@@ -204,6 +207,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     (kind) => this.finishAnimation(kind),
     1e-9,
   );
+  private readonly biteReach: number;
   private activeChoiceId: string | null = null;
   private usedChoiceId: string | null = null;
   private bitePlayed = false;
@@ -356,6 +360,9 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.waterStrands = waterStrands;
 
     this.angler.add(this.visuals);
+    this.angler.updateMatrixWorld(true);
+    const front = new Box3().setFromObject(this.visuals, true).max.z;
+    this.biteReach = BOW_CLEARANCE_Z - FACE_Z - front;
     this.worldRoot.add(this.angler);
     this.hideScene();
   }
@@ -410,7 +417,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.resetBorrowedPose();
     if (this.usedChoiceId === 'flashlight' && outcomeAttacked(result)) {
       this.bitePlayed = false;
-      sampleDeathStareBite(0, this.sample);
+      sampleDeathStareBite(0, this.biteReach, this.sample);
       this.applySample(0);
       return this.animation.start('bite', DEATH_STARE_BITE_DURATION);
     }
@@ -528,7 +535,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     if (kind === 'reveal') {
       sampleDeathStareReveal(progress, this.sample);
     } else if (kind === 'bite') {
-      sampleDeathStareBite(progress, this.sample);
+      sampleDeathStareBite(progress, this.biteReach, this.sample);
     } else if (kind === 'item') {
       if (this.activeChoiceId === null) return;
       sampleDeathStareItemUse(
