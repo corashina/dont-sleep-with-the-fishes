@@ -1,7 +1,7 @@
 // Importance: 95/100. The swarm must pause for the choice and carry the exact stolen item.
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { Box3, Group, Matrix4, Mesh, MeshStandardMaterial, Quaternion, Raycaster, Texture, Vector3 } from 'three';
+import { Box3, DoubleSide, Group, Matrix4, Mesh, MeshStandardMaterial, Quaternion, Raycaster, Texture, Vector3 } from 'three';
 import { boatSupplyTransform } from '../src/world/BoatStorage';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { HeartBasket } from '../src/survival/HeartBasket';
@@ -9,9 +9,16 @@ import { createLifeboat } from '../src/world/Lifeboat';
 import { LifeboatAssets } from '../src/world/LifeboatAssets';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EventModelLibrary } from '../src/survival/EventModelLibrary';
-import { CrabSwarmPresentation, CRAB_REVEAL_SECONDS, CRAB_RETREAT_SECONDS } from '../src/survival/events/CrabSwarmPresentation';
+import {
+  CrabSwarmPresentation, CRAB_AIM_INDEX, CRAB_REVEAL_SECONDS, CRAB_RETREAT_SECONDS,
+} from '../src/survival/events/CrabSwarmPresentation';
+import { isFloorCrab, isRailCrab } from '../src/survival/events/crabSwarmChoreography';
 import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
 import type { MutableSupplyPose } from '../src/survival/BoatSupplyDisplay';
+
+// Rail and floor crabs rest on level wood. The wall crab entries are unused.
+const LEVEL_REST_Z = [-2.85, -2.85, -0.97, -0.97, 0, 0, -0.72, -0.72];
+const onLevelWood = (index: number) => isRailCrab(index) || isFloorCrab(index);
 
 let models: EventModelLibrary;
 let hull: Group;
@@ -72,6 +79,63 @@ describe('Crab swarm presentation', () => {
       }
     } finally { presentation.dispose(); }
   });
+  // Importance: 95/100. Reported boat intersections must not return: shelves, side frames and ribs.
+  it.each([0, 42, 71, 99])('keeps every crab out of the shelves, frames and ribs for seed %s', seed => {
+    const { presentation, crabs, boat } = setup(seed);
+    const solids = [...boat.getObjectByName('survival-ribs')!.children, ...boat.getObjectByName('lifeboat-wear-details')!.children]
+      .filter((object): object is Mesh => object instanceof Mesh);
+    for (const solid of solids) {
+      solid.material = (solid.material as MeshStandardMaterial).clone();
+      (solid.material as MeshStandardMaterial).side = DoubleSide;
+    }
+    const ray = new Raycaster();
+    const direction = new Vector3(0.123, 1, 0.071).normalize();
+    const point = new Vector3();
+    const check = (label: string) => {
+      boat.updateMatrixWorld(true);
+      for (const crab of crabs) {
+        if (!crab.visible) continue;
+        const bounds = new Box3().setFromObject(crab);
+        for (const solid of solids) {
+          const box = new Box3().setFromObject(solid);
+          if (!bounds.intersectsBox(box)) continue;
+          crab.traverse(object => {
+            if (!(object instanceof Mesh)) return;
+            const vertices = object.geometry.getAttribute('position');
+            for (let index = 0; index < vertices.count; index += 3) {
+              point.fromBufferAttribute(vertices, index).applyMatrix4(object.matrixWorld);
+              if (!box.containsPoint(point)) continue;
+              ray.set(point, direction);
+              expect(ray.intersectObject(solid, false).length % 2, `${label} ${crab.name} in ${solid.name}`).toBe(0);
+            }
+          });
+        }
+      }
+    };
+    try {
+      void presentation.reveal();
+      for (let frame = 1; frame <= 50; frame += 1) {
+        presentation.update(frame, CRAB_REVEAL_SECONDS / 50);
+        check(`reveal ${frame}`);
+      }
+      void presentation.react({ lostInstanceIds: [] } as unknown as EventOutcomePresentation);
+      for (let frame = 1; frame <= 50; frame += 1) {
+        presentation.update(100 + frame, CRAB_RETREAT_SECONDS / 50);
+        check(`retreat ${frame}`);
+      }
+    } finally { presentation.dispose(); }
+  });
+  // Importance: 90/100. Knife, shotgun and other aimed tools must point at a crab, not at empty space.
+  it('aims tools at the middle of one crab', () => {
+    const { presentation, crabs } = setup();
+    try {
+      void presentation.reveal();
+      presentation.skip();
+      const target = presentation.itemAimTarget.getWorldPosition(new Vector3());
+      expect(new Box3().setFromObject(crabs[CRAB_AIM_INDEX]!).containsPoint(target)).toBe(true);
+      expect(presentation.itemAimTarget.model).toBe(crabs[CRAB_AIM_INDEX]);
+    } finally { presentation.dispose(); }
+  });
   // Importance: 95/100. Reported item intersections must stay fixed across the random crab rotations.
   it.each([0, 42, 71, 99])('keeps the moved crabs clear of the basket, flashlight and radio for seed %s', seed => {
     const { presentation, crabs } = setup(seed);
@@ -89,7 +153,7 @@ describe('Crab swarm presentation', () => {
     try {
       void presentation.reveal();
       presentation.skip();
-      for (const index of [0, 1, 7]) {
+      for (const index of [0, 1, 6, 7]) {
         const bounds = new Box3().setFromObject(crabs[index]!);
         obstacles.forEach((obstacle, obstacleIndex) => {
           expect(bounds.intersectsBox(obstacle), `Crab ${index} ${JSON.stringify(bounds)}, obstacle ${obstacleIndex} ${JSON.stringify(obstacle)}`).toBe(false);
@@ -118,16 +182,17 @@ describe('Crab swarm presentation', () => {
           expect(hit, `No wood below ${crab.name} at frame ${frame}`).toBeDefined();
           expect(hit!.distance, `${crab.name} frame ${frame}: ${crab.position.toArray()} hit ${hit!.object.name}`).toBeGreaterThanOrEqual(0.049);
           // The body turns between two contacting wood planes at an inside corner.
-          expect(hit!.distance).toBeLessThan(crabs.indexOf(crab) < 4 ? 0.3 : 0.08);
+          const index = crabs.indexOf(crab);
+          expect(hit!.distance).toBeLessThan(onLevelWood(index) ? 0.3 : 0.08);
         }
       }
       for (const [index, crab] of crabs.entries()) {
         normal.set(0, 1, 0).applyQuaternion(crab.quaternion);
-        if (index < 4) {
+        if (onLevelWood(index)) {
           expect(normal.y).toBeCloseTo(1);
-          expect(crab.position.y).toBeCloseTo(index < 2 ? 0.48 : -0.3065);
-          expect(crab.position.z).toBeCloseTo(index < 2 ? -2.85 : -0.85, 1);
-          if (index < 2) {
+          expect(crab.position.y).toBeCloseTo(isRailCrab(index) ? 0.48 : -0.3065);
+          expect(crab.position.z).toBeCloseTo(LEVEL_REST_Z[index]!, 1);
+          if (isRailCrab(index)) {
             expect(Math.abs(crab.position.x)).toBeGreaterThan(0.6);
           } else {
             expect(crab.position.x).toBeCloseTo(index === 2 ? -0.65 : 0.26);
@@ -213,12 +278,10 @@ describe('Crab swarm presentation', () => {
       presentation.update(2, CRAB_REVEAL_SECONDS * 0.5);
       await reveal;
       expect(crabs.some((crab, index) => Math.abs(crab.position.x) < halfway[index]!)).toBe(true);
-      for (const crab of crabs.slice(4, 7)) {
+      for (const crab of crabs.slice(4, 6)) {
         expect(crab.position.y).toBeGreaterThanOrEqual(0.13);
         expect(crab.position.y).toBeLessThanOrEqual(0.19);
       }
-      expect(crabs[7]!.position.y).toBeGreaterThanOrEqual(-0.11);
-      expect(crabs[7]!.position.y).toBeLessThanOrEqual(-0.05);
       const transforms = crabs.map(crab => [crab.position.toArray(), crab.quaternion.toArray()]);
       presentation.update(600, 600);
       expect(crabs.map(crab => [crab.position.toArray(), crab.quaternion.toArray()])).toEqual(transforms);

@@ -8,8 +8,20 @@ const ease = (value: number) => { const t = clamp(value); return t * t * (3 - 2 
 const PATH_STEPS = 192;
 const TURN_RADIUS = 12;
 const UP = new Vector3(0, 1, 0);
-const REST_HEIGHTS = [0.13, 0.13, 0.13, 0.13, 0.13, 0.13, 0.13, -0.11] as const;
-const SIDE_POSITIONS_Z = [-2.85, -2.85, -1.91, -1.91, -1.08, -1.08, -0.35, -0.35] as const;
+const WALL_REST_Y = 0.13;
+// Wall crabs rest between side frames. The rear pair stops on the rail, clear of the radio.
+const SIDE_POSITIONS_Z = [-2.85, -2.85, -1.91, -1.91, -1.08, -1.08, -0.72, -0.72] as const;
+const DASH_SHARE = 0.8;
+const DASH_WEIGHT = 0.25;
+const GAIT_HZ = 7;
+const GAIT_SWAY = 0.08;
+const GAIT_LIFT = 0.006;
+const gaitTurn = new Quaternion();
+const gaitLift = new Vector3();
+
+/** The bow pair and the rear pair stop on the rail. */
+export const isRailCrab = (index: number) => index < 2 || index > 5;
+export const isFloorCrab = (index: number) => index === 2 || index === 3;
 
 function restingYaw(index: number, random: RandomSource): number {
   const variation = random.next() - 0.5;
@@ -20,10 +32,23 @@ function restingYaw(index: number, random: RandomSource): number {
 }
 
 function wallProgress(index: number, travel: number): number {
-  // Stop the bow pair on top of the rail, halfway through the turn over its rim.
-  if (index < 2) return travel * 0.625;
-  if (index < 4) return travel / 0.55 * 0.8;
+  // Stop rail crabs on top of the rail, halfway through the turn over its rim.
+  if (isRailCrab(index)) return travel * 0.625;
+  if (isFloorCrab(index)) return travel / 0.55 * 0.8;
   return travel;
+}
+
+/** Crabs scuttle in bursts. A larger weight turns faster on the rail rims. */
+function dash(travel: number, dashes: number): number {
+  const index = Math.min(dashes - 1, Math.floor(travel * dashes));
+  const phase = clamp((travel * dashes - index) / DASH_SHARE);
+  return DASH_WEIGHT * (index + ease(phase)) / dashes + (1 - DASH_WEIGHT) * travel;
+}
+
+/** Leg motion is strongest in the middle of each dash. */
+function stride(travel: number, dashes: number): number {
+  const index = Math.min(dashes - 1, Math.floor(travel * dashes));
+  return Math.sin(Math.PI * clamp((travel * dashes - index) / DASH_SHARE));
 }
 
 function wallRay(surface: CrabSurface, travel: number, side: number, z: number, restY: number): void {
@@ -49,6 +74,9 @@ export class CrabPath {
   private duration = 1;
   private retreatDelay = 0;
   private retreatDuration = 1;
+  private dashes = 1;
+  private retreatDashes = 1;
+  private gaitPhase = 0;
   private readonly bodyPoints: Vector3[] = [];
 
   constructor(model: Group) {
@@ -70,15 +98,14 @@ export class CrabPath {
     const side = index % 2 === 0 ? -1 : 1;
     const z = SIDE_POSITIONS_Z[index]! + (random.next() - 0.5) * 0.08;
     const startZ = Math.max(-2.94, z + (random.next() < 0.5 ? -1 : 1) * (0.06 + random.next() * 0.1));
-    // The nearest starboard crab grips the wall below the radio shelf.
-    const restY = REST_HEIGHTS[index]! + random.next() * 0.06;
+    const restY = WALL_REST_Y + random.next() * 0.06;
     this.delay = random.next() * 0.32;
     this.duration = 0.36 + random.next() * 0.28;
     this.retreatDelay = random.next() * 0.2;
     this.retreatDuration = 0.45 + random.next() * 0.34;
     const yaw = restingYaw(index, random);
     const startYaw = yaw + (random.next() - 0.5) * 0.7;
-    const landing = index === 2 || index === 3 ? new CrabFloorLanding(side, yaw, this.bodyPoints, surface) : null;
+    const landing = isFloorCrab(index) ? new CrabFloorLanding(side, yaw, this.bodyPoints, surface) : null;
     for (let step = 0; step <= PATH_STEPS; step += 1) {
       const travel = step / PATH_STEPS;
       const position = this.positions[step]!;
@@ -94,6 +121,9 @@ export class CrabPath {
       turn.setFromAxisAngle(UP, MathUtils.lerp(startYaw, yaw, ease(travel)));
       rotation.setFromUnitVectors(UP, surface.normal).multiply(turn);
     }
+    this.dashes = 3 + Math.floor(random.next() * 3);
+    this.retreatDashes = 2 + Math.floor(random.next() * 2);
+    this.gaitPhase = random.next() * Math.PI * 2;
     this.smoothTurns();
   }
 
@@ -116,15 +146,21 @@ export class CrabPath {
     }
   }
 
-  sample(root: Group, progress: number, retreat = false): void {
-    const travel = retreat
-      ? 1 - clamp((progress - this.retreatDelay) / this.retreatDuration)
+  sample(root: Group, progress: number, seconds: number, retreat = false): void {
+    const walk = retreat
+      ? clamp((progress - this.retreatDelay) / this.retreatDuration)
       : clamp((progress - this.delay) / this.duration);
+    const dashes = retreat ? this.retreatDashes : this.dashes;
+    const travel = clamp(retreat ? 1 - dash(walk, dashes) : dash(walk, dashes));
     const sample = travel * PATH_STEPS;
     const first = Math.min(Math.floor(sample), PATH_STEPS - 1);
     const blend = sample - first;
     root.position.lerpVectors(this.positions[first]!, this.positions[first + 1]!, blend);
     root.quaternion.slerpQuaternions(this.rotations[first]!, this.rotations[first + 1]!, blend);
     root.visible = travel > 0;
+    // Sway the body over its legs and lift it off the timber, never into it.
+    const gait = Math.sin(seconds * GAIT_HZ * Math.PI * 2 + this.gaitPhase) * stride(walk, dashes);
+    root.quaternion.multiply(gaitTurn.setFromAxisAngle(UP, gait * GAIT_SWAY));
+    root.position.addScaledVector(gaitLift.copy(UP).applyQuaternion(root.quaternion), Math.abs(gait) * GAIT_LIFT);
   }
 }

@@ -6,6 +6,7 @@ import type { EventModelInstance } from '../EventModelLibrary';
 import type {
   DedicatedEventEnvironment, DedicatedEventPresentation, EventOutcomePresentation, EventSceneContext,
 } from '../eventPresentationTypes';
+import { ItemAimTarget } from '../ItemAimTarget';
 import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import { mulberry32 } from '../random';
 import { CrabPath } from './crabSwarmChoreography';
@@ -13,6 +14,8 @@ import { CrabPath } from './crabSwarmChoreography';
 export const CRAB_COUNT = 8;
 export const CRAB_REVEAL_SECONDS = 5;
 export const CRAB_RETREAT_SECONDS = 3.2;
+/** Tools aim at the starboard floor crab, in the middle of the view. */
+export const CRAB_AIM_INDEX = 3;
 const clamp = (value: number) => MathUtils.clamp(value, 0, 1);
 const ease = (value: number) => { const t = clamp(value); return t * t * (3 - 2 * t); };
 
@@ -46,7 +49,7 @@ export class CrabSwarmPresentation implements DedicatedEventPresentation {
   readonly eventId = 'crab-swarm' as const;
   readonly worldRoot = new Group();
   readonly boatRoot = new Group();
-  readonly itemAimTarget = new Group();
+  readonly itemAimTarget: ItemAimTarget;
   private readonly crabs: Crab[] = [];
   private readonly animation = new TimedPresentationAnimation<'reveal' | 'reaction'>(
     (kind, _time, progress) => kind === 'reveal' ? this.climb(progress) : this.retreat(progress),
@@ -66,9 +69,6 @@ export class CrabSwarmPresentation implements DedicatedEventPresentation {
   constructor(private readonly environment: Environment) {
     this.worldRoot.name = 'crab-swarm-world';
     this.boatRoot.name = 'crab-swarm-boat';
-    this.itemAimTarget.name = 'crab-swarm-aim';
-    this.itemAimTarget.position.set(0, 0.2, -1.7);
-    this.boatRoot.add(this.itemAimTarget);
     try {
       for (let index = 0; index < CRAB_COUNT; index += 1) {
         const model = environment.eventModels.create('crab');
@@ -83,6 +83,12 @@ export class CrabSwarmPresentation implements DedicatedEventPresentation {
         this.crabs.push({ root, model, path: new CrabPath(model.root) });
         this.boatRoot.add(root);
       }
+      const target = this.crabs[CRAB_AIM_INDEX]!;
+      this.itemAimTarget = new ItemAimTarget(target.root);
+      this.itemAimTarget.name = 'crab-swarm-aim';
+      // Aim at the middle of the shell, not at the feet.
+      this.itemAimTarget.position.y = new Box3().setFromObject(target.model.root).getCenter(new Vector3()).y;
+      target.root.add(this.itemAimTarget);
     } catch (error) {
       this.dispose();
       throw error;
@@ -161,7 +167,7 @@ export class CrabSwarmPresentation implements DedicatedEventPresentation {
   }
 
   private climb(progress: number): void {
-    for (const crab of this.crabs) crab.path.sample(crab.root, progress);
+    for (const crab of this.crabs) crab.path.sample(crab.root, progress, progress * CRAB_REVEAL_SECONDS);
   }
 
   private retreat(progress: number): void {
@@ -170,7 +176,7 @@ export class CrabSwarmPresentation implements DedicatedEventPresentation {
     const thief = this.crabs[this.itemStart.x < 0 ? 0 : 1]!;
     for (const crab of this.crabs) {
       const retreat = actor !== null && crab === thief ? clamp((progress - 0.3) / 0.7) : progress;
-      crab.path.sample(crab.root, retreat, true);
+      crab.path.sample(crab.root, retreat, progress * CRAB_RETREAT_SECONDS, true);
     }
     if (actor === null) return;
     const approach = ease(progress / 0.3);

@@ -37,15 +37,16 @@ export class CrabSurface {
     this.normal.copy(hit.face.normal).applyMatrix3(this.worldNormal).applyMatrix3(this.boatNormal).normalize();
     position.copy(hit.point);
     this.boat.worldToLocal(position);
-    position.addScaledVector(this.normal, 0.008);
     // Feet span the plank seams. Their bevels must not pitch the whole body up and down.
     if (hit.object.name.startsWith('lifeboat-hull-strake-')) this.normal.setY(0).normalize();
+    position.addScaledVector(this.normal, 0.008);
   }
 }
 
 /** Turn from a wall onto the floor while keeping actual body vertices clear of both planes. */
 export class CrabFloorLanding {
-  readonly z = -0.85;
+  // Land clear of the floor rib and side frame at z -0.68.
+  readonly z = -0.97;
   private readonly y = LIFEBOAT_FLOOR_SURFACE_Y;
   private readonly x: number;
   private readonly targets: Object3D[];
