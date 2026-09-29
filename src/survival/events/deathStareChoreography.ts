@@ -6,6 +6,8 @@ import { eventItemUseDuration } from '../eventItemUseChoreography';
 export const DEATH_STARE_REVEAL_DURATION = 3.2;
 export const DEATH_STARE_ITEM_DURATION = scaleEventItemDuration(1.25);
 export const DEATH_STARE_REACTION_DURATION = 1.25;
+export const DEATH_STARE_BITE_DURATION = 2.4;
+export const DEATH_STARE_BITE_PROGRESS = 0.82;
 
 export function deathStareItemDuration(choiceId: string): number {
   if (choiceId === 'flareGun') return eventItemUseDuration('flare-target');
@@ -310,5 +312,32 @@ export function sampleDeathStareReaction(
     output.itemScaleY = 1 - collapse * 0.76;
     output.itemScaleZ = 1 - collapse * 0.18;
   }
+  return true;
+}
+
+/** `reach` is the forward travel that keeps the creature's front at the bow. */
+export function sampleDeathStareBite(
+  progress: number,
+  reach: number,
+  output: DeathStareSample,
+): boolean {
+  resetSample(output);
+  holdGaze(output);
+  const t = clamp01(progress);
+  const windUp = pulse(t, 0, 0.24, 0.4);
+  const approach = smoothstep((t - 0.28) / 0.46);
+  const rear = smoothstep((t - 0.28) / 0.4) * (1 - smoothstep((t - 0.74) / 0.08));
+  const slam = smoothstep((t - 0.74) / 0.08);
+  const gape = smoothstep(t / 0.3) * (1 - slam);
+  const impact = pulse(t, 0.78, DEATH_STARE_BITE_PROGRESS, 1);
+  output.fishZ = -windUp * 0.5 + approach * reach;
+  output.fishY = -windUp * 0.3 + rear * 0.9 + slam * 0.2;
+  output.fishPitch = windUp * 0.04 - rear * 0.16;
+  output.jawOpen = 0.18 + gape * 1.1;
+  output.lureStrength = 0.72 + approach * 0.28;
+  output.lunge = approach;
+  output.cameraPitch = impact * -0.12;
+  output.cameraRoll = impact * 0.04;
+  output.hullRoll = impact * -0.1;
   return true;
 }

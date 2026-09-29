@@ -1,8 +1,10 @@
 import {
+  Euler,
   Group,
   Material,
   Mesh,
   MeshStandardMaterial,
+  Vector3,
 } from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import type { ItemInstanceId } from '../../game/ItemState';
@@ -19,6 +21,17 @@ import type {
   EventSceneContext,
 } from '../eventPresentationTypes';
 import { StationaryEventCamera } from '../StationaryEventCamera';
+import {
+  identityShadowFigureSample,
+  isShadowFigureWeapon,
+  resetShadowFigureSample,
+  sampleShadowFigureReaction,
+  sampleShadowFigureWeapon,
+  SHADOW_FIGURE_REACTION_DURATION,
+  shadowFigureWeaponDuration,
+  type ShadowFigureReaction,
+  type ShadowFigureWeapon,
+} from './shadowFigureChoreography';
 
 export const CARLITOS_EVENT_IDS = [
   'shadow-figure',
@@ -58,6 +71,15 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
   private readonly basePosePosition = new Float64Array(3);
   private readonly basePoseRotation = new Float64Array(3);
   private readonly baseHeadRotation = new Float64Array(3);
+  private readonly falseCatBasePosition = new Vector3();
+  private readonly falseCatBaseRotation = new Euler();
+  private readonly falseCatBaseScale = new Vector3();
+  private readonly falseCatLungeDirection = new Vector3();
+  private readonly shadowSample = identityShadowFigureSample();
+  private silhouetteMaterial: MeshStandardMaterial | null = null;
+  private falseCatOutwardSign = 1;
+  private weapon: ShadowFigureWeapon | null = null;
+  private weaponReaction: ShadowFigureReaction | null = null;
   private active: ActiveAnimation | null = null;
   private staged = false;
   private facingStrength = 0;
@@ -121,6 +143,7 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
     this.captureBasePose();
     this.cameraLook?.capture();
     this.placeFalseCatOppositeCarlitos();
+    this.resetWeapon();
     this.staged = true;
     this.worldRoot.visible = true;
     this.boatRoot.visible = true;
@@ -141,15 +164,24 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
     return this.startAnimation('choice', CHOICE_DURATION) as Promise<void>;
   }
 
-  playItemUse(_choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
+  playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
     if (!this.canAnimate()) return Promise.resolve(false);
     this.cancelActive();
+    if (this.falseCat !== null && isShadowFigureWeapon(choiceId)) {
+      this.weapon = choiceId;
+      this.weaponReaction = null;
+      return this.startAnimation('item', shadowFigureWeaponDuration(choiceId)) as Promise<boolean>;
+    }
     return this.startAnimation('item', CHOICE_DURATION) as Promise<boolean>;
   }
 
-  react(_result: EventOutcomePresentation): Promise<void> {
+  react(result: EventOutcomePresentation): Promise<void> {
     if (!this.canAnimate()) return Promise.resolve();
     this.cancelActive();
+    if (this.weapon !== null) {
+      this.weaponReaction = (result.resourceDeltas.health ?? 0) < 0 ? 'claw' : 'scatter';
+      return this.startAnimation('reaction', SHADOW_FIGURE_REACTION_DURATION) as Promise<void>;
+    }
     return this.startAnimation('reaction', REACTION_DURATION) as Promise<void>;
   }
 
@@ -173,6 +205,7 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
     if (active.kind === 'reveal') strength = keyedRevealProgress(progress);
     else if (active.kind === 'reaction') strength = 1 - pulse(progress, 0, 0.38, 0.78) * 0.28;
     else strength = 1 + pulse(progress, 0, 0.38, 0.82) * 0.12;
+    this.sampleWeapon(active.kind, progress);
     this.applyStrength(
       strength,
       active.kind === 'reveal' ? smoothstep(progress) : 1,
@@ -267,8 +300,26 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
 
   private restoreAndHide(): void {
     this.restoreBaseState();
+    this.resetWeapon();
+    this.applyFalseCatSample();
     this.staged = false;
     this.hideScene();
+  }
+
+  private resetWeapon(): void {
+    this.weapon = null;
+    this.weaponReaction = null;
+    resetShadowFigureSample(this.shadowSample);
+  }
+
+  private sampleWeapon(kind: AnimationKind, progress: number): void {
+    const weapon = this.weapon;
+    if (weapon === null) return;
+    if (kind === 'item') {
+      sampleShadowFigureWeapon(weapon, progress, this.shadowSample);
+    } else if (kind === 'reaction' && this.weaponReaction !== null) {
+      sampleShadowFigureReaction(weapon, this.weaponReaction, progress, this.shadowSample);
+    }
   }
 
   private hideScene(): void {
@@ -283,10 +334,30 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
       this.cameraLook?.applyLookAt(this.itemAimTarget, this.facingStrength);
       return;
     }
-    if (this.eventId === 'shadow-figure') {
-      if (this.falseCat === null) return;
-      this.falseCat.visible = true;
-    }
+    if (this.eventId === 'shadow-figure') this.applyFalseCatSample();
+  }
+
+  private applyFalseCatSample(): void {
+    const falseCat = this.falseCat;
+    if (falseCat === null) return;
+    const sample = this.shadowSample;
+    const side = this.falseCatOutwardSign;
+    falseCat.position.copy(this.falseCatBasePosition);
+    falseCat.position.x += sample.outward * side;
+    falseCat.position.y += sample.lift;
+    falseCat.position.addScaledVector(this.falseCatLungeDirection, sample.lunge);
+    falseCat.rotation.set(
+      this.falseCatBaseRotation.x + sample.pitch,
+      this.falseCatBaseRotation.y,
+      this.falseCatBaseRotation.z - sample.roll * side,
+    );
+    falseCat.scale.set(
+      this.falseCatBaseScale.x * sample.scaleX,
+      this.falseCatBaseScale.y * sample.scaleY,
+      this.falseCatBaseScale.z * sample.scaleZ,
+    );
+    if (this.silhouetteMaterial !== null) this.silhouetteMaterial.opacity = sample.opacity;
+    falseCat.visible = sample.opacity > 0.01;
   }
 
   private placeFalseCatOppositeCarlitos(): void {
@@ -296,6 +367,20 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
     this.falseCat.position.x = -this.falseCat.position.x;
     this.falseCat.rotation.copy(carlitos.rotation);
     this.falseCat.scale.copy(carlitos.scale);
+    this.falseCatBasePosition.copy(this.falseCat.position);
+    this.falseCatBaseRotation.copy(this.falseCat.rotation);
+    this.falseCatBaseScale.copy(this.falseCat.scale);
+    this.falseCatOutwardSign = this.falseCat.position.x < 0 ? -1 : 1;
+    this.falseCatLungeDirection.set(0, 0, 0);
+    const camera = this.environment.camera;
+    if (camera === undefined) return;
+    // Lunge along the deck toward the player's view.
+    camera.getWorldPosition(this.falseCatLungeDirection);
+    this.boatRoot.updateWorldMatrix(true, false);
+    this.boatRoot.worldToLocal(this.falseCatLungeDirection);
+    this.falseCatLungeDirection.sub(this.falseCatBasePosition);
+    this.falseCatLungeDirection.y = 0;
+    if (this.falseCatLungeDirection.lengthSq() > 0) this.falseCatLungeDirection.normalize();
   }
 
   private createFalseCat(): Group {
@@ -312,8 +397,10 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
       roughness: 1,
       metalness: 0,
       flatShading: true,
+      transparent: true,
     });
     this.ownedMaterials.add(silhouetteMaterial);
+    this.silhouetteMaterial = silhouetteMaterial;
     clone.traverse((object) => {
       if (!(object instanceof Mesh)) return;
       object.material = Array.isArray(object.material)

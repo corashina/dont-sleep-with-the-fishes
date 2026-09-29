@@ -360,13 +360,10 @@ const survivalEvents: SurvivalEventDefinition[] = [
     choice('flareGun', 'deathStareFlareChoice', 'flareGun',
       outcome(1, 'deathStareFlareResult', effects(undefined, [consume('flareGun')]))),
     { ...choice('flashlight', 'eventText071', 'flashlight',
-      outcome(80, 'eventText131'),
-      outcome(20, 'deathStareLightFlickers', atNextDawn(1))), breakChance: 0.40 },
-    choice('umbrella', 'eventText072', 'umbrella',
-      outcome(60, 'eventText133'),
-      outcome(40, 'eventText134', effects([
+      outcome(1, 'eventText134', effects([
         subtract('hull', { min: 44, max: 60 }), subtract('health', 60),
-      ], [breakItem('umbrella')]))),
+      ]))), breakChance: 0.40 },
+    choice('umbrella', 'eventText072', 'umbrella', outcome(1, 'eventText133')),
     choice('cannedFood', 'eventText073', 'cannedFood',
       outcome(66, 'eventText135', effects([subtract('food', 1)])),
       outcome(33, 'eventText134', effects([subtract('food', 1), subtract('hull', { min: 33, max: 55 }), subtract('health', 50)]))),
@@ -531,6 +528,11 @@ const survivalEvents: SurvivalEventDefinition[] = [
     choice('flashlight', 'eventText071', 'flashlight',
       outcome(50, 'eventText185', effects([add('pressure', 1)])),
       outcome(50, 'eventText186', effects([subtract('health', 50)]))),
+    choice('knife', 'eventText068', 'knife',
+      outcome(70, 'shadowKnifeScatter'),
+      outcome(30, 'shadowKnifeClaw', effects([subtract('health', 25)]))),
+    choice('shotgun', 'eventText069', 'shotgun',
+      outcome(1, 'shadowShotgunResult', effects(undefined, [consume('shotgun')]))),
     choice('flareGun', 'eventText070', 'flareGun', outcome(
       1,
       'eventText187',

@@ -1986,7 +1986,14 @@ export class SurvivalEventFlow {
       || (context.eventId === 'monster-in-the-fog'
         && (context.presentation.resourceDeltas.hull ?? 0) < 0)
       || (context.eventId === 'eerie-melody'
-        && (context.presentation.resourceDeltas.hull ?? 0) < 0);
+        && (context.presentation.resourceDeltas.hull ?? 0) < 0)
+      || this.isDeathStareBite(context);
+  }
+
+  private isDeathStareBite(context: EventResolutionContext): boolean {
+    return context.eventId === 'death-stare'
+      && context.choice.choiceId === 'flashlight'
+      && (context.presentation.resourceDeltas.hull ?? 0) < 0;
   }
 
   private async coverImpactBite(context: EventResolutionContext): Promise<boolean> {
@@ -2016,6 +2023,7 @@ export class SurvivalEventFlow {
 
   private playEventResolutionDamageCue(context: EventResolutionContext): void {
     if (!isEventPresentationRoute(context.eventId, 'dedicated')) return;
+    if (this.isDeathStareBite(context)) return;
     const hullDamage = (context.presentation.resourceDeltas.hull ?? 0) < 0;
     const healthDamage = (context.presentation.resourceDeltas.health ?? 0) < 0;
     if (!hullDamage && !healthDamage) return;
@@ -2061,8 +2069,7 @@ export class SurvivalEventFlow {
   }
 
   private eventResolutionCue(context: EventResolutionContext): Promise<void> {
-    if ((context.eventId === 'monster-in-the-fog' || context.eventId === 'eerie-melody')
-      && this.isImpactBite(context)) return Promise.resolve();
+    if (context.eventId !== 'swarm-of-sharks' && this.isImpactBite(context)) return Promise.resolve();
     const stationaryHandymanTouch = context.eventId === 'handyman'
       && context.choice.choiceId === 'touch';
     if (stationaryHandymanTouch) return Promise.resolve();
