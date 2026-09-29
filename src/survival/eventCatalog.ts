@@ -369,6 +369,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       choice('fishingNet', 'crabSwarmNetChoice', 'fishingNet', outcome(1, 'crabSwarmNetResult')),
       choice('bucket', 'crabSwarmBucketChoice', 'bucket', outcome(1, 'crabSwarmBucketResult')),
       choice('knife', 'crabSwarmKnifeChoice', 'knife', outcome(1, 'crabSwarmKnifeResult')),
+      choice('shotgun', 'crabSwarmShotgunChoice', 'shotgun', outcome(1, 'crabSwarmShotgunResult')),
       choice('flashlight', 'eventText071', 'flashlight',
         outcome(1, 'crabSwarmLightResult', effects(undefined, [loseEventTarget()]))),
       choice('sleep', 'eventText063', undefined,

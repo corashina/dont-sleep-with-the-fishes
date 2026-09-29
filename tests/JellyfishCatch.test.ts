@@ -27,22 +27,14 @@ it('instances the colony around the boat, follows waves, and releases shared res
   expect(background).toBeInstanceOf(InstancedMesh);
   expect(background.count).toBe(1152);
   expect(clone.mock.calls).toEqual([['flowersHeart']]);
-  expect(presentation.waterGlow).toHaveLength(30);
-  const positions = presentation.waterGlow;
-  const firstPulse = positions[1]!.w;
   presentation.update(1.3, 0.1);
   const matrix = new Matrix4();
   const position = new Vector3();
-  expect(presentation.waterGlow).toBe(positions);
-  expect(positions[1]!.w).not.toBe(firstPulse);
   for (let index = 0; index < 30; index += 1) {
     const batch = nearby[index % 3]!;
     expect(batch.material).toBeInstanceOf(ShaderMaterial);
     batch.getMatrixAt(Math.floor(index / 3), matrix);
     position.setFromMatrixPosition(matrix);
-    expect(positions[index]!.x).toBeCloseTo(position.x);
-    expect(positions[index]!.y).toBeCloseTo(position.z);
-    expect(positions[index]!.w).toBeGreaterThan(0);
     const surface = sampleWaveField(DEFAULT_WAVES, 1.3, position.x, position.z, water.readAmplitudeScale());
     expect(position.y).toBeLessThan(surface.height);
     if (index === 0) expect(position.distanceTo(presentation.itemAimTarget()!.position)).toBeLessThan(0.00001);

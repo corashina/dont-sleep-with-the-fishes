@@ -6,7 +6,6 @@ import {
   type Color,
   type Material,
   type Scene,
-  type Vector4,
   type WebGLRenderer,
 } from 'three';
 import { OceanCapture } from './OceanCapture';
@@ -100,20 +99,16 @@ export class OceanRenderer {
   private amplitudeScale = 1;
   private vortexBound = 0;
 
-  setBioluminescence(sources: readonly Vector4[]): void {
+  setUnderwaterGlowEnabled(enabled: boolean): void {
     if (this.disposed) return;
-    const count = Math.min(sources.length, this.uniforms.uBioluminescence.value.length);
-    if (count > 0 && this.glowCapture === null) {
+    if (enabled && this.glowCapture === null) {
       this.glowCapture = new UnderwaterGlowCapture();
       this.uniforms.uGlowColor.value = this.glowCapture.colorTexture;
+      this.uniforms.uGlowScattering.value = this.glowCapture.scatteringTexture;
       this.uniforms.uGlowDepth.value = this.glowCapture.depthTexture;
       this.preparedVersion = -1;
-    } else if (count === 0 && this.glowCapture !== null) {
+    } else if (!enabled && this.glowCapture !== null) {
       this.releaseGlowResources();
-    }
-    this.uniforms.uBioluminescenceCount.value = count;
-    for (let i = 0; i < count; i += 1) {
-      this.uniforms.uBioluminescence.value[i]!.copy(sources[i]!);
     }
   }
 
@@ -394,6 +389,7 @@ export class OceanRenderer {
     this.glowCapture?.dispose();
     this.glowCapture = null;
     this.uniforms.uGlowColor.value = null;
+    this.uniforms.uGlowScattering.value = null;
     this.uniforms.uGlowDepth.value = null;
     this.uniforms.uGlowReady.value = 0;
   }

@@ -17,7 +17,7 @@ export class JellyfishBackground {
   constructor(models: JellyfishModels, private readonly water: DriftingWater) {
     this.root = models.createBackground(ROWS * COLUMNS);
     this.root.instanceMatrix.setUsage(DynamicDrawUsage);
-    // Surround the boat, including the net camera. Match the polar field in oceanShader.
+    // Surround the boat, including the net camera.
     for (let row = 0; row < ROWS; row += 1) {
       for (let column = 0; column < COLUMNS; column += 1) {
         const index = row * COLUMNS + column;

@@ -75,6 +75,7 @@ const resultLabels: Readonly<Record<string, Parameters<typeof text>[0]>> = {
   'crab-swarm.fishingNet.0': 'repelled',
   'crab-swarm.bucket.0': 'repelled',
   'crab-swarm.knife.0': 'repelled',
+  'crab-swarm.shotgun.0': 'repelled',
   'crab-swarm.flashlight.0': 'stolen',
   'crab-swarm.sleep.0': 'stolen',
   'dangerous-waters.anchor.0': 'safe',

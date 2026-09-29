@@ -1,413 +1,46 @@
 # Don't Sleep With The Fishes
 
-A desktop-browser survival game built with TypeScript and Three.js. Scavenge a sinking ship under a one-minute deadline, launch with only the supplies you saved, and then manage a lifeboat through changing weather, day and night events, and an uncertain wait for rescue.
+You have one minute to escape the sinking Dorothy. Search her rooms, carry supplies to the lifeboat, and reach the evacuation area before time runs out.
 
-Phones and tablets cannot run the game. They show a PC-only message before game loading starts.
-Use a computer with a keyboard and mouse. Touchscreen PCs use the same desktop controls.
+At sea, spend your energy on fishing, diving, and repairs. Keep yourself fed, protect your equipment, and face whatever comes alongside after dark.
 
-## Visual identity
+## About the game
 
-The game uses an authored illustrated style: darkly comic, melancholic, and
-maritime. Stylized models favor recognizable silhouettes, purposeful
-irregularity, and constructed detail; sparse scene-integrated UI and tactile
-keyed animation keep the physical world dominant. Selective ambient occlusion
-and restrained print treatment add cohesion without substituting for geometry,
-materials, lighting, or composition.
+A single-player survival game for desktop browsers, with an illustrated sea world, dark comedy, and strange encounters.
 
-See the [visual style guide](VISUAL_STYLE_GUIDE.md) for the durable
-direction and the [current visual audit](docs/VISUAL_AUDIT.md) for prioritized
-recommendations.
+- **Choose your supplies.** Carry up to three weight points per trip. Your lifeboat starts with what you save.
+- **Live from the sea.** Catch fish with a rod or net. Dive for supplies, collect drifting loot, and trade.
+- **Keep the boat afloat.** Divide your daily energy between food, repairs, and opportunities. Damaged tools need care too.
+- **Bring Carlitos.** Save the cat from Dorothy. Feed him, pet him, and ask him to retrieve supplies or keep watch.
+- **Face the night.** Storms, sharks, ghosts, and other visitors call for different responses. Use the equipment you kept.
+- **Find a way home.** Signal for rescue or uncover the Heart of the Sea. Read your journal as the run unfolds.
 
-The 3D world combines authored procedural geometry with curated, locally
-committed models and shaders. Its shared cloudless atmosphere combines grounded
-maritime scattering, a locally committed original gibbous-moon texture,
-weather-aware celestial light, fog, lighting, and synchronized ocean
-reflections without external sky art.
+## Play requirements
 
-The scavenging phase takes place on a furnished single-level coastal freighter. A loop connects the crew cabin, wheelhouse, cargo deck, storage/workroom, and lifeboat station, giving each one-minute run two practical search directions.
+Use a desktop browser with WebGL, a keyboard, and a mouse. Phones and tablets show a desktop-only notice.
 
-Collectibles spawn on authored desks, shelves, cabinets, workbenches, racks, and crates across all ship regions. Each item type uses fitting surfaces without room categories. Dorothy contains exactly 20 scavenging item types and 23 physical pickups. Food appears three times, Bait twice, and every other item type once.
+Languages: English, Polish, and Argentinian Spanish. Optional auto-save keeps one local survival checkpoint.
 
-The ship combines original procedural geometry with locally committed wood maps and flat authored steel materials. Each enclosed room has a pulsing caged alarm lamp centered on its ceiling. One synchronized CC0 klaxon feeds those three room positions at half volume, fades naturally through doors, and follows pause and exit lifecycle.
+## Run locally
 
-## Dorothy supplies
+Install Bun and Node.js, then run:
 
-The carry limit is three weight points, not three objects. Weight-one Dorothy supplies are Food (3), Bait (2), Duct Tape, Compass, Map, Binoculars, Flare Gun, Radio, and Flashlight. Weight-two supplies are Medkit, Fishing Net, Bucket, Umbrella, Swim Ring, Shotgun, and Carlitos. Scuba Gear and Anchor each weigh three points.
-
-Food, Bait, Duct Tape, Medkit, Flare Gun, and Shotgun are one-use Dorothy supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Binoculars, Fishing Net, Bucket, Scuba Gear, Anchor, Radio, Umbrella, Swim Ring, and Flashlight are durable items used by actions or events. Carlitos changes from a saved Dorothy item to the living companion when survival starts. He then leaves the item inventory. Generic durable loss, breakage, and consumption rules do not apply to living Carlitos. A repairable durable item can become broken, and a durable item can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
-
-The repair toolbox and bow-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run. The toolbox spends up to three Energy to repair the hull. Each Energy repairs up to 33 Hull. Duct Tape repairs broken items only. End Day starts the night sequence. Energy becomes one to three at dawn, based on hunger and night outcomes. From day five, a saved Radio has a 20% chance to receive a signal at dawn. The signal remains actionable while its incoming audio plays. Answering costs one energy, keeps the Radio, and adds diminishing hidden rescue lead. Energy Bar restores energy to the maximum of three and is consumed.
-
-The day pool contains Drifting Supplies and Drifting Chest.
-Event selection relies on the scene and response prompts.
-It does not show event titles.
-
-All night events use the bright, glowy star field when weather and haze allow it.
-
-An old chest can become a mimic and attack automatically. A usable Knife reduces the damage from 25 to 10 Health.
-
-**Something Under Us** can appear at night from day eight, with pressure one or higher.
-A vast sea shadow circles outside the hull, with faint eyes and teeth beneath the water.
-Low underwater groans accompany its approach and fade as it leaves. Its wake lifts the boat.
-Stay still to lose one Energy from the normal dawn amount. Throw one Bait to preserve sleep.
-Throwing one Food also diverts the shadow and preserves sleep.
-The event has a seven-day cooldown and can appear twice per run.
-Use System Tuning → Event Test → Something Under Us to inspect it.
-
-Jellyfish accepts Fishing Net or Bucket. It records the choice without a large reward.
-
-Additional event responses use recovered equipment:
-
-- **Tentacle Attack:** Save the targeted supply without injury using the Knife or Fishing Net. The knife has a 30% break chance; the net has a 35% tear chance.
-- **Swarm of Sharks:** Throw two Food away from the boat to divert the sharks. This requires two Food.
-- **Windy Night:** Spend Duct Tape to secure supplies against loss and breakage. Wind still removes 10–20 Hull.
-- **Dangerous Waters:** Drop the Anchor in the shallows. It holds safely 65% of the time. Otherwise, it breaks and removes 10–20 Hull.
-- **Tornado:** The Anchor has a 35% break chance. A broken anchor also costs 10–20 Hull.
-- **Restless Waves:** The Anchor protects the hull but has a 30% break chance.
-- **Leak:** The Bucket has a 35% break chance. A broken bucket also costs 5–10 Hull.
-- **Windy Night:** The Fishing Net protects supplies but has a 35% tear chance.
-- **Dangerous Waters:** Find a gap with Binoculars. Lose one Energy from the normal dawn amount. Passage is safe 60% of the time; otherwise, rocks remove 5–10 Hull. Keep the Binoculars.
-- **Other People:** Call the crew on the Radio. Keep the Radio and gain hidden rescue progress. Lose one Energy from the normal dawn amount. The call does not end the run.
-
-Run pressure rises on days 8, 15, 25, and 40. Successful supernatural
-counters can lower pressure. Quiet-night chances fall as pressure rises.
-Dangerous event weights rise by 25 percent per pressure level. Night energy
-results apply at the next dawn. Event damage has no day-50 multiplier.
-
-## Carlitos
-
-Carlitos cannot die during survival. Hunger and unhappiness limit his energy to zero through three.
-His condition score is fullness minus unhappiness penalty. Scores of four or more allow three energy.
-Scores of three, two, or one and below allow two, one, or zero energy.
-He recovers one energy each dawn, up to that limit. Care raises the limit but does not refill energy.
-At zero energy he rests aboard. He cannot retrieve supplies, keep watch, or improve fishing luck.
-Feeding and petting work at zero energy. Carlitos meows after the thrown food reaches him.
-Unhappiness stops at ten. All needs remain recoverable. Keeping watch costs one Carlitos energy.
-
-## Run
-
-```bash
+```sh
 bun install
 bun run dev
 ```
 
-Open the local URL printed by Vite.
-
-## Google Analytics
-
-Production builds use the Google tag for GA4 traffic and engagement reports.
-Set the public measurement ID before building:
-
-1. Create a GA4 web data stream for the deployed site. Copy its `G-...` measurement ID.
-2. In GitHub, open **Settings → Secrets and variables → Actions → Variables**.
-3. Add the repository variable `VITE_GA_MEASUREMENT_ID` with that ID.
-4. Run the **Deploy to GitHub Pages** workflow again.
-
-For other hosts, copy `.env.example` to `.env.production` and set the same variable before building.
-The measurement ID is public. It is included in the browser bundle.
-Missing or invalid IDs disable analytics. Development, test, and playtest builds also disable analytics.
-Localhost, loopback previews, and URLs with a `playtest` parameter send no analytics.
-
-| Event | Trigger | Parameters |
-|---|---|---|
-| `game_start` | Scavenging starts, including a restart | None |
-| `game_death` | Dorothy sinks with the player, health reaches zero, or the lifeboat sinks | `ending_type`, `survival_day` |
-| `game_win` | Rescue or the Kraken ending | `ending_type`, `survival_day` |
-
-Each ending is sent once per phase. Loading a save does not send another `game_start`.
-Ending previews, event tests, and the animation lab send no gameplay events.
-`ending_type` is `dorothy`, `death`, `sinking`, `rescue`, or `kraken`.
-`survival_day` is zero for Dorothy and the current day for survival endings.
-The tag loads asynchronously. An unavailable tag does not block the game.
-
-In GA4, register `ending_type` as an event-scoped custom dimension.
-Register `survival_day` as an event-scoped custom metric with the standard unit.
-Use Realtime reports or [Tag Assistant](https://tagassistant.google.com/) to verify the deployed site.
-See Google's [tag setup](https://developers.google.com/tag-platform/gtagjs)
-and [event setup](https://developers.google.com/analytics/devguides/collection/ga4/events) guides.
-
-## Audio source policy
-
-Source all new music and sound assets only from [Freesound](https://freesound.org/).
-Suggest only sounds from Freesound.
-Accept only files with a clear license and source history. Verify the source page before each download.
-Record the source page, creator, and license in `src/assets/ATTRIBUTION.md`.
-
-The main menu uses a fixed underwater camera. A skull rests in a small sunken boat in the foreground. The title is painted onto a planted wooden sign on the left. Sand ridges, sparse debris, and a large tilted wreck of Dorothy create the distant depth layers. Sharks, fish, kelp, bubbles, suspended matter, and caustics animate while the camera stays fixed.
-
-Select **START** to fade into the existing scavenging intro. The scavenging
-phase uses pointer lock; the survival phase releases it for a fixed seated view
-and mouse-accessible controls.
-
-## Controls
-
-### Scavenging
-
-| Input | Action |
-|---|---|
-| `WASD` | Move through the ship |
-| Mouse | Look |
-| `Shift` | Sprint |
-| `Space` | Jump |
-| Left mouse click | Pick up another supply, drop the newest carried supply, or store supplies in the lifeboat |
-| `Escape` | Pause or resume, and release the mouse while paused |
-
-Supplies are repeatable physical instances rather than one slot per item type. The HUD reads `CARRY n / 3`: every instance contributes its listed weight, and pickups are refused when their weight would take the total over three. Dropping returns the newest carried instance to the deck, where it can be picked up again. The weathered wooden lifeboat has unlimited storage, so every supply thrown aboard is retained and no full-boat state exists.
-
-### Lifeboat survival
-
-| Input | Action |
-|---|---|
-| Mouse | Hover physical recovered props for details; click a prop to perform its action. While fishing, click valid water to cast and click the bubbles to reel |
-| Chest icon | When a chest is aboard, turn the seated camera 180 degrees; use it again to look forward |
-| `Tab` / `Shift+Tab` | Move forward or backward through controls |
-| `Enter` / `Space` | Activate the focused control; while fishing, cast at the centered water point or reel during a bite |
-| `Escape` | Pause or resume, including during fishing; pausing does not cancel the attempt or refund its energy |
-| Top-center journal button | Open completed entries; `NEW` marks unread history |
-| Boat lantern | End the day and fade into an event or quiet night |
-| Closed chest | Spend three energy to open the chest |
-| Carlitos | Select **Carlitos** to open his scene-linked care card |
-
-### Carlitos
-
-Carlitos is the only crewmate. Save him on Dorothy to bring him into the lifeboat.
-
-Select **Carlitos** to see his Energy, Hunger, and Happiness. The card offers **Pet** and **Feed**.
-
-Pet eases loneliness once each day. Feed uses one Food. Carlitos meows when the thrown food reaches him.
-
-Carlitos improves fishing luck and can help during events while he has energy.
-
-### Fishing
-
-Track the bite as it moves across the water. Click it to hook the catch and reel it in automatically.
-
-Fishing can reel in Fish Bones as a rare junk catch. It gives no food.
-
-Fishing can also recover utility salvage at the wiki-documented weights: Bait,
-Wet Duct Tape, Broken Compass, Torn Fishing Net, and Energy Bar. Bait stacks;
-Wet Duct Tape becomes ordinary usable Duct Tape; Energy Bars are usable;
-Compass and Fishing Net arrive broken and require Duct Tape. A usable or broken
-unique utility is removed from the catch pool until it is consumed or lost.
-Utility catches neither consume bait nor receive bait's fish-weight bonus.
-
-### System tuning
-
-Press <code>`</code> (backquote) in either phase to open **System Tuning**.
-All System Tuning settings persist between sessions.
-
-Use **Master Volume** and **Mute** to control all audio.
-
-### Survival auto-save
-
-Open **System Tuning** with <code>`</code>. Turn on **Auto-save** to keep one
-local lifeboat survival checkpoint. Auto-save is off by default. The choice
-persists between sessions.
-
-Select **Continue** in System Tuning to restore the last stable checkpoint.
-Scavenging progress is not saved. Turning auto-save off or reaching an ending
-deletes the checkpoint.
-
-The menu also offers **Calm**, **Overcast**, **Squall**, **Rain**, **Wind**,
-**Thunderstorm**, **Waves**, and **Fog**. A selection overrides event weather,
-carries across the phase handoff, and persists between sessions.
-
-Daytime clouds adapt to the active weather. They have varied sizes and rounded shapes.
-Calm clouds keep the sun clear.
-
-Normal gameplay is **Calm** outside events. Night events can use authored presentation weather while staged and resolved. The event weather includes **Overcast**, **Squall**, **Rain**, **Wind**, **Thunderstorm**, **Waves**, and **Fog**. Calm returns after each event ends.
-
-For testing, the same menu includes an **Event Test** picker. Choose an authored
-event and select **Enter Event** to start a fresh lifeboat run at that event with
-one usable copy of every recoverable item. After the event resolves, survival
-continues normally.
-
-Recovered supplies remain as physical props clustered on the survival boat's forward platform; there is no bottom dock or inventory tray. A resource or item type appears in one stable place, with up to three nearby copies representing larger quantities while the label reports the exact total. Hovering or keyboard-focusing a group reveals its label, condition, purpose, cost, effect, risk, and any unavailable reason. Broken durable props stay in place with a damaged treatment; consumed and lost props disappear and stop exposing action anchors. The permanent bow rod projects the **Fish - 1 Energy** action in every run. **Dive** still requires usable recovered Scuba Gear. Other unavailable actions remain visible and explain what is missing. Event and outcome dialogs keep keyboard focus until they are resolved.
-
-Accepted daytime actions play through the lifeboat scene, update the condition display, and leave a short non-blocking caption. Rejected actions explain the reason without opening a dialog.
-
-## Game loop
-
-The ship sinks in one minute. Search the cabin, wheelhouse, cargo deck, and storage room. Carry supplies up to weight three and store them in the lifeboat. Stand in the marked evacuation area beside the lifeboat when the timer reaches zero. Evacuation is automatic; you cannot leave early. Dorothy then sinks before survival starts. Duplicate instances remain distinct. Only stored supplies enter the survival inventory and reappear as survival props.
-
-In the lifeboat, each day gives three energy for daytime actions:
-
-- **Fish** costs one energy and uses the lifeboat's permanent bow rod. Click valid water to cast, or press `Enter`/`Space` for the centered cast; when bubbles appear, click them or press `Enter`/`Space` within the 1.5-second reel window. Available bait improves the catch automatically and is consumed only when a fish lands, never for junk or a miss. Pausing with `Escape` freezes the attempt but does not cancel it, and an accepted attempt's energy remains spent.
-- **Dive** costs 3 Energy and requires usable scuba gear. Normal dives have a 65% reward chance and an independent 25% injury chance. Overcast weather changes these to 60% and 30%. Injuries remove 15–45 Health. Flashlights do not affect diving. Equipment rewards occupy 15% of all dives within the success chance. Other successful dives give food or bait with equal chances. Diving never adds rescue progress. Food and bait quantities are one (90%), two (9%), or three (1%). Wreckage dives give equipment (40%), food (17.5%), bait (17.5%), or injury (25%). Wreckage uses the same food and bait quantity chances.
-- **Eat** spends one food to reduce hunger by a random 18–24 points. Each whole number has equal probability. Hunger stops at zero.
-- **Repair** uses the lifeboat's fixed toolbox. It spends one to three Energy and repairs up to 33 Hull per Energy.
-- **Treat** consumes the recovered Medkit to restore health.
-- **End Day** starts the night sequence. Energy becomes one to three at dawn, based on hunger and night outcomes.
-- **Repair item** consumes Duct Tape to restore one selected broken, repairable supply.
-- **Answer signal** costs one energy while the Radio signal audio plays. Each answer adds diminishing hidden rescue lead.
-- **Eat Energy Bar** consumes the bar and restores energy to three.
-- **Open chest** costs three energy. The first chest gives a Heart of the Sea piece. Later chests recover tools or resources.
-
-Collect one Heart of the Sea piece from each source: Jellyfish, Ocean of Blood, and a chest.
-Collect the brain at Jellyfish by hand, with a Net, or with a Bucket. Use Scuba Gear in the Ocean of Blood.
-Both events reward only their Heart of the Sea piece, without food or other items.
-Missed sources can return. Collected sources stop appearing. Heart pieces stay separate from tools.
-The complete heart guarantees a Kraken encounter at the next nightfall.
-Collected heart pieces fit inside a small open basket on the bench, right of the bait.
-The Kraken rises and watches, grips each piece from the basket, then slowly submerges over a 30-second sequence.
-The empty basket remains on the bench. “The Sea Releases You” appears after the last tentacle disappears.
-Fatal damage can still end the run before this encounter.
-Event Test includes the Kraken encounter and its ending preview. Saves use version 8; older saves are rejected.
-- **End day** advances into the day and night event sequence.
-
-Health, Food, Energy, and Hull remain visible as condition meters. Food is the inverse of internal hunger, so it drains toward zero as the survivor becomes hungry. Food and bait remain separate stores used by actions and outcomes, but they are not persistently tallied in the HUD.
-
-The sea removes a random 8–13 Hull from the lifeboat on four of every five nights. Every fifth night has no hull wear. The roll depends on the run seed and completed day, so loading a save preserves it. Available Energy always keeps the fixed toolbox useful.
-
-Day and night events fade to black before each reveal.
-
-Event tableaus include drifting flowers, the chest mimic, and drifting supplies.
-
-- **Drifting Supplies:** From day 3, spend three energy to retrieve a barrel, lifeboat cooler, or shipping container. Barrel loot grants one resource. Cooler loot grants two. Container loot grants three or an Energy Bar.
-
-Pressure, flags, chest state, day bounds, cooldowns, and inventory can gate events.
-
-Clicking the physical boat lantern ends the day and uses the same slow cover before sleep. Most nights open an event decision; some nights pass quietly under the black cover before dawn fades back in over 2.5 seconds. Resolving a nighttime event or completing a quiet night advances to dawn. Each completed night adds an unread journal entry, and the player can open the journal later without advancing time.
-
-Each journal page retells fishing, daytime events, and nighttime events in the survivor's voice in all supported languages. Entries describe wounds, fatigue, catches, and Carlitos's condition in words, without resource counts or stat changes. Event entries explain the attempted action, its actual result, and how equipment was spent, damaged, lost, or traded.
-
-Rescue remains random. Maximum hidden rescue lead opens a small chance on day 25. Lower lead opens rescue later. Radio replies and signaling events shorten the hidden wait. Supply searches do not add rescue progress. The Flare Gun is consumed during **Other People**, but **Other People** never ends the run immediately. Rescue progress and gains remain hidden in all player text. Radio feedback describes only the transmission. A well-supplied successful run usually ends from day 30 through day 35. A no-signal successful run can pass day 40.
-
-## Endings
-
-- **SUNK WITH DOROTHY** — Dorothy sinks before the lifeboat clears her side.
-- **RESCUE FOUND YOU** — A rescue vessel finds the lifeboat after the minimum rescue day.
-- **THE SEA OUTLASTED YOU** — Hunger, diving, or an event reduces the survivor to death.
-- **THE BOAT IS GONE** — Damage sinks the lifeboat.
-- **TAKEN IN THE DARK** — A supernatural event takes the survivor.
-
-**Start From the Ship** performs a full restart with a fresh scavenging run.
-
-## Asset sources
-
-[Poly Pizza](https://poly.pizza/) is the default site for finding and importing
-item models. Prefer **Poly by Google** models when they suit the object, license,
-visual direction, and runtime budget; semantic fit and quality still take
-precedence over creator priority. All collectible models, the fixed fishing
-rod, Kay Lousberg's lantern, and Quaternius's ceiling light are pinned Poly
-Pizza assets. Run `bun run models:fetch:items` to download, hash-check, process,
-audit, and atomically publish the complete set.
-
-Source pages, licenses, resource IDs, hashes, and processing records are listed
-in [the asset ledger](src/assets/ATTRIBUTION.md).
-
-The ship alarm uses [Klaxon by InfamousLazure](https://freesound.org/people/InfamousLazure/sounds/584001/) from Freesound under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
-
-Carlitos uses seven clips split from [Cat Meows 7x by Kinoton](https://freesound.org/people/Kinoton/sounds/584895/) under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
-
-Dorothy's deck and tinted room floors use [Poly Haven — Dark Wooden Planks](https://polyhaven.com/a/dark_wooden_planks). Cabin walls and ceiling linings use [ambientCG — Painted Wood 006C](https://ambientcg.com/view?id=PaintedWood006C). White corner trim joins continuous roof trim. Benches and the hatch use dark timber and steel fittings. Tubular deck and crow's nest rails share meshes by material. Room alarms are the only lamps. Machinery details use 836 triangles and two material batches. Rigging lines attach directly to small mounting plates.
-
-## Commands
-
-```bash
-bun run dev
-bun run test
-bun run typecheck
-bun run build
-bun run preview
-bun run models:fetch:menu
-bun run models:check:menu
-```
-
-`bun run build` type-checks the project and writes the static production site to `dist/`. Deploy that directory to any static host.
-
-### Loading and ownership
-
-Startup phase loaders request only the menu models, sand, display font, and menu audio.
-Selecting **START** loads ship models, textures, furniture, audio, sky assets, lifeboat assets, and physics.
-The survival handoff loads its models and audio. It keeps shared sky and lifeboat assets during the transition.
-**Continue** and event tests load survival directly. They do not load ship resources first.
-
-`PhaseResources` shares pending loads and holds each asset until its final lease ends.
-`Game` disposes the outgoing phase before it releases that phase's lease.
-Stale or failed transitions release acquired resources and cannot replace the current phase.
-
-For ambient-occlusion inspection, append `?ao=debug` to show the raw item AO
-buffer or `?ao=off` for an unoccluded comparison. Reload after changing modes.
-While the game is open, press `O` to cycle composite, raw AO, and AO-off modes.
-
-Scavenging physics is controlled in `src/physics/PhysicsOptions.ts`.
-`SCAVENGE_PHYSICS_DEBUG_MESHES` renders the moving ship colliders and seven
-dynamic object colliders. Debug meshes stay hidden until Start is clicked.
-`SCAVENGE_PHYSICS_ENABLED` is the master switch. Disabling it skips Rapier
-loading and keeps the seven obstacle visuals static.
-
-## Architecture
-
-`src/world/ShipDangerEffects` owns room alarms.
-
-- `src/Game` — top-level game director, phase transitions, restart, renderer ownership, and active phase leases.
-- `src/app/PhaseResources` — menu, ship, and survival resource groups with shared loads and reference-counted leases.
-- `src/app` — launch, phase contracts, saved-run entry, and browser test entry.
-- `src/menu` — underwater menu models, composition, animation, particles, and UI.
-- `src/menu/MenuSigns` — the owned title and interactive guide sign textures, geometry, and hover state.
-- `src/menu/SunkenDorothyWreck` — the simplified static Dorothy silhouette.
-- `src/menu/DistantSeabed` — the static ridge, rock, plant, and debris depth layers.
-- `src/phases/MainMenuPhase` — menu lifecycle, pointer lock, fade, and scavenging handoff.
-- `src/phases` — scavenging phase lifecycle and its handoff into survival.
-- `src/game` — scavenging timer, item state, score, and sinking progression.
-- `src/survival` — deterministic survival rules, inventory, events, orchestration, and lifeboat world.
-- `src/survival/eventCatalog`, `eventCatalogValidation`, `eventSelection`, `eventOutcomeRules`, `journalRecords`, `dayActionRules`, and `fishingSettlementRules` — focused survival domain rules.
-- `src/survival/SurvivalSession` — owns mutable survival state.
-- `src/survival/SurvivalPhase` — owns the survival phase lifecycle, global pause, restart, overrides, flow wiring, rendering, and top-level errors.
-- `src/survival/SurvivalDayActionFlow` — owns accepted day actions, chest actions, repairs, dives, sleep, and dawn requests.
-- `src/survival/SurvivalFishingFlow` — owns each fishing attempt and its view, timing, result, and return state.
-- `src/survival/SurvivalEventFlow` — owns event loading, reveal, choices, outcomes, dawn, and event cleanup.
-- `src/survival/EventPresentationHost` — owns the active event adapter, roots, lifecycle, and replacement.
-- `src/survival/EventPresentationRegistry` — maps event IDs to normalized adapter factories.
-- `src/survival/DriftingItemFlow` — owns drifting-item focus, contextual choices, camera return, and target projection.
-- `src/survival/ItemAnimationLabFlow` — owns lab selection, item animation, repair-tool animation, cues, and lab bundles.
-- `src/survival/SurvivalVisibilityController` — owns document visibility listeners and resume waiters.
-- `src/survival/BoatWorld` — builds the lifeboat scene and coordinates frames, atmosphere, buoyancy, and top-level cleanup.
-- `src/survival/BoatCameraController` — owns rear, event, and drifting-item camera motion.
-- `src/survival/FishingPresentation` — owns fishing state, animation, particles, projection, and visual resources.
-- `src/survival/MoonEventPresentation` — owns the moon event lifecycle and reaction animation.
-- `src/survival/BoatInteractionProjector` — projects boat and event interaction targets.
-- `src/survival/DivePresentationController` — owns the active dive lifecycle and camera pose.
-- `src/world` and `src/ocean` — procedural ship and boat geometry, shared wave field, ocean shader, weather, and buoyancy.
-- `src/ocean/oceanShader` — owns shader bytes, quality defines, and quality uniforms.
-- `src/ocean/oceanGeometry` — owns stateless surface and horizon geometry builders.
-- `src/ocean/OceanRenderer` — owns runtime quality, state, follow, update, and disposal.
-- `src/world/ShipItemPlacement` — physical-fit item profiles, anchor validation, and randomized assignment to authored surfaces.
-- `src/world/ShipAssets` and `src/world/ShipMaterials` — locally committed PBR timber maps, procedural secondary surfaces, ship materials, and explicit texture ownership.
-- `src/world/ShipLayoutTypes` — shared ship layout types and constants.
-- `src/world/shipLayoutData` — authored ship layout data.
-- `src/world/ShipNavigation` — navigation grids and route metrics.
-- `src/world/ShipLayoutValidation` — layout validation.
-- `src/world/ShipGeometryPrimitives` — shared geometry primitives and build context.
-- `src/world/ShipHullGeometry` — hull, deck, floors, and water-exclusion bounds.
-- `src/world/ShipRoomGeometry` — room walls, windows, doors, and roofs.
-- `src/world/ShipAccessGeometry` — ladders and access structures.
-- `src/world/ShipExteriorGeometry` — exterior details, engines, and rails.
-- `src/world/ShipGeometry` — final builder composition. It owns zone centers, arc colliders, and idempotent geometry disposal.
-- `src/world/ShipFurniture` — furnished room and working-deck layouts, furniture colliders, item anchors, and route-clearance samples.
-- `src/world/ShipSmoke` — fixed-pool twin-stack smoke whose density and drift respond to sinking and reduced-motion preference.
-- `src/world/Skybox`, `src/world/SkyAssets`, and `src/world/skyPalette` — shared cloudless atmosphere rendering, app-owned moon art, grounded weather and day/night palettes, celestial bodies, and ocean/fog color synchronization.
-- `src/player`, `src/input`, and `src/interaction` — pointer-lock movement, collision, raycast prompts, carrying, drops, and throws.
-- `src/ui` — scavenging HUD, pause and result screens, plus the accessible survival overlay.
-- `src/ui/SurvivalUI` — mounts 20 ordered roots and forwards semantic commands to survival flows.
-- `SurvivalUI` owns the global treatment, live announcer, busy state, pause state, and event forwarding.
-- `src/ui/SurvivalHudView` — owns status controls, day status, camera turn, and condition meters.
-- `src/ui/BoatAnchorView` — owns projected boat commands, tooltips, highlights, and Carlitos controls.
-- `src/ui/SurvivalEventView` — owns event captions, contextual choices, sleep masks, feedback, and choice beats.
-- `src/ui/SurvivalCoverView` — owns sleep covers, bad-sleep cues, dive results, and covered-scene timing.
-- `src/ui/SurvivalFishingView` — owns fishing input, bite targets, fades, results, and fishing announcements.
-- `src/ui/DriftingItemView` — owns drifting-item placement, choices, selection, and back navigation.
-- `src/ui/SurvivalJournalView` — owns journal pages, history text, navigation, and close input.
-- `src/ui/SurvivalModalViews` — owns repair, pause, and ending markup and local input.
-- `src/ui/ModalFocusManager` — owns modal priority, background inert state, focus traps, and focus restoration.
-
-The scavenging ocean mesh and lifeboat sample the same four-wave field. In survival, the ocean and boat remain synchronized while the camera stays fixed to the boat rig; reduced-motion preference removes parallax, lurch, tooltip movement, and nonessential UI transitions.
-
-Water exclusion is rendered in the ocean shader rather than by layering flat patches over the water. Each frame, the ship and lifeboat contribute inverse world-transform matrices and local hull bounds to two fixed shader regions. Ocean fragments transform their world positions into each vessel's local coordinates and are discarded inside those bounds before ocean color output. Because the mask follows complete world transforms, it stays aligned through vessel translation, rotation, listing, parent rigs, and non-uniform scale while high waves remain visible outside the hulls.
-
-## Milestone boundaries
-
-This milestone targets desktop browsers with keyboard and mouse. Carlitos is its only crewmate.
-
-It does not include saves, touch controls, mobile controls, other crewmates, or persistent progression.
+Open the URL printed by Vite. See [Development](docs/DEVELOPMENT.md) for checks and deployment.
+
+## Documentation
+
+| Guide | Contents |
+| --- | --- |
+| [Gameplay](docs/GAMEPLAY.md) | Controls, supplies, survival rules, Carlitos, saves, and endings. Contains spoilers. |
+| [Architecture](docs/ARCHITECTURE.md) | Code map, state flow, phase transitions, and resource ownership. |
+| [Events](docs/EVENTS.md) | Selection rules, outcomes, presentation, and event authoring. Contains spoilers. |
+| [Development](docs/DEVELOPMENT.md) | Setup, checks, simulations, debugging, deployment, and analytics. |
+| [Assets](docs/ASSETS.md) | Sources, licenses, import tools, and asset checks. |
+| [Water rendering](docs/WATER_RENDERING.md) | Ocean geometry, shading, captures, and quality settings. |
+
+Built with TypeScript, Three.js, and Rapier. Read [AGENTS.md](AGENTS.md) before making changes.

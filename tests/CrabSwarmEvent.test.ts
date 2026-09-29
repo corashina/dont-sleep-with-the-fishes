@@ -10,7 +10,8 @@ function game(items: ItemId[], seed = 42) {
 }
 
 describe('Crab swarm', () => {
-  it.each(['fishingNet', 'bucket', 'knife'] as const)('defends with %s without item loss or damage', item => {
+  // Importance: 95/100. Each defense must prevent permanent item loss.
+  it.each(['fishingNet', 'bucket', 'knife', 'shotgun'] as const)('defends with %s without item loss or damage', item => {
     const session = game([item, 'map', 'carlitos']);
     const before = session.snapshot();
     const outcome = session.resolveEvent({ kind: 'item', choiceId: item, instanceId: `${item}-1` });

@@ -1,4 +1,4 @@
-import { Group, type Object3D, type PerspectiveCamera, type Vector4 } from 'three';
+import { Group, type Object3D, type PerspectiveCamera } from 'three';
 import { CheckBackPresentation } from './CheckBackPresentation';
 import { DriftingItemPresentation } from './DriftingItemPresentation';
 import type { DriftingWater } from './DriftingWaveMotion';
@@ -17,8 +17,6 @@ import type { EventPresentationKey } from './survivalTypes';
 import type { EventPresentationCue } from './eventPresentationCue';
 import { SeagullPresentation } from './SeagullPresentation';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
-
-const NO_WATER_GLOW: readonly Vector4[] = Object.freeze([]);
 
 function includesFeaturedEvent(
   onlyEventId: FeaturedEventId | null | undefined,
@@ -175,12 +173,6 @@ export class FeaturedEventPresentations {
     if (this.disposed || this.activeEventId !== 'flowers') return null;
     const flowers = this.presentations.get('flowers');
     return flowers instanceof JellyfishPresentation ? flowers.itemCatch : null;
-  }
-
-  waterGlow(): readonly Vector4[] {
-    if (this.disposed || this.activeEventId !== 'flowers') return NO_WATER_GLOW;
-    const presentation = this.presentations.get('flowers');
-    return presentation instanceof JellyfishPresentation ? presentation.waterGlow : NO_WATER_GLOW;
   }
 
   itemAimTarget(eventId: string): Object3D | null {

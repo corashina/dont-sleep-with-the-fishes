@@ -4,6 +4,7 @@ import {
   type Camera, type Scene, type WebGLRenderer,
 } from 'three';
 import { UNDERWATER_GLOW_LAYER } from '../rendering/renderLayers';
+import { UnderwaterGlowScattering } from './UnderwaterGlowScattering';
 
 /** Isolate luminous bodies so water can transmit their light in either quality mode. */
 export class UnderwaterGlowCapture {
@@ -15,6 +16,8 @@ export class UnderwaterGlowCapture {
     stencilBuffer: false,
   });
   readonly colorTexture = this.target.texture;
+  private readonly scattering = new UnderwaterGlowScattering();
+  readonly scatteringTexture = this.scattering.texture;
   readonly inverseProjection = new Matrix4();
   readonly viewMatrix = new Matrix4();
   readonly viewport = new Vector4();
@@ -62,6 +65,7 @@ export class UnderwaterGlowCapture {
       renderer.setRenderTarget(this.target);
       renderer.setScissorTest(false);
       renderer.render(scene, camera);
+      this.scattering.update(renderer, this.colorTexture, width, height);
     } finally {
       camera.layers.mask = layers;
       scene.background = background;
@@ -79,5 +83,6 @@ export class UnderwaterGlowCapture {
 
   dispose(): void {
     this.target.dispose();
+    this.scattering.dispose();
   }
 }

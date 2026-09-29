@@ -80,7 +80,7 @@ export class CrabSwarmPresentation implements DedicatedEventPresentation {
         // Place the feet on the path, independent of the source model's origin.
         const bounds = new Box3().setFromObject(model.root);
         model.root.position.y -= bounds.min.y;
-        this.crabs.push({ root, model, path: new CrabPath() });
+        this.crabs.push({ root, model, path: new CrabPath(model.root) });
         this.boatRoot.add(root);
       }
     } catch (error) {

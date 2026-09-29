@@ -1,103 +1,139 @@
 # Water rendering
 
-Water quality has two values: `low` and `high`. High is the default.
-Invalid stored values use the default. There is no obsolete quality migration.
+[Game overview](../README.md) · [Architecture](ARCHITECTURE.md) · [Development](DEVELOPMENT.md)
+
+This document describes the working tree reviewed on September 29, 2026.
+
+## Quality settings
+
+Water quality has two values: `low` and `high`.
+The saved preference defaults to High. Invalid stored values also select High.
+The `OceanRenderer` constructor defaults to Low when no quality is supplied.
+
+Both settings share waves, hull contact, surface detail, fog, and event effects.
+Low uses scene lighting and a procedural sky reflection.
+High adds scene refraction and planar reflections.
 
 ## Modules
 
-- `OceanRenderer` owns the surface, horizon, material, and High resources.
-- `oceanShader` contains shared geometry and Low shading.
-- `oceanOptics` contains High shading. Colors and capture textures use linear light.
-- `OceanFoam` owns a persistent 512-square foam field covering 128 metres.
-- `OceanCapture` owns scene color, depth, and planar reflection captures.
+All modules below are in [`src/ocean`](../src/ocean).
 
-Both quality levels use the same Gerstner waves as buoyancy.
+| Module | Responsibility |
+| --- | --- |
+| `OceanRenderer` | Owns geometry, material, capture resources, quality changes, and preparation. |
+| `oceanGeometry` | Builds the central surface and eight horizon panels. |
+| `WaveField`, `waveModulation` | Share wave calculations between rendering and buoyancy. |
+| `oceanShader` | Combines displacement, Low shading, event effects, and fog. |
+| `oceanOptics` | Provides High normals, refraction, reflections, and sun highlights. |
+| `highWaterLook` | Defines shared High day and night colors, light strength, fog, and open-water radiance. |
+| `oceanFoam`, `oceanSurfaceDetail` | Generate procedural foam filaments, surface colors, and fine ripple normals. |
+| `WaterExclusion`, `oceanHullProfile`, `waterContactShader` | Shape water around hulls and remove water inside them. |
+| `OceanCapture` | Captures scene color, scene depth, and planar reflection color. |
+| `UnderwaterGlowCapture` | Captures luminous bodies for both quality settings. |
+| `UnderwaterGlowScattering` | Blurs captured light into a soft scattering texture. |
+
+## Waves and geometry
+
+Both settings use the same four modulated Gerstner waves as buoyancy.
+Vortex settings deform the surface. The shader discards the vortex core.
 High normals include horizontal wave displacement and vortex deformation.
-Small ripples fade with pixel footprint. Unresolved normal variation increases highlight roughness.
+Small High ripples fade with pixel footprint. Unresolved normal variation increases highlight roughness.
 
-`highWaterLook` owns the approved lab's day and night lighting presets.
-Scavenging, survival, and the lab use the same High sun direction, colors, and water fog.
-Reflection depth separates real object reflections from the shared reflected sky background.
-Deep water uses the lab's shallow optical background without adding a floor to gameplay worlds.
-Nearby submerged objects retain scene refraction. Weather still drives the shared waves and foam.
-Low water continues to use scene lighting.
+The central surface spans 180 metres. The horizon extends 1,100 metres from the center on each horizontal axis.
+Eight horizon panels use frustum culling. Their bounds include wave and vortex displacement.
+Panel edges share matching vertex positions. Horizon spacing increases toward the outer edge.
 
-## High preparation
+| Setting | Central grid | Horizon radial segments | Total triangles before culling |
+| --- | --- | --- | --- |
+| Low | 192 by 192 | 24 | 115,200 |
+| High | 288 by 288 | 36 | 259,200 |
 
-The first water color draw after an ocean update prepares its textures.
-Depth and outline override draws do not run preparation.
-The horizon reuses the same textures. Another camera gets its own preparation.
+Up to two hull exclusion regions remove interior water.
+Hull profiles support different widths, lengths, and tapers across their height.
+Contact shaping adjusts water height and normals near the hull.
 
-Foam moves through a bounded texture. Moving the ocean origin reprojects the previous texture.
-Wave compression deposits whitecaps. Hull contact and movement deposit foam trails.
-Exponential source and decay integration controls foam lifetime. Time reversal and teleport clear history.
-The shader adds filtered bubble detail and broken patch edges.
+## Surface detail and lighting
 
-Scene capture hides the water and renders color and depth.
-Three.js Reflector supplies the clipped reflected view.
-Each capture uses half resolution, capped at 1024 pixels per axis.
-Capture restores render targets, viewports, scissor state, XR, and shadow update state.
-Captures reuse world transforms from the outer render instead of updating the full scene twice more.
-Refraction skips the procedural sky. Far-depth water uses authored radiance, so that sky draw cannot affect its color.
-Reflections retain the sky. Capture restores background visibility and automatic matrix updates even after a render error.
+Foam and ripples are procedural shader detail. There is no persistent foam texture or stored wake history.
+Wind-aligned noise produces moving filaments and broken patches. Wave height changes their width and strength.
+Fine ripple normals use pixel filtering. Filament opacity fades between 45 and 150 metres of view depth.
+Both settings apply this detail before blood color, underwater glow, and fog.
 
-The horizon uses eight separate panels with frustum culling and bounds expanded for waves and vortices.
-The nearby surface keeps its original subdivisions. Shared panel edges use matching vertices.
-High has 259,200 ocean triangles, down from 373,248. Low has 115,200, down from 165,888.
-Both totals fall by 30.6 percent before culling. This is a geometry reduction, not a measured frame-rate gain.
+Scavenging and survival share the High lighting presets.
+Sea fog modifies High colors, fog density, and direct light strength.
+Open water uses authored radiance without a physical floor.
+Nearby submerged objects use captured color and depth.
 
-Refraction rejects foreground depth samples. Underwater distance controls RGB absorption.
+## Capture preparation
+
+The first water color draw after an ocean update prepares capture textures.
+Depth and outline override draws skip preparation. Horizon draws reuse the prepared textures.
+A camera change triggers preparation again. A guard prevents recursive preparation during capture draws.
+When enabled, underwater glow is captured before the High scene captures.
+
+High scene capture hides the water and renders scene color and depth.
+It hides the registered refraction background, including the procedural sky.
+Three.js `Reflector` supplies the clipped reflected view.
+Reflections retain sky color and transparent effects, even when those effects do not write depth.
+The reflection camera hides sky clouds and excludes the weather particle layer. Lightning remains visible.
+
+Scene captures use half resolution, capped at 1,024 pixels per axis, while preserving aspect ratio.
+They reuse world transforms from the outer render.
+Capture restores water visibility, background visibility, matrix updates, render targets, viewports, scissor, XR, and shadow state after errors.
+
+Refraction rejects foreground depth samples. Underwater path length controls RGB absorption.
+Long paths blend toward the authored open-water background.
+Reflection distortion is applied in world space before projection. Reflection edges blend into the procedural sky reflection.
 Fresnel controls reflection strength. GGX controls sun highlights.
-Planar reflections approximate the sea with its mean plane. Large waves remain an approximation.
+Planar reflections approximate the sea at its mean plane. They do not trace reflections between waves.
 
-Switching to Low releases all five High textures. Disposal releases geometry and material resources.
-Steady frame updates reuse vectors, matrices, arrays, and targets.
+## Underwater glow
 
-## Shader performance
+The Jellyfish event (`flowers`) enables glow capture. Event cleanup disables it.
+Luminous jellyfish meshes also use `UNDERWATER_GLOW_LAYER`.
+Glow works in both quality settings and survives quality changes.
 
-Both settings skip vortex calculations when its strength is zero.
-Low skips detail past its existing fade distance and foam where coverage is zero.
-High computes wave height and displaced normals in one wave loop.
-High skips foam noise below the minimum density and bubbles where coverage is zero.
-Screen derivatives run before the foam coverage branch.
+The capture renders only that layer against a transparent black background.
+It records linear color and depth at viewport resolution, capped at 2,048 pixels per axis.
+This preserves thin tentacles better than the High scene capture's half resolution.
 
-On 2026-09-08, paired 1080p water draws were measured on an RTX 4070 Ti.
-Each case used 120 warm-up frames, then 300 alternating before/after pairs.
-Each timing covered eight draws and was divided by eight to reduce timing noise.
-Both versions used the same geometry, capture textures, foam texture, camera, and simulation time.
+Scattering downsamples the captured color to one quarter of each dimension.
+Two horizontal and vertical blur cycles reuse two targets.
+The passes use Three.js blur shaders and a full-screen quad.
 
-| View | Low before / after | High before / after |
-| --- | --- | --- |
-| Calm, day | 0.208 / 0.127 ms | 0.307 / 0.240 ms |
-| Rough, day | 0.241 / 0.168 ms | 0.318 / 0.269 ms |
-| Horizon, rough, night | 0.216 / 0.146 ms | 0.213 / 0.183 ms |
-| Active vortex, day | 0.236 / 0.151 ms | 0.230 / 0.181 ms |
+The water shader adds three light components:
 
-These are median water draw times, excluding capture, foam simulation, and the rest of the frame.
-They do not measure an equivalent gain in full-game FPS.
-Pixel comparisons covered all eight cases at the same simulation time.
-Low differed by at most one channel level in six pixels per image.
-The largest High difference affected 462 of 2,073,600 pixels by more than one channel level.
-Its mean channel error was below 0.001 on the 0–255 scale.
-No shader or WebGL errors occurred.
+- Drifting plankton noise, with wave-height modulation and distance fade.
+- Soft scattering sampled from the blurred creature capture.
+- Direct creature color, attenuated by underwater path length when captured depth lies behind the surface.
 
-## Visual checks
+Scattering is a screen-space blur. It is not a volume simulation.
+The capture restores camera layers, background, clear color, render target, viewport, scissor, XR, and shadow state after errors.
 
-Start Vite, then open `/dont-sleep-with-the-fishes/scripts/water-lab/`.
-The lab is a development fixture. It is not part of the production menu.
-It includes submerged objects, reflection markers, a moving hull, and game post-processing.
+## Resource lifecycle
 
-Checked on 2026-09-07:
+High owns three sampled textures: scene color, scene depth, and reflection color.
+Switching to Low releases those capture resources and replaces the surface geometry.
+Glow resources remain independent of quality. Disabling glow releases its capture and blur targets and clears its uniforms.
+Disposal releases all capture resources, geometry, and the water material.
+Steady updates reuse vectors, matrices, uniforms, and targets. Capture targets resize only when their required dimensions change.
 
-- Calm and rough High water compiled without shader or WebGL errors.
-- Scene reflections, submerged objects, hull trails, and broken whitecaps were visible.
-- Night foam followed scene lighting.
-- Direct rendering and game post-processing both rendered correctly.
-- High to Low reduced allocated textures by five. High could then be restored.
-- Full suite: 109 files and 1,710 tests passed.
-- Final water checks: six files and 29 tests passed.
-- TypeScript, ESLint, and production build passed.
+## Verification
 
-The fixture showed roughly 7 ms frame intervals at 1280 by 720 on this machine.
-This is not a full-game GPU benchmark. The 1080p, 60 FPS desktop target still needs representative hardware profiling.
-The production build retains its large-chunk warning.
+Run the development server with `bun run dev`.
+Use System Tuning to inspect water in the game. See [Development](DEVELOPMENT.md#inspect-the-game).
+
+- Check both water quality settings in daytime and nighttime scenes.
+- Check hull edges, reflections, and waves during scavenging and survival.
+- Change weather and post-processing settings. Check for shader or WebGL errors.
+- Check weather particles and their exclusion from reflections.
+- Check Jellyfish glow in the game at both quality settings, then close the event and check cleanup.
+
+Existing tests cover capture sizing, state restoration, preparation reuse, quality changes, and glow cleanup:
+
+```powershell
+bun run test tests/OceanCapture.test.ts tests/OceanRenderer.test.ts tests/UnderwaterGlowCapture.test.ts
+```
+
+Run a browser check after rendering changes. Unit checks do not measure GPU performance.
+Profile the current renderer on representative hardware to assess the 1080p, 60 FPS target.

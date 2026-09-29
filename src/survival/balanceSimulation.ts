@@ -93,7 +93,7 @@ const EVENT_CHOICE_PRIORITY = Object.freeze({
   'tentacle-attack': ['shotgun', 'flareGun', 'knife', 'sleep'],
   'death-stare': ['shotgun', 'flashlight', 'umbrella', 'cannedFood', 'sleep'],
   'swarm-of-sharks': ['fishingNet', 'knife', 'shotgun', 'baitTin', 'sleep'],
-  'crab-swarm': ['fishingNet', 'bucket', 'knife', 'sleep'],
+  'crab-swarm': ['fishingNet', 'bucket', 'knife', 'shotgun', 'sleep'],
   tornado: ['anchor', 'swimRing', 'sleep'],
   whirlpool: ['anchor', 'compass', 'map', 'swimRing', 'sleep'],
   'shower-night': ['umbrella', 'bucket', 'map', 'sleep'],

@@ -3,7 +3,6 @@ import {
   DynamicDrawUsage,
   Object3D,
   Vector3,
-  Vector4,
   type InstancedMesh,
   type BufferGeometry,
   type ShaderMaterial,
@@ -38,7 +37,6 @@ export class JellyfishPresentation extends KeyedEventPresentation {
   private readonly background: JellyfishBackground;
   private readonly jellyfish: InstancedMesh<BufferGeometry, ShaderMaterial>[] = [];
   private readonly instance = new Object3D();
-  readonly waterGlow: Vector4[] = [];
   private readonly scoopTarget = new Object3D();
   private readonly brain: Group;
   private caught = false;
@@ -71,7 +69,6 @@ export class JellyfishPresentation extends KeyedEventPresentation {
       this.subject.add(batch);
     }
     JELLYFISH_POSITIONS.forEach(([x, y, z]) => {
-      this.waterGlow.push(new Vector4());
       this.basePositions.push(new Vector3(
         x * JELLYFISH_SPREAD_X,
         y - 0.62,
@@ -130,7 +127,6 @@ export class JellyfishPresentation extends KeyedEventPresentation {
 
   private floatJellyfish(time: number): void {
     this.background.update(time);
-    this.subject.updateWorldMatrix(true, false);
     const amplitude = this.water.readAmplitudeScale();
     const jelly = this.instance;
     for (let index = 0; index < this.basePositions.length; index += 1) {
@@ -149,8 +145,6 @@ export class JellyfishPresentation extends KeyedEventPresentation {
       jelly.scale.set(size * (0.94 + pulse * 0.06), size * (1.08 - pulse * 0.08), size);
       jelly.updateMatrix();
       this.jellyfish[index % 3]!.setMatrixAt(Math.floor(index / 3), jelly.matrix);
-      this.target.copy(jelly.position).applyMatrix4(this.subject.matrixWorld);
-      this.waterGlow[index]!.set(this.target.x, this.target.z, index === 0 ? 0.7 : size * 2.5, pulse);
       if (index === 0) this.scoopTarget.position.copy(jelly.position);
     }
     for (const batch of this.jellyfish) batch.instanceMatrix.needsUpdate = true;

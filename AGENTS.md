@@ -20,7 +20,6 @@
 
 - Before implementing tests, give it a rating 0-100 in terms of importance and implement only those that score 90 or higher.
 
-- Before changing player-facing UI, models, materials, lighting, composition,
-animation, or post-processing, read [`VISUAL_STYLE_GUIDE.md`](VISUAL_STYLE_GUIDE.md).
+- Before changing player-facing UI, models, materials, lighting, composition, animation, or post-processing, read [`VISUAL_STYLE_GUIDE.md`](VISUAL_STYLE_GUIDE.md).
 
-- Before AI browser playtests, read [`docs/browser-playtesting.md`](docs/browser-playtesting.md).
+- Use the [stop-slop skill](https://github.com/hardikpandya/stop-slop/blob/main/SKILL.md) when writing or editing UI text and documentation

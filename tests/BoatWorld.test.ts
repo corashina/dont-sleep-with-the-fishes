@@ -1022,7 +1022,7 @@ describe('BoatWorld helpers', () => {
       world.stageEvent('flowers');
       const flower = world.scene.getObjectByName('flowers-scoop-target')!;
       const ocean = world.scene.getObjectByName('procedural-ocean') as Mesh<BufferGeometry, ShaderMaterial>;
-      expect(ocean.material.uniforms.uBioluminescenceCount!.value).toBe(30);
+      expect(ocean.material.uniforms.uGlowColor!.value).not.toBeNull();
       const brain = flower.parent!.getObjectByName('flowers-heart-piece')!;
       const use = world.playEventItemUse('flowers', itemId, item.instanceId);
       const net = borrow.mock.results.at(-1)!.value.root as Group;
@@ -1040,14 +1040,22 @@ describe('BoatWorld helpers', () => {
       world.update(duration, duration * 0.24);
       await use;
       expect(brain.parent).toBe(net);
+      const storedBrain = world.scene.getObjectByName('boat-heart-pieces')!.getObjectByName('flowers-heart-piece')!;
+      const rewarded = snapshot([item], { heartPieces: { flowers: true, blood: false, chest: false } });
+      world.syncInventory(rewarded);
+      expect(brain.visible).toBe(true);
+      expect(storedBrain.visible).toBe(false);
       const returning = world.returnEventItemUse();
       const recovery = eventItemOutcomeDuration(itemId, 'recover');
       world.update(duration + recovery / 2, recovery / 2);
       expect(brain.parent).toBe(net);
+      world.syncInventory(rewarded);
+      expect(storedBrain.visible).toBe(false);
       world.update(duration + recovery, recovery / 2);
       await returning;
       expect(brain.parent?.name).toBe('event-prop:flowers');
       expect(brain.visible).toBe(false);
+      expect(storedBrain.visible).toBe(true);
       const collected = world.reactToEventOutcome('flowers', {
         accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'none',
         eventPresentationKey: 'flowers.collect',
@@ -1058,10 +1066,46 @@ describe('BoatWorld helpers', () => {
       world.clearEvent();
       expect(flower.parent?.name).toBe('event-prop:flowers');
       expect(flower.visible).toBe(true);
-      expect(ocean.material.uniforms.uBioluminescenceCount!.value).toBe(0);
+      expect(ocean.material.uniforms.uGlowColor!.value).toBeNull();
     } finally {
       world.dispose();
       borrow.mockRestore();
+      propModels.dispose();
+    }
+  });
+
+  // Importance: 95/100. Cancellation must transfer an owned brain, without granting an unearned reward.
+  it.each([
+    ['fishingNet', false], ['fishingNet', true], ['bucket', false], ['bucket', true],
+  ] as const)('clears a brain carried by %s with reward granted=%s', async (itemId, granted) => {
+    const item = savedItem(itemId);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(new PerspectiveCamera(), propModels, ...createTestSkyTextures(), [item]);
+    try {
+      world.syncInventory(snapshot([item]));
+      world.stageEvent('flowers');
+      const target = world.scene.getObjectByName('flowers-scoop-target')!;
+      const brain = target.parent!.getObjectByName('flowers-heart-piece')!;
+      const storedBrain = world.scene.getObjectByName('boat-heart-pieces')!.getObjectByName('flowers-heart-piece')!;
+      const use = world.playEventItemUse('flowers', itemId, item.instanceId);
+      const duration = eventItemUseDuration(itemId === 'fishingNet' ? 'net-scoop' : 'bucket-scoop');
+      world.update(duration, duration);
+      await use;
+      const current = snapshot([item], { heartPieces: { flowers: granted, blood: false, chest: false } });
+      world.syncInventory(current);
+      expect(brain.visible).toBe(true);
+      expect(storedBrain.visible).toBe(false);
+      const returning = world.returnEventItemUse();
+      const halfRecovery = eventItemOutcomeDuration(itemId, 'recover') / 2;
+      world.update(duration + halfRecovery, halfRecovery);
+      world.clearEvent();
+      await returning;
+      expect(brain.visible).toBe(false);
+      expect(storedBrain.visible).toBe(granted);
+      world.syncInventory(current);
+      expect(storedBrain.visible).toBe(granted);
+    } finally {
+      world.dispose();
       propModels.dispose();
     }
   });

@@ -17,6 +17,7 @@ export class BoatHeartDisplay {
   private tooltipMask = -1;
   private tooltipText = '?';
   private ownedPieces: HeartPieces = EMPTY_HEART;
+  private readonly presentationHiddenPieces = new Set<HeartPieceId>();
   private collecting = false;
   private returned = false;
   private restParent: Object3D | null = null;
@@ -78,7 +79,18 @@ export class BoatHeartDisplay {
     if (this.collecting) return;
     this.returned = snapshot.ending?.id === 'kraken';
     this.root.visible = !this.returned;
-    for (const id of HEART_PIECE_IDS) this.models.pieces[id].visible = this.ownedPieces[id] && !this.returned;
+    for (const id of HEART_PIECE_IDS) this.syncPieceVisibility(id);
+  }
+
+  setPresentationPieceHidden(id: HeartPieceId, hidden: boolean): void {
+    if (hidden) this.presentationHiddenPieces.add(id);
+    else this.presentationHiddenPieces.delete(id);
+    if (!this.collecting) this.syncPieceVisibility(id);
+  }
+
+  private syncPieceVisibility(id: HeartPieceId): void {
+    this.models.pieces[id].visible = this.ownedPieces[id]
+      && !this.returned && !this.presentationHiddenPieces.has(id);
   }
 
   beginCollection(): void {
@@ -103,10 +115,7 @@ export class BoatHeartDisplay {
     this.restTransform.decompose(this.root.position, this.root.quaternion, this.root.scale);
     this.restParent = null;
     this.root.visible = !returned;
-    for (const id of HEART_PIECE_IDS) {
-      const piece = this.models.pieces[id];
-      piece.visible = this.ownedPieces[id] && !returned;
-    }
+    for (const id of HEART_PIECE_IDS) this.syncPieceVisibility(id);
   }
   dispose(): void {
     this.endCollection(this.returned);

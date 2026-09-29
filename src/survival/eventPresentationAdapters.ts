@@ -1,5 +1,5 @@
 import { KrakenPresentation } from './events/KrakenPresentation';
-import { type Object3D, type Vector4 } from 'three';
+import { type Object3D } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { runCleanupSteps } from '../world/SceneResources';
 import type {
@@ -70,7 +70,7 @@ export interface EventPresentationAdapterDependencies {
   readonly featuredModels: SurvivalEventModels;
   readonly featuredTargets: FeaturedEventPresentationTargets;
   readonly driftingWater: DriftingWater;
-  readonly setBioluminescence: (sources: readonly Vector4[]) => void;
+  readonly setUnderwaterGlowEnabled: (enabled: boolean) => void;
   readonly moon: MoonEventPresentationEnvironment;
   readonly applyDangerousWatersReaction: (
     reaction: Readonly<DangerousWatersBoatReaction>,
@@ -414,17 +414,17 @@ export const createFeaturedAdapter: EventPresentationAdapterFactory = (
     eventId,
     dependencies.driftingWater,
   );
-  const syncWaterGlow = (): void => {
-    if (eventId === 'flowers') dependencies.setBioluminescence(featured.waterGlow());
-  };
   const clear = (): void => {
     featured.clear();
-    syncWaterGlow();
+    if (eventId === 'flowers') dependencies.setUnderwaterGlowEnabled(false);
   };
   return createAdapter(eventId, [
     { parent: dependencies.worldParent, root: featured.root },
   ], {
-    stage: (context) => { featured.stage(eventId, context.variantSeed); syncWaterGlow(); },
+    stage: (context) => {
+      featured.stage(eventId, context.variantSeed);
+      if (eventId === 'flowers') dependencies.setUnderwaterGlowEnabled(true);
+    },
     reveal: () => featured.reveal(eventId),
     playChoice: noChoice,
     playItemUse: noItemUse,
@@ -436,7 +436,7 @@ export const createFeaturedAdapter: EventPresentationAdapterFactory = (
     react: ({ outcome }) => outcome.eventPresentationKey === undefined
       ? Promise.resolve()
       : featured.react(eventId, outcome.eventPresentationKey),
-    update: (time, delta) => { featured.update(time, delta); syncWaterGlow(); },
+    update: (time, delta) => featured.update(time, delta),
     settleForVisibilityChange: () => featured.settleForVisibilityChange(),
     clear,
   }, [clear, () => featured.dispose()]);

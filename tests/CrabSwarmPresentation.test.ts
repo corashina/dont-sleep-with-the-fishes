@@ -1,7 +1,10 @@
 // Importance: 95/100. The swarm must pause for the choice and carry the exact stolen item.
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { Group, Mesh, MeshStandardMaterial, Raycaster, Texture, Vector3 } from 'three';
+import { Box3, Group, Matrix4, Mesh, MeshStandardMaterial, Quaternion, Raycaster, Texture, Vector3 } from 'three';
+import { boatSupplyTransform } from '../src/world/BoatStorage';
+import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
+import { HeartBasket } from '../src/survival/HeartBasket';
 import { createLifeboat } from '../src/world/Lifeboat';
 import { LifeboatAssets } from '../src/world/LifeboatAssets';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -45,10 +48,60 @@ function setup(seed = 42) {
 }
 
 describe('Crab swarm presentation', () => {
-  // Importance: 95/100. Feet must touch timber, and resting crabs must face into the boat from its walls.
-  it('keeps the feet against wood throughout boarding and holds a vertical wall pose', () => {
+  // Importance: 95/100. Reported rotation snaps must not return during boarding or retreat.
+  it.each([0, 42, 71, 99])('turns continuously while walking for seed %s', seed => {
+    const { presentation, crabs } = setup(seed);
+    const previous = crabs.map(crab => crab.quaternion.clone());
+    try {
+      for (const retreat of [false, true]) {
+        if (retreat) void presentation.react({ lostInstanceIds: [] } as unknown as EventOutcomePresentation);
+        else void presentation.reveal();
+        crabs.forEach((crab, index) => previous[index]!.copy(crab.quaternion));
+        const frames = Math.ceil((retreat ? CRAB_RETREAT_SECONDS : CRAB_REVEAL_SECONDS) * 60);
+        let worst = { angle: 0, frame: 0, crab: '', position: [] as number[], normal: [] as number[] };
+        for (let frame = 1; frame <= frames; frame += 1) {
+          presentation.update(frame / 60, 1 / 60);
+          crabs.forEach((crab, index) => {
+            const angle = previous[index]!.angleTo(crab.quaternion) * 180 / Math.PI;
+            if (angle > worst.angle) worst = { angle, frame, crab: crab.name,
+              position: crab.position.toArray(), normal: new Vector3(0, 1, 0).applyQuaternion(crab.quaternion).toArray() };
+            previous[index]!.copy(crab.quaternion);
+          });
+        }
+        expect(worst.angle, `retreat=${retreat}: ${JSON.stringify(worst)}`).toBeLessThan(15);
+      }
+    } finally { presentation.dispose(); }
+  });
+  // Importance: 95/100. Reported item intersections must stay fixed across the random crab rotations.
+  it.each([0, 42, 71, 99])('keeps the moved crabs clear of the basket, flashlight and radio for seed %s', seed => {
+    const { presentation, crabs } = setup(seed);
+    const itemBox = (id: 'flashlight' | 'radio' | 'compass' | 'spyglass' | 'baitTin') => {
+      const spec = ITEM_MODEL_SPECS[id];
+      const pose = boatSupplyTransform(id, 0);
+      return new Box3(new Vector3(...spec.normalizedBounds.min), new Vector3(...spec.normalizedBounds.max))
+        .applyMatrix4(new Matrix4().compose(pose.position, new Quaternion().setFromEuler(pose.rotation),
+          new Vector3().setScalar(pose.scale))).expandByScalar(0.01);
+    };
+    const basket = new HeartBasket(0.37, 0.25);
+    basket.root.position.set(1.05, 0.22, -1.62);
+    const obstacles = [itemBox('flashlight'), itemBox('radio'), itemBox('compass'), itemBox('spyglass'),
+      itemBox('baitTin'), new Box3().setFromObject(basket.root).expandByScalar(0.01)];
+    try {
+      void presentation.reveal();
+      presentation.skip();
+      for (const index of [0, 1, 7]) {
+        const bounds = new Box3().setFromObject(crabs[index]!);
+        obstacles.forEach((obstacle, obstacleIndex) => {
+          expect(bounds.intersectsBox(obstacle), `Crab ${index} ${JSON.stringify(bounds)}, obstacle ${obstacleIndex} ${JSON.stringify(obstacle)}`).toBe(false);
+        });
+      }
+    } finally { presentation.dispose(); basket.dispose(); }
+  });
+  // Importance: 95/100. All eight crabs must land on wood at the requested rail, floor, and wall positions.
+  it('keeps contact with wood and splits the resting poses between rails, floor and walls', () => {
     const { presentation, crabs, boat } = setup();
-    const wood = [boat.getObjectByName('lifeboat-hull-planks')!, boat.getObjectByName('survival-gunwale')!];
+    const wood = ['lifeboat-hull-planks', 'survival-gunwale', 'lifeboat-display-bench-seat',
+      'lifeboat-floorboards', 'survival-floor'].map(name => boat.getObjectByName(name)!);
     const ray = new Raycaster();
     const normal = new Vector3();
     try {
@@ -63,14 +116,28 @@ describe('Crab swarm presentation', () => {
           ray.ray.direction.copy(normal).negate();
           const hit = ray.intersectObjects(wood, true)[0];
           expect(hit, `No wood below ${crab.name} at frame ${frame}`).toBeDefined();
-          expect(hit!.distance).toBeGreaterThanOrEqual(0.049);
-          expect(hit!.distance).toBeLessThan(0.08);
+          expect(hit!.distance, `${crab.name} frame ${frame}: ${crab.position.toArray()} hit ${hit!.object.name}`).toBeGreaterThanOrEqual(0.049);
+          // The body turns between two contacting wood planes at an inside corner.
+          expect(hit!.distance).toBeLessThan(crabs.indexOf(crab) < 4 ? 0.3 : 0.08);
         }
       }
-      for (const crab of crabs) {
+      for (const [index, crab] of crabs.entries()) {
         normal.set(0, 1, 0).applyQuaternion(crab.quaternion);
-        expect(Math.abs(normal.y)).toBeLessThan(0.1);
-        expect(normal.x * crab.position.x).toBeLessThan(0);
+        if (index < 4) {
+          expect(normal.y).toBeCloseTo(1);
+          expect(crab.position.y).toBeCloseTo(index < 2 ? 0.48 : -0.3065);
+          expect(crab.position.z).toBeCloseTo(index < 2 ? -2.85 : -0.85, 1);
+          if (index < 2) {
+            expect(Math.abs(crab.position.x)).toBeGreaterThan(0.6);
+          } else {
+            expect(crab.position.x).toBeCloseTo(index === 2 ? -0.65 : 0.26);
+            const facing = new Vector3(0, 0, -1).applyQuaternion(crab.quaternion);
+            expect(facing.z).toBeGreaterThan(0.95);
+          }
+        } else {
+          expect(Math.abs(normal.y)).toBeLessThan(0.1);
+          expect(normal.x * crab.position.x).toBeLessThan(0);
+        }
       }
     } finally { presentation.dispose(); }
   });
@@ -146,10 +213,12 @@ describe('Crab swarm presentation', () => {
       presentation.update(2, CRAB_REVEAL_SECONDS * 0.5);
       await reveal;
       expect(crabs.some((crab, index) => Math.abs(crab.position.x) < halfway[index]!)).toBe(true);
-      for (const crab of crabs) {
+      for (const crab of crabs.slice(4, 7)) {
         expect(crab.position.y).toBeGreaterThanOrEqual(0.13);
         expect(crab.position.y).toBeLessThanOrEqual(0.19);
       }
+      expect(crabs[7]!.position.y).toBeGreaterThanOrEqual(-0.11);
+      expect(crabs[7]!.position.y).toBeLessThanOrEqual(-0.05);
       const transforms = crabs.map(crab => [crab.position.toArray(), crab.quaternion.toArray()]);
       presentation.update(600, 600);
       expect(crabs.map(crab => [crab.position.toArray(), crab.quaternion.toArray()])).toEqual(transforms);

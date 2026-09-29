@@ -14,9 +14,8 @@ import type {
 } from './SurvivalUiViewModel';
 import { runCleanupSteps, throwCleanupFailure } from './UiCleanup';
 import { returnArrowArtwork } from './uiArtwork';
+import { focusedEventPlacement, FOCUSED_EVENT_BOTTOM_RESERVE, FOCUSED_EVENT_MARGIN } from './focusedEventPlacement';
 
-const ROUTINE_DIALOG_MARGIN = 20;
-const FOCUSED_EVENT_BOTTOM_RESERVE = 128;
 const requireElement = createElementRequirement('focused event view');
 const FOCUSED_EVENT_TITLES: Readonly<Record<InspectableEventId, string>> = Object.freeze({
   get 'drifting-supplies'() { return uiText('suppliesTitle'); },
@@ -39,6 +38,7 @@ export class FocusedEventView {
   private readonly closeButton: HTMLButtonElement;
   private currentEventId: InspectableEventId | null = null;
   private supplyKind: DriftingSupplyKind | undefined;
+  private target: FocusedEventFocusView['target'] = null;
   private readonly choicesById = new Map<EventResponseId, FocusedEventChoiceView>();
   private selectedChoiceId: EventResponseId | null = null;
   private busy = false;
@@ -61,6 +61,7 @@ export class FocusedEventView {
         button.setAttribute('aria-description', choice.unavailableReason);
       }
     }
+    if (this.visible) this.position();
   }
 
   private disposed = false;
@@ -96,6 +97,7 @@ export class FocusedEventView {
     if (this.disposed) return;
     this.currentEventId = view.eventId;
     this.supplyKind = view.supplyKind;
+    this.target = view.target;
     this.backButton.setAttribute('aria-label', uiText('returnBoat'));
     this.title.textContent = this.eventTitle(view.eventId);
     this.choicesById.clear();
@@ -113,6 +115,7 @@ export class FocusedEventView {
     this.visible = false;
     this.currentEventId = null;
     this.supplyKind = undefined;
+    this.target = null;
     this.choicesById.clear();
     this.selectedChoiceId = null;
     this.title.textContent = '';
@@ -125,7 +128,8 @@ export class FocusedEventView {
   }
 
   updateTarget(target: FocusedEventFocusView['target']): void {
-    void target;
+    this.target = target;
+    if (!this.disposed && this.visible) this.position();
   }
 
   setBusy(busy: boolean): void {
@@ -271,13 +275,15 @@ export class FocusedEventView {
     const rootBounds = this.coordinateRoot.getBoundingClientRect();
     const viewportWidth = Math.max(1, rootBounds.width || this.coordinateRoot.clientWidth || window.innerWidth);
     const viewportHeight = Math.max(1, rootBounds.height || this.coordinateRoot.clientHeight || window.innerHeight);
-    const popupBottom = Math.max(ROUTINE_DIALOG_MARGIN, viewportHeight - FOCUSED_EVENT_BOTTOM_RESERVE);
-    const width = Math.max(1, Math.min(420, viewportWidth - ROUTINE_DIALOG_MARGIN * 2));
-    const maximumHeight = Math.max(1, popupBottom - ROUTINE_DIALOG_MARGIN);
-    const height = Math.min(maximumHeight, this.card.getBoundingClientRect().height || 360);
-    const x = (viewportWidth - width) / 2;
-    const y = Math.max(ROUTINE_DIALOG_MARGIN, (popupBottom - height) / 2);
-    this.setPosition(width, maximumHeight, x, y, 'center', 'centered');
+    const width = Math.max(1, Math.min(420, viewportWidth - FOCUSED_EVENT_MARGIN * 2));
+    this.root.style.setProperty('--focused-event-width', `${width}px`);
+    this.root.style.setProperty('--focused-event-max-height', `${Math.max(1,
+      viewportHeight - FOCUSED_EVENT_BOTTOM_RESERVE - FOCUSED_EVENT_MARGIN)}px`);
+    const height = this.card.offsetHeight || 360;
+    const { maximumHeight, x, y, placement, anchorState } = focusedEventPlacement(
+      viewportWidth, viewportHeight, width, height, this.target,
+    );
+    this.setPosition(width, maximumHeight, x, y, placement, anchorState);
   }
 
   private setPosition(width: number, maximumHeight: number, x: number, y: number, placement: string, anchorState: string): void {

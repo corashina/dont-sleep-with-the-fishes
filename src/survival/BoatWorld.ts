@@ -90,6 +90,7 @@ import { EventItemEffects } from './EventItemEffects';
 import { EventItemUseAdapter } from './EventItemUseAdapter';
 import {
   EventItemUseController,
+  type EventItemCatch,
   type EventItemUseRequest,
 } from './EventItemUseController';
 import {
@@ -856,7 +857,7 @@ export class BoatWorld {
       },
       focusedFactories: this.focusedEventFactories,
       featuredModels,
-      setBioluminescence: (sources) => this.ocean.setBioluminescence(sources),
+      setUnderwaterGlowEnabled: (enabled) => this.ocean.setUnderwaterGlowEnabled(enabled),
       featuredTargets: {
         driftingCargoStern: this.chestDisplay.root,
         flowersDeck: this.flowersDeckTarget,
@@ -1202,7 +1203,7 @@ export class BoatWorld {
         context,
         aimTarget,
         itemCatch: context === 'net-scoop' || context === 'bucket-scoop'
-          ? this.eventPresentationHost.itemCatch() : null,
+          ? this.itemUseCatch(eventId) : null,
         onAction,
       };
       const [played] = await Promise.all([
@@ -1222,6 +1223,21 @@ export class BoatWorld {
 
   private eventOperationIsStale(operation: number): boolean {
     return this.disposed || operation !== this.weatherEventOperation;
+  }
+
+  private itemUseCatch(eventId: string): EventItemCatch | null {
+    const itemCatch = this.eventPresentationHost.itemCatch();
+    if (eventId !== 'flowers' || itemCatch === null) return itemCatch;
+    return {
+      capture: (item, itemId) => {
+        this.heartDisplay.setPresentationPieceHidden('flowers', true);
+        itemCatch.capture(item, itemId);
+      },
+      release: () => {
+        itemCatch.release();
+        this.heartDisplay.setPresentationPieceHidden('flowers', false);
+      },
+    };
   }
 
   private itemUseAimTarget(context: EventItemUseContext, eventId: string): Object3D | null {
