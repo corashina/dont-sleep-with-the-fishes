@@ -12,6 +12,7 @@ import type {
   InterleavedBufferAttribute,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
+import { createWaveSample } from '../../ocean/WaveField';
 import { runCleanupSteps } from '../../world/SceneResources';
 import type {
   DedicatedEventEnvironment,
@@ -38,6 +39,12 @@ const TENTACLE_Z = -2.0;
 const TENTACLE_SCALE = 0.94;
 const TENTACLE_HIT_Y = 1.25;
 const TENTACLE_HIT_Z = 0.44;
+const FLOAT_LIMIT = 0.22;
+
+type SnatcherEnvironment = Pick<
+  DedicatedEventEnvironment,
+  'eventModels' | 'sampleWorldWaveInto' | 'readWorldWaveAmplitudeScale'
+>;
 
 type PositionAttribute = BufferAttribute | InterleavedBufferAttribute;
 
@@ -78,6 +85,12 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   private readonly hitClosestWorldPosition = new Vector3();
   private readonly hitSurfaces: readonly TentacleHitSurface[];
   private readonly sample: SnatcherSample = identitySnatcherSample();
+  private readonly tentacleWave = createWaveSample();
+  private readonly centerWave = createWaveSample();
+  private readonly tentacleWater = new Vector3();
+  private readonly centerWater = new Vector3();
+  private floatY = 0;
+  private swayTime = 0;
   private readonly animation = new TimedPresentationAnimation<
     'reveal' | 'item' | 'reaction'
   >(
@@ -89,7 +102,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   private staged = false;
   private disposed = false;
 
-  constructor(environment: DedicatedEventEnvironment) {
+  constructor(private readonly environment: SnatcherEnvironment) {
     this.worldRoot.name = 'tentacle-attack-world';
     this.boatRoot.name = 'tentacle-attack-boat';
     this.tentacle.name = 'tentacle-attack-tentacle';
@@ -169,11 +182,14 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     return this.animation.start('reaction', SNATCHER_REACTION_DURATION);
   }
 
-  update(_time: number, delta: number): void {
+  update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
     const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
     this.mixer?.update(safeDelta);
-    this.animation.update(_time, safeDelta);
+    this.swayTime += safeDelta;
+    this.sampleWaterFloat(time);
+    if (this.animation.active) this.animation.update(time, safeDelta);
+    else this.applySample();
     this.updateItemAimTarget();
   }
 
@@ -191,6 +207,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     this.animation.cancel();
     this.activeChoiceId = null;
     this.usedChoiceId = null;
+    sampleSnatcherReveal(0, this.sample);
     this.tentacle.add(this.itemAimTarget);
     this.staged = false;
     this.idleAction?.stop();
@@ -234,21 +251,51 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     const visibility = Math.max(this.sample.headVisibility, this.sample.fingerVisibility);
     this.tentacle.visible = visibility > 0.008;
     this.modelInstance.root.visible = visibility > 0.008;
+    // A slow living sway, strongest when the tentacle stands above the water.
+    const sway = this.sample.headVisibility * (1 - this.sample.recoilStrength);
+    const time = this.swayTime;
     this.tentacle.position.set(
       TENTACLE_X + this.sample.creatureX,
-      TENTACLE_Y + this.sample.creatureY,
+      TENTACLE_Y + this.sample.creatureY + this.floatY,
       TENTACLE_Z + this.sample.creatureZ,
     );
     this.tentacle.rotation.set(
-      -0.12 + this.sample.creaturePitch,
-      Math.PI - 0.32 + this.sample.creatureYaw,
-      -0.2 + this.sample.creatureRoll,
+      -0.12 + this.sample.creaturePitch
+        + Math.sin(time * 0.83) * 0.035 * sway,
+      Math.PI - 0.32 + this.sample.creatureYaw
+        + Math.sin(time * 0.61 + 1.1) * 0.06 * sway,
+      -0.2 + this.sample.creatureRoll
+        + Math.sin(time * 1.07 + 2.3) * 0.04 * sway,
     );
     const riseScale = 0.72 + this.sample.crouchStrength * 0.28;
     this.tentacle.scale.set(
       TENTACLE_SCALE * (0.9 + this.sample.pointStrength * 0.1),
       TENTACLE_SCALE * riseScale,
       TENTACLE_SCALE * (0.92 + this.sample.pointStrength * 0.08),
+    );
+  }
+
+  // The boat rides the swell at its center. The tentacle rides the water at its own spot.
+  private sampleWaterFloat(time: number): void {
+    const amplitude = this.environment.readWorldWaveAmplitudeScale();
+    this.boatRoot.updateWorldMatrix(true, false);
+    this.tentacleWater.set(TENTACLE_X, 0, TENTACLE_Z);
+    this.boatRoot.localToWorld(this.tentacleWater);
+    this.centerWater.set(0, 0, 0);
+    this.boatRoot.localToWorld(this.centerWater);
+    this.environment.sampleWorldWaveInto(
+      this.tentacleWave, time, this.tentacleWater.x, this.tentacleWater.z, amplitude,
+    );
+    this.environment.sampleWorldWaveInto(
+      this.centerWave, time, this.centerWater.x, this.centerWater.z, amplitude,
+    );
+    this.tentacleWater.y = this.tentacleWave.height;
+    this.centerWater.y = this.centerWave.height;
+    this.boatRoot.worldToLocal(this.tentacleWater);
+    this.boatRoot.worldToLocal(this.centerWater);
+    // The tentacle grips the gunwale, so it keeps the boat tilt and eases into a heave limit.
+    this.floatY = FLOAT_LIMIT * Math.tanh(
+      (this.tentacleWater.y - this.centerWater.y) / FLOAT_LIMIT,
     );
   }
 

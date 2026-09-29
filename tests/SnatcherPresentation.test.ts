@@ -6,7 +6,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { SnatcherPresentation } from '../src/survival/events/SnatcherPresentation';
 import { lifeboatHullHalfWidthAt } from '../src/world/Lifeboat';
-import { snatcherItemDuration, SNATCHER_REACTION_DURATION } from '../src/survival/events/snatcherChoreography';
+import { snatcherItemDuration, SNATCHER_REACTION_DURATION, SNATCHER_REVEAL_DURATION } from '../src/survival/events/snatcherChoreography';
 
 let models: EventModelLibrary;
 
@@ -27,6 +27,14 @@ beforeAll(async () => {
 });
 
 afterAll(() => models?.dispose());
+
+function flatWater() {
+  return {
+    eventModels: models,
+    sampleWorldWaveInto: () => undefined,
+    readWorldWaveAmplitudeScale: () => 1,
+  };
+}
 
 function stage(presentation: SnatcherPresentation, seed: number): void {
   presentation.stage({ eventId: 'tentacle-attack', targetInstanceId: null, variantSeed: seed });
@@ -52,7 +60,7 @@ function vertices(presentation: SnatcherPresentation): Vector3[] {
 describe('tentacle attack framing', () => {
   // Importance: 95/100. Every attack must send the tentacle underwater and hide it before the result completes.
   it.each(['shotgun', 'fishingNet', 'knife'])('sinks back out of sight after %s', async (choice) => {
-    const presentation = new SnatcherPresentation({ eventModels: models } as never);
+    const presentation = new SnatcherPresentation(flatWater());
     try {
       stage(presentation, 1);
       const tentacle = presentation.boatRoot.getObjectByName('tentacle-attack-tentacle')!;
@@ -82,7 +90,7 @@ describe('tentacle attack framing', () => {
 
   // Importance: 95/100. The production skin must clear the hull through every attack stage on either side.
   it.each([0, 1])('keeps the animated tentacle outside the hull, seed %s', (seed) => {
-    const presentation = new SnatcherPresentation({ eventModels: models } as never);
+    const presentation = new SnatcherPresentation(flatWater());
     let minimumClearance = Infinity;
     const advance = (duration: number) => {
       for (let frame = 0; frame < 40; frame += 1) {
@@ -97,19 +105,19 @@ describe('tentacle attack framing', () => {
       for (const choice of ['knife', 'shotgun', 'fishingNet', 'cannedFood']) {
         presentation.stage({ eventId: 'tentacle-attack', targetInstanceId: null, variantSeed: seed });
         void presentation.reveal();
-        advance(2.5);
+        advance(SNATCHER_REVEAL_DURATION);
         advance(4);
         void presentation.playItemUse(choice, 'knife-1');
         advance(snatcherItemDuration(choice));
         void presentation.react({} as never);
-        advance(1.2);
+        advance(SNATCHER_REACTION_DURATION);
       }
       expect(minimumClearance).toBeGreaterThan(0.12);
     } finally { presentation.dispose(); }
   });
 
   it.each([0, 1])('keeps the side attack visible in wide and narrow viewports, seed %s', (seed) => {
-    const presentation = new SnatcherPresentation({ eventModels: models } as never);
+    const presentation = new SnatcherPresentation(flatWater());
     const camera = new PerspectiveCamera(80, 16 / 9, 0.1, 500);
     camera.position.set(0, 0.88, 0.96);
     camera.lookAt(0, 0.88, -1.55);
@@ -138,8 +146,8 @@ describe('tentacle attack framing', () => {
 
   it.each(['knife', 'shotgun', 'fishingNet', 'cannedFood'])(
     'mirrors the animated skin and %s target, including retreat and restaging', (choice) => {
-      const left = new SnatcherPresentation({ eventModels: models } as never);
-      const right = new SnatcherPresentation({ eventModels: models } as never);
+      const left = new SnatcherPresentation(flatWater());
+      const right = new SnatcherPresentation(flatWater());
       const assertMirrored = () => {
         const leftPoints = vertices(left);
         const rightPoints = vertices(right);
