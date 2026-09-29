@@ -1990,7 +1990,7 @@ export class SurvivalEventFlow {
 
   private isDeathStareBite(context: EventResolutionContext): boolean {
     return context.eventId === 'death-stare'
-      && context.choice.choiceId === 'umbrella'
+      && context.choice.choiceId === 'flashlight'
       && (context.presentation.resourceDeltas.hull ?? 0) < 0;
   }
 

@@ -408,7 +408,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.animation.cancel();
     this.activeChoiceId = null;
     this.resetBorrowedPose();
-    if (this.usedChoiceId === 'umbrella' && outcomeAttacked(result)) {
+    if (this.usedChoiceId === 'flashlight' && outcomeAttacked(result)) {
       this.bitePlayed = false;
       sampleDeathStareBite(0, this.sample);
       this.applySample(0);
