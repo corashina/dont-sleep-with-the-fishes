@@ -3,17 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 
 describe('Face on the Moon bucket choice', () => {
-  it('keeps the bucket usable and wakes with two energy after saving', () => {
+  it('keeps the bucket usable and adds pressure without changing dawn energy after saving', () => {
     const session = new SurvivalSession([{ type: 'bucket', instanceId: 'bucket-1' }], {
       seed: 41, initialEventId: 'face-on-the-moon',
     });
     expect(session.resolveEvent({ kind: 'item', choiceId: 'bucket', instanceId: 'bucket-1' }))
-      .toMatchObject({ accepted: true, nextDawnEnergy: 2 });
+      .toMatchObject({ accepted: true, deltas: { pressure: 1 } });
     expect(session.snapshot().inventory['bucket-1']?.condition).toBe('usable');
 
     const restored = SurvivalSession.restore(session.exportCheckpoint());
     expect(restored.beginDawn().accepted).toBe(true);
-    expect(restored.snapshot().energy).toBe(2);
+    expect(restored.snapshot().energy).toBe(3);
     expect(restored.snapshot().inventory['bucket-1']?.condition).toBe('usable');
   });
 

@@ -6,11 +6,12 @@ const TARGET_GAP = 24;
 
 export function focusedEventPlacement(
   viewportWidth: number, viewportHeight: number, width: number, height: number,
-  target: ProjectedBoatBounds | null,
+  target: ProjectedBoatBounds | null, scale: number,
 ) {
-  const margin = FOCUSED_EVENT_MARGIN;
+  const margin = FOCUSED_EVENT_MARGIN * scale;
+  const gap = TARGET_GAP * scale;
   const right = Math.max(margin + width, viewportWidth - margin);
-  const bottom = Math.max(margin + 1, viewportHeight - FOCUSED_EVENT_BOTTOM_RESERVE);
+  const bottom = Math.max(margin + 1, viewportHeight - FOCUSED_EVENT_BOTTOM_RESERVE * scale);
   const centerX = viewportWidth / 2;
   const centerY = viewportHeight / 2;
   const centered = {
@@ -23,10 +24,10 @@ export function focusedEventPlacement(
   if (!target?.visible) return centered;
 
   const regions = [
-    { placement: 'left', left: margin, right: Math.min(right, target.x - target.width / 2 - TARGET_GAP), top: margin, bottom },
-    { placement: 'right', left: Math.max(margin, target.x + target.width / 2 + TARGET_GAP), right, top: margin, bottom },
-    { placement: 'above', left: margin, right, top: margin, bottom: Math.min(bottom, target.y - target.height / 2 - TARGET_GAP) },
-    { placement: 'below', left: margin, right, top: Math.max(margin, target.y + target.height / 2 + TARGET_GAP), bottom },
+    { placement: 'left', left: margin, right: Math.min(right, target.x - target.width / 2 - gap), top: margin, bottom },
+    { placement: 'right', left: Math.max(margin, target.x + target.width / 2 + gap), right, top: margin, bottom },
+    { placement: 'above', left: margin, right, top: margin, bottom: Math.min(bottom, target.y - target.height / 2 - gap) },
+    { placement: 'below', left: margin, right, top: Math.max(margin, target.y + target.height / 2 + gap), bottom },
   ];
   let best = centered;
   let bestHeight = 0;

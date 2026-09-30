@@ -21,7 +21,6 @@ import type { RescueLead } from './survivalBalance';
 import type {
   ActionOutcome,
   ChestSnapshot,
-  DawnEnergy,
   SurvivalInventorySnapshot,
   WeatherId,
 } from './survivalTypes';
@@ -55,7 +54,6 @@ export interface SurvivalSessionCheckpoint {
   readonly carlitos: CarlitosSnapshot | null;
   readonly pendingEventId: string | null;
   readonly pendingEventTargetId: ItemInstanceId | null;
-  readonly nextDawnEnergyOverride: DawnEnergy | null;
   readonly lastEventId: string | null;
   readonly lastSeenDays: Readonly<Record<string, number>>;
   readonly appearanceCounts: Readonly<Record<string, number>>;

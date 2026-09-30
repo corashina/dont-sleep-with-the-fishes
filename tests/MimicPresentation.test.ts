@@ -1,5 +1,5 @@
 // Importance: 95/100. The copy must match the player hull, stay empty, and release its water mask and resources.
-import { BoxGeometry, BufferGeometry, Group, Material, Matrix4, Mesh, MeshStandardMaterial, PerspectiveCamera, PointLight, Quaternion, Texture, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, Group, Material, Matrix4, Mesh, MeshStandardMaterial, PerspectiveCamera, PointLight, Quaternion, Scene, ShaderLib, Texture, Vector3, type WebGLProgramParametersWithUniforms, type WebGLRenderer } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { MimicPresentation } from '../src/survival/MimicPresentation';
 import type { FocusedEventPresentationDependencies } from '../src/survival/FocusedEventPresentation';
@@ -9,6 +9,7 @@ import type { WaterExclusionRegion } from '../src/ocean/WaterExclusion';
 import { createLifeboat } from '../src/world/Lifeboat';
 import { LifeboatAssets } from '../src/world/LifeboatAssets';
 import { collectMeshResources, disposeResourceSets } from '../src/world/SceneResources';
+import { Skybox } from '../src/world/Skybox';
 
 const outcome: ActionOutcome = { accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'none' };
 
@@ -28,6 +29,48 @@ function fixture(records: readonly BoatSupplyPresentationRecord[] = []) {
 }
 
 describe('Mimic presentation', () => {
+  // Importance: 95/100. Flat fog leaves a visible silhouette against the sea when the mimic disappears.
+  it('renders the hull and copied supplies in the same fog volume as the sea', () => {
+    const sourceMaterial = new MeshStandardMaterial();
+    const geometry = new BoxGeometry();
+    const source = new Group();
+    source.add(new Mesh(geometry, sourceMaterial));
+    const records = [{ root: source, visibleCopies: 1 }] as unknown as BoatSupplyPresentationRecord[];
+    const { presentation, assets, boat, camera } = fixture(records);
+    const scene = new Scene();
+    const texture = new Texture();
+    const sky = new Skybox(scene, { phase: 'night', weather: 'fog', severity: 0 }, texture);
+    const renderer = {} as WebGLRenderer;
+    try {
+      presentation.stage();
+      sky.update(2, { phase: 'night', weather: 'fog', severity: 0 }, new Vector3(0, 1.5, 0));
+      boat.traverse(object => {
+        if (!(object instanceof Mesh)) return;
+        for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+          const shader = {
+            uniforms: {}, vertexShader: ShaderLib.standard.vertexShader,
+            fragmentShader: ShaderLib.standard.fragmentShader,
+          } as WebGLProgramParametersWithUniforms;
+          material.onBeforeCompile(shader, renderer);
+          material.onBeforeRender(renderer, scene, camera, object.geometry, object, null!);
+          expect(shader.uniforms.uSeaFogAmount?.value).toBe(1);
+          expect(shader.uniforms.uSeaFogColor?.value).toEqual(sky.palette.fogColor);
+          expect(material.transparent).toBe(false);
+          expect(material.depthWrite).toBe(true);
+        }
+      });
+      const sourceShader = {
+        uniforms: {}, vertexShader: ShaderLib.standard.vertexShader,
+        fragmentShader: ShaderLib.standard.fragmentShader,
+      } as WebGLProgramParametersWithUniforms;
+      sourceMaterial.onBeforeCompile(sourceShader, renderer);
+      expect(sourceShader.uniforms.uSeaFogAmount).toBeUndefined();
+    } finally {
+      presentation.dispose(); assets.dispose(); sky.dispose(); texture.dispose();
+      geometry.dispose(); sourceMaterial.dispose();
+    }
+  });
+
   it('uses the full player hull and materials with empty storage', () => {
     const { presentation, assets, boat } = fixture();
     const player = createLifeboat(assets);

@@ -59,15 +59,6 @@ function resolvedEffects(
       ? { items: selected.effects.items.map((mutation) => ({ ...mutation })) }
       : {}),
     ...(selected.effects.chest !== undefined ? { chest: selected.effects.chest } : {}),
-    ...(selected.effects.nextDawnEnergy !== undefined
-      ? { nextDawnEnergy: selected.effects.nextDawnEnergy }
-      : {}),
-    ...(selected.effects.nextDawnEnergyReduction !== undefined
-      ? { nextDawnEnergyReduction: selected.effects.nextDawnEnergyReduction }
-      : {}),
-    ...(selected.effects.maximumNextDawnEnergy !== undefined
-      ? { maximumNextDawnEnergy: selected.effects.maximumNextDawnEnergy }
-      : {}),
     ...(selected.effects.followUpNight !== undefined
       ? { followUpNight: selected.effects.followUpNight }
       : {}),

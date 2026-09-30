@@ -21,15 +21,14 @@ function session(hunger = 0, item?: ItemId): SurvivalSession {
 
 describe('Ocean of Blood rules', () => {
 
-  it.each([[0, 2], [60, 2], [70, 1]])('caps dawn energy at hunger %s across a checkpoint', (hunger, energy) => {
+  it.each([[0, 3], [60, 2], [70, 1]])('adds pressure and uses hunger %s for dawn energy after saving', (hunger, energy) => {
     const run = session(hunger);
     expect(run.resolveEvent({ kind: 'endure' })).toMatchObject({
-      accepted: true, nextDawnEnergy: energy, eventResult: { resultId: 'blood-ocean-waited' },
+      accepted: true, deltas: { pressure: 1 }, eventResult: { resultId: 'blood-ocean-waited' },
     });
     const restored = SurvivalSession.restore(run.exportCheckpoint());
     expect(restored.beginDawn().accepted).toBe(true);
     expect(restored.snapshot().energy).toBe(energy);
-    expect(restored.exportCheckpoint().nextDawnEnergyOverride).toBeNull();
   });
 
   // Importance: 95/100. Salvage must not award the heart or permit a second reward.

@@ -1,4 +1,5 @@
 import { onLanguageChange } from '../i18n/language';
+import { uiScaleForViewport } from '../ui/uiScale';
 import { trackGameEnding, trackGameStart } from '../browser/GoogleAnalytics';
 import { prepareScene } from '../rendering/prepareScene';
 import { reportLoadingStage, type ReportLoadingProgress } from '../app/LoadingProgress';
@@ -749,7 +750,8 @@ export class ScavengePhase implements GamePhase {
       this.viewportHeight,
     );
     if (!projected.visible) return;
-    const placement = projected.y - projected.height / 2 >= 96 ? 'above' : 'below';
+    const scale = uiScaleForViewport(this.viewportWidth, this.viewportHeight);
+    const placement = projected.y - projected.height / 2 >= 96 * scale ? 'above' : 'below';
     this.itemTooltip = {
       get text() { return ITEM_LABELS[target.targetItem!.type]; },
       x: projected.x,

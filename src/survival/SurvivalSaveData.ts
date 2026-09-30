@@ -33,7 +33,6 @@ import { SURVIVAL_BALANCE, type RescueLead } from './survivalBalance';
 import type {
   ActionOutcome,
   ChestSnapshot,
-  DawnEnergy,
   EventPresentationKey,
   ItemCondition,
   SurvivalInventorySnapshot,
@@ -42,7 +41,7 @@ import type {
 } from './survivalTypes';
 import type { FishingCatchId } from './fishingCatalog';
 
-export const SURVIVAL_SAVE_VERSION = 9 as const;
+export const SURVIVAL_SAVE_VERSION = 10 as const;
 
 export interface SurvivalSaveDocument {
   readonly version: typeof SURVIVAL_SAVE_VERSION;
@@ -166,7 +165,6 @@ function parseCarlitos(value: unknown): CarlitosSnapshot | null | undefined {
 }
 
 type ActionOutcomeExtensions = {
-  readonly nextDawnEnergy?: DawnEnergy;
   readonly rewardSummary?: NonNullable<ActionOutcome['rewardSummary']>;
   readonly eventResult?: NonNullable<ActionOutcome['eventResult']>;
   readonly eventPresentationKey?: EventPresentationKey;
@@ -177,15 +175,13 @@ function parseActionOutcome(value: unknown): ActionOutcome | null | undefined {
   if (!isRecord(value)) return undefined;
   const baseOutcome = parseActionOutcomeBase(value);
   if (baseOutcome === null) return undefined;
-  const nextDawnEnergy = parseNextDawnEnergyExtension(value);
   const rewardSummary = parseRewardSummaryExtension(value);
   const eventResult = parseEventResultExtension(value);
   const eventPresentationKey = parseEventPresentationKeyExtension(value);
-  if (nextDawnEnergy === null || rewardSummary === null
+  if (rewardSummary === null
     || eventResult === null || eventPresentationKey === null) return undefined;
   return Object.freeze(withOutcomeText({
     ...baseOutcome,
-    ...nextDawnEnergy,
     ...rewardSummary,
     ...eventResult,
     ...eventPresentationKey,
@@ -218,14 +214,6 @@ function parseResourceDeltas(value: unknown): ActionOutcome['deltas'] | null {
     deltas[key] = delta;
   }
   return Object.freeze(deltas);
-}
-
-function parseNextDawnEnergyExtension(
-  value: Record<string, unknown>,
-): ActionOutcomeExtensions | null {
-  if (!('nextDawnEnergy' in value)) return {};
-  const nextDawnEnergy = parseInteger(value.nextDawnEnergy, 1, 4);
-  return nextDawnEnergy === null ? null : { nextDawnEnergy: nextDawnEnergy as DawnEnergy };
 }
 
 function parseRewardSummaryExtension(
@@ -538,7 +526,6 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const inventory = parseInventory(value.inventory);
   const savedItems = parseItemList(value.savedItems);
   const carlitos = parseCarlitos(value.carlitos);
-  const nextDawnEnergyOverride = parseNextDawnEnergyOverride(value.nextDawnEnergyOverride);
   const lastEventId = parseEventIdOrNull(value.lastEventId);
   const lastSeenDays = parseEventNumberRecord(
     value.lastSeenDays,
@@ -559,7 +546,6 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
     lastHealthCause, pendingJournalActions, journalEntries, history].some((field) => field === null)) return null;
   if ([carlitos, lastEventId, lastOutcome, lastHullEventId, pendingJournalDaytime,
     pendingJournalNighttime].some((field) => field === undefined)) return null;
-  if (nextDawnEnergyOverride === undefined) return null;
   const pendingEventId = parseEventIdOrNull(value.pendingEventId);
   const pendingEventTargetId = parsePendingEventTargetId(value.pendingEventTargetId, inventory!);
   if (pendingEventId === undefined || pendingEventTargetId === undefined) return null;
@@ -575,7 +561,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
     food: food!, bait: bait!, recoveredFood: recoveredFood!, recoveredBait: recoveredBait!, rescueLead: rescueLead! as RescueLead,
     radioSignalAvailable: value.radioSignalAvailable, radioSignalsSent: radioSignalsSent!, radioSignalsEnabled: value.radioSignalsEnabled,
     heartPieces: heartPieces!, chest: chest!, weather: value.weather, actedToday: value.actedToday, inventory: inventory!, savedItems: savedItems!, savedPickupCount: savedPickupCount!, carlitos: carlitos!,
-    pendingEventId, pendingEventTargetId, nextDawnEnergyOverride: nextDawnEnergyOverride as DawnEnergy | null,
+    pendingEventId, pendingEventTargetId,
     lastEventId: lastEventId!, lastSeenDays: lastSeenDays!, appearanceCounts: appearanceCounts!, lastOutcome: lastOutcome!, lastHealthCause: lastHealthCause!, lastHullEventId: lastHullEventId!,
     pendingJournalDaytime: pendingJournalDaytime!, pendingJournalNighttime: pendingJournalNighttime!, pendingJournalActions: pendingJournalActions!, journalEntries: journalEntries!,
     fishingCounter: fishingCounter!, seed: seed!, randomState: randomState!,
@@ -614,12 +600,6 @@ function parseHistory(value: unknown, currentDay: number): readonly SurvivalRead
     previousDay = day;
   }
   return previousDay === currentDay ? readings : null;
-}
-
-function parseNextDawnEnergyOverride(value: unknown): DawnEnergy | null | undefined {
-  if (value === null) return null;
-  const parsed = parseInteger(value, 1, 4);
-  return parsed === null ? undefined : parsed as DawnEnergy;
 }
 
 function parsePendingJournalNight(value: unknown): JournalNightRecord | null | undefined {

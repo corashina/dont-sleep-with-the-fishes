@@ -5,7 +5,6 @@ import { createInactiveVortexWaveState, createWaveSample, type WaveSample } from
 import { runCleanupSteps } from '../../world/SceneResources';
 import { smoothstep } from '../animationMath';
 import type { BorrowedSupplyActor, MutableSupplyPose } from '../BoatSupplyDisplay';
-import { StationaryEventCamera } from '../StationaryEventCamera';
 import type {
   DedicatedEventEnvironment,
   DedicatedEventPresentation,
@@ -25,9 +24,9 @@ import {
 } from './whirlpoolChoreography';
 
 const MAX_LOST_ACTORS = 2;
-// The boat rides the outer rim, clear of the sunken water.
-const CENTER_X = 7.03;
-const CENTER_Z = -13.82;
+// Open water separates the boat from the vortex on its right.
+const CENTER_X = 16;
+const CENTER_Z = -14;
 const CENTER_DISTANCE = Math.hypot(CENTER_X, CENTER_Z);
 const RADIUS = 17;
 const DEPRESSION = 6;
@@ -35,15 +34,6 @@ const TANGENT_STRENGTH = 1.2;
 const THROAT_DEPTH = 7;
 // Matches the ocean core cut-out at full strength.
 const CORE_RADIUS = RADIUS * 0.56;
-const DRAG_ANGLE = 0.3;
-const LURCH_ANGLE = 0.22;
-const LURCH_PULL = 1.1;
-const BOW_DIP = 0.06;
-// The camera looks further down than the boat tilts, so the throat shows without the hull dipping under water.
-const CAMERA_DIP = 0.2;
-// Turns the bow toward the throat while the current drags the boat.
-const HEADING_TURN = 0.35;
-const INWARD_ROLL = 0.08;
 const AIM_RADIUS = CORE_RADIUS + 1.8;
 const IDENTITY_ITEM_POSE: MutableSupplyPose = {
   x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, scaleX: 1, scaleY: 1, scaleZ: 1,
@@ -71,7 +61,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   private readonly vortex: WhirlpoolVortex;
   private readonly surfaceWave: WaveSample = createWaveSample();
   private readonly sample = createWhirlpoolSample();
-  private readonly reactionState = { hullDamage: 0, lostItemCount: 0 };
+  private readonly reactionState = { lostItemCount: 0 };
   private readonly lost: LostSupply[] = Array.from({ length: MAX_LOST_ACTORS }, () => ({
     actor: null,
     pose: { ...IDENTITY_ITEM_POSE },
@@ -80,7 +70,6 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     startRadius: 0,
   }));
   private readonly scratch = new Vector3();
-  private readonly cameraLook: StationaryEventCamera | null;
   private readonly animation = new TimedPresentationAnimation<'reveal' | 'item' | 'reaction'>(
     (kind, _time, progress) => this.applyAnimation(kind, progress),
     (kind) => this.finishAnimation(kind),
@@ -93,21 +82,17 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   private disposed = false;
 
   constructor(private readonly environment: DedicatedEventEnvironment) {
-    this.cameraLook = environment.camera === undefined
-      ? null
-      : new StationaryEventCamera(environment.camera);
     this.vortex = new WhirlpoolVortex(RADIUS, THROAT_DEPTH, environment.boatEffectsRoot);
     this.worldRoot.name = 'whirlpool-world';
     this.boatRoot.name = 'whirlpool-boat';
     this.worldRoot.position.set(CENTER_X, 0, CENTER_Z);
     this.itemAimTarget.name = 'whirlpool-item-aim-target';
-    // Throws land on the funnel wall between the dragged boat and the throat.
-    const aimAngle = -DRAG_ANGLE;
+    // Throws land on the near wall of the funnel.
     const aim = AIM_RADIUS / CENTER_DISTANCE;
     this.itemAimTarget.position.set(
-      (-CENTER_X * Math.cos(aimAngle) - CENTER_Z * Math.sin(aimAngle)) * aim,
+      -CENTER_X * aim,
       -1.4,
-      (CENTER_X * Math.sin(aimAngle) - CENTER_Z * Math.cos(aimAngle)) * aim,
+      -CENTER_Z * aim,
     );
     this.worldRoot.add(this.vortex.root, this.itemAimTarget);
     this.hideScene();
@@ -116,11 +101,10 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== this.eventId) return;
     this.clear();
-    this.cameraLook?.capture();
     this.staged = true;
     this.worldRoot.visible = true;
     this.boatRoot.visible = true;
-    sampleWhirlpoolReveal(0, this.sample);
+    sampleWhirlpoolReveal(this.sample);
     this.applySample(this.waveTime);
   }
 
@@ -128,8 +112,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     if (this.disposed || !this.staged) return Promise.resolve();
     this.animation.cancel();
     this.activeChoiceId = null;
-    this.cameraLook?.capture();
-    sampleWhirlpoolReveal(0, this.sample);
+    sampleWhirlpoolReveal(this.sample);
     this.applySample(this.waveTime);
     return this.animation.start('reveal', WHIRLPOOL_REVEAL_DURATION);
   }
@@ -153,7 +136,6 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.animation.cancel();
     this.activeChoiceId = null;
     this.releaseLostActors(false);
-    this.reactionState.hullDamage = result.resourceDeltas.hull ?? 0;
     this.reactionState.lostItemCount = 0;
     const selectedId = result.selectedInstanceId;
     for (const id of result.lostInstanceIds) {
@@ -192,7 +174,6 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.activeChoiceId = null;
     this.releaseLostActors(false);
     this.resetPresentationState();
-    this.cameraLook?.restore();
   }
 
   dispose(): void {
@@ -200,7 +181,6 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.disposed = true;
     this.animation.cancel();
     this.activeChoiceId = null;
-    this.cameraLook?.restore();
     runCleanupSteps([
       () => this.releaseLostActors(false),
       () => this.resetPresentationState(),
@@ -232,13 +212,11 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
 
   private applyAnimation(kind: 'reveal' | 'item' | 'reaction', progress: number): void {
     if (kind === 'reveal') {
-      sampleWhirlpoolReveal(progress, this.sample);
+      sampleWhirlpoolReveal(this.sample);
     } else if (kind === 'item') {
       if (this.activeChoiceId === null) return;
-      this.cameraLook?.apply(0, 0);
       sampleWhirlpoolItemUse(this.sample);
     } else {
-      this.cameraLook?.apply(0, 0);
       sampleWhirlpoolReaction(this.reactionState, progress, this.sample);
     }
   }
@@ -264,30 +242,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
       this.flowTime,
       vortex,
     );
-    this.applyBoatDrag();
     this.applyLostPoses();
-  }
-
-  /** Swings the boat and the camera together along the rim, around the vortex centre. */
-  private applyBoatDrag(): void {
-    const { drag, lurch } = this.sample;
-    const angle = -(drag * (DRAG_ANGLE + 0.04 * Math.sin(this.flowTime * 0.7)) + lurch * LURCH_ANGLE);
-    const cosine = Math.cos(angle);
-    const sine = Math.sin(angle);
-    // Rotate the boat's offset from the centre about the vertical axis.
-    const offsetX = -CENTER_X * cosine - CENTER_Z * sine;
-    const offsetZ = CENTER_X * sine - CENTER_Z * cosine;
-    const pull = lurch * LURCH_PULL / CENTER_DISTANCE;
-    const x = CENTER_X + offsetX * (1 - pull);
-    const z = CENTER_Z + offsetZ * (1 - pull);
-    const boatPitch = -(drag * BOW_DIP + lurch * 0.04);
-    const cameraPitch = -(drag * CAMERA_DIP + lurch * 0.08);
-    const roll = -(drag * INWARD_ROLL + lurch * 0.07) + drag * 0.025 * Math.sin(this.flowTime * 1.3);
-    const heading = angle - drag * HEADING_TURN;
-    this.environment.boatEffectsRoot?.position.set(x, 0, z);
-    this.environment.boatEffectsRoot?.rotation.set(boatPitch, heading, roll, 'YXZ');
-    this.environment.cameraEffectsRoot?.position.set(x, 0, z);
-    this.environment.cameraEffectsRoot?.rotation.set(cameraPitch, heading, roll, 'YXZ');
   }
 
   private applyLostPoses(): void {
@@ -327,7 +282,6 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
 
   private resetPresentationState(): void {
     this.staged = false;
-    this.reactionState.hullDamage = 0;
     this.reactionState.lostItemCount = 0;
     this.waveTime = 0;
     this.flowTime = 0;
@@ -335,10 +289,6 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     this.hideScene();
     Object.assign(this.environment.vortexWave, createInactiveVortexWaveState());
     this.vortex.update(0, 1, 0, this.environment.vortexWave);
-    this.environment.boatEffectsRoot?.position.set(0, 0, 0);
-    this.environment.boatEffectsRoot?.rotation.set(0, 0, 0, 'XYZ');
-    this.environment.cameraEffectsRoot?.position.set(0, 0, 0);
-    this.environment.cameraEffectsRoot?.rotation.set(0, 0, 0, 'XYZ');
   }
 
   private hideScene(): void {

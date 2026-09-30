@@ -15,6 +15,8 @@ import {
 import { isFloorCrab, isRailCrab } from '../src/survival/events/crabSwarmChoreography';
 import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
 import type { MutableSupplyPose } from '../src/survival/BoatSupplyDisplay';
+import { eventItemUseDurationForItem, resolveEventItemUseContext } from '../src/survival/eventItemUseChoreography';
+import { NET_ATTACK_CONTACT_PROGRESS } from '../src/survival/netAttackChoreography';
 
 // Rail and floor crabs rest on level wood. The wall crab entries are unused.
 const LEVEL_REST_Z = [-2.85, -2.85, -0.97, -0.97, 0, 0, -0.72, -0.72];
@@ -55,6 +57,61 @@ function setup(seed = 42) {
 }
 
 describe('Crab swarm presentation', () => {
+  // Importance: 95/100. Every defense must drive crabs away at contact, without replaying their retreat.
+  it.each([
+    ['shotgun', 0.46], ['knife', 0.68], ['fishingNet', NET_ATTACK_CONTACT_PROGRESS], ['bucket', 0.75],
+  ] as const)('starts retreat at the %s action and continues through the outcome', async (item, contact) => {
+    const { presentation, crabs } = setup();
+    try {
+      void presentation.reveal();
+      presentation.skip();
+      const positions = () => crabs.map(crab => crab.position.toArray());
+      const resting = positions();
+      const context = resolveEventItemUseContext('crab-swarm', item, item)!;
+      const contactSeconds = eventItemUseDurationForItem(context, item) * contact;
+      void presentation.playItemUse(item, `${item}-1`);
+      presentation.update(1, contactSeconds - 0.01);
+      expect(positions()).toEqual(resting);
+      presentation.update(2, 0.11);
+      crabs.forEach((crab, index) => expect(crab.position.toArray()).not.toEqual(resting[index]));
+      const moving = positions();
+      const finished = vi.fn();
+      const reaction = presentation.react({ lostInstanceIds: [] } as unknown as EventOutcomePresentation).then(finished);
+      expect(positions()).toEqual(moving);
+      await Promise.resolve();
+      expect(finished).not.toHaveBeenCalled();
+      presentation.update(3, CRAB_RETREAT_SECONDS);
+      await reaction;
+      expect(crabs.every(crab => !crab.visible)).toBe(true);
+      await presentation.react({ lostInstanceIds: [] } as unknown as EventOutcomePresentation);
+      expect(crabs.every(crab => !crab.visible)).toBe(true);
+    } finally { presentation.dispose(); }
+  });
+
+  // Importance: 95/100. Flashlight use must retain the exact-item theft and reset earlier defense state.
+  it('resets defense retreat before a new flashlight theft', async () => {
+    const { presentation, crabs, borrowEventActor } = setup();
+    try {
+      void presentation.reveal();
+      presentation.skip();
+      void presentation.playItemUse('shotgun', 'shotgun-1');
+      presentation.settleForVisibilityChange();
+      expect(crabs.every(crab => !crab.visible)).toBe(true);
+      presentation.stage({ eventId: 'crab-swarm', targetInstanceId: 'map-1', variantSeed: 42 });
+      void presentation.reveal();
+      presentation.skip();
+      await presentation.playItemUse('flashlight', 'flashlight-1');
+      presentation.update(1, 10);
+      expect(crabs.every(crab => crab.visible)).toBe(true);
+      expect(borrowEventActor).not.toHaveBeenCalled();
+      const reaction = presentation.react({ lostInstanceIds: ['map-1'] } as unknown as EventOutcomePresentation);
+      expect(borrowEventActor).toHaveBeenCalledExactlyOnceWith('map-1');
+      presentation.skip();
+      await reaction;
+      expect(crabs.every(crab => !crab.visible)).toBe(true);
+    } finally { presentation.dispose(); }
+  }, 10000);
+
   // Importance: 95/100. Reported rotation snaps must not return during boarding or retreat.
   it.each([0, 42, 71, 99])('turns continuously while walking for seed %s', seed => {
     const { presentation, crabs } = setup(seed);

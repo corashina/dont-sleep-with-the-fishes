@@ -959,7 +959,9 @@ describe('SurvivalSession daytime actions', () => {
     const before = session.snapshot();
     expect(session.resolveEvent(itemResponse('bucket'))).toMatchObject({ accepted: false, code: 'item-unavailable' });
     expect(session.snapshot()).toEqual(before);
-    expect(session.resolveEvent({ kind: 'endure' }).message).toBe('You wake with two energy.');
+    expect(session.resolveEvent({ kind: 'endure' })).toMatchObject({
+      accepted: true, deltas: { health: -10 }, eventResult: { resultId: 'shower-night.sleep.1' },
+    });
   });
 
   it('applies set, subtract, and add resource effects in authored order with clamps', () => {

@@ -1,7 +1,8 @@
-import { Group, Material, Mesh, Skeleton, SkinnedMesh } from 'three';
+import { Group, Material, Mesh, MeshStandardMaterial, Skeleton, SkinnedMesh } from 'three';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { HOVER_OUTLINE_NAME } from '../rendering/HoverOutline';
 import { disposeResourceSets } from '../world/SceneResources';
+import { applySeaFogMaterial } from '../world/SeaFogMaterial';
 import type { BoatSupplyPresentationRecord } from './BoatSupplyDisplay';
 
 export class MimicSupplies {
@@ -22,6 +23,7 @@ export class MimicSupplies {
       let material = copies.get(source);
       if (material === undefined) {
         material = source.clone();
+        if (material instanceof MeshStandardMaterial) applySeaFogMaterial(material);
         copies.set(source, material);
         this.materials.add(material);
       }

@@ -647,7 +647,7 @@ describe('event selection contracts', () => {
     );
     expect(rig.audio.eventItemCue).toHaveBeenCalledExactlyOnceWith('radio', 1);
     expect(rig.realSession.snapshot()).toMatchObject({
-      rescueLead: 5, energy: 2, ending: null,
+      rescueLead: 5, energy: 3, ending: null,
       inventory: { 'radio-1': { condition: 'usable' } },
     });
     expect(rig.onInvariantError).not.toHaveBeenCalled();

@@ -1,7 +1,8 @@
-import { BufferGeometry, Group, Material, Mesh, PointLight, Quaternion, Vector3 } from 'three';
+import { BufferGeometry, Group, Material, Mesh, MeshStandardMaterial, PointLight, Quaternion, Vector3 } from 'three';
 import { createWaterExclusion, type WaterExclusionRegion } from '../ocean/WaterExclusion';
 import { createLifeboat } from '../world/Lifeboat';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
+import { applySeaFogMaterial } from '../world/SeaFogMaterial';
 import { smoothstepUnchecked as smoothstep } from './animationMath';
 import type {
   EventChoicePresentation, FocusedEventPresentation, FocusedEventPresentationDependencies,
@@ -60,6 +61,9 @@ export class MimicPresentation implements FocusedEventPresentation {
     this.inspection.name = 'mimic-seat-light';
     this.root.add(this.boat, this.aim, this.rim, this.inspection);
     collectMeshResources(this.boat, this.geometries, this.materials);
+    for (const material of this.materials) {
+      if (material instanceof MeshStandardMaterial) applySeaFogMaterial(material);
+    }
     build.storageRoot.add(this.supplies.root);
     // Keep solid depth-tested surfaces. The atmosphere conceals the distant copy.
     this.boat.traverse((object) => { if (object instanceof Mesh) object.castShadow = false; });

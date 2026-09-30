@@ -90,6 +90,7 @@ const RADIO_CALL_CUE_PROGRESSES = Object.freeze([0.65]);
 const BUCKET_HELMET_RAIN_CUE_PROGRESSES = Object.freeze([0.65]);
 const WEIGHTED_THROW_DURATION_MULTIPLIER = 1.15;
 const SCOOP_DURATION = 1.65;
+export const BUCKET_SCOOP_CONTACT_PROGRESS = 0.75;
 const SCOOP_FLIGHT_ARC_HEIGHT = 0.9;
 const SCOOP_GUNWALE_CLEARANCE = 0.28;
 const NET_PICKUP_DEPTH = 0.14;
@@ -700,7 +701,7 @@ function sampleBucketScoop(
   const outbound = smoothstep((progress - 0.44) / 0.26);
   const inbound = 1 - smoothstep((progress - 0.79) / 0.17);
   const travel = Math.min(outbound, inbound);
-  const scoop = pulse(progress, 0.69, 0.75, 0.82);
+  const scoop = pulse(progress, 0.69, BUCKET_SCOOP_CONTACT_PROGRESS, 0.82);
   output.viewY += SCOOP_GUNWALE_CLEARANCE * gunwaleClearance
     + 0.1 * travel
     - 0.16 * scoop;

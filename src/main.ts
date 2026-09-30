@@ -3,7 +3,9 @@ import './styles/main.css';
 import './styles/settings.css';
 import { startApplication } from './app/startApplication';
 import { initializeLanguage } from './i18n/language';
+import { installUiScale } from './ui/uiScale';
 
+installUiScale();
 initializeLanguage();
 
 const mount = document.querySelector<HTMLElement>('#app');

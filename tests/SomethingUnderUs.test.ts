@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { Group, Mesh, PerspectiveCamera, Vector3 } from 'three';
 import { DEFAULT_WAVES, sampleWaveFieldInto } from '../src/ocean/WaveField';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { survivalEventById } from '../src/survival/eventCatalog';
-import { validateSurvivalEventCatalog } from '../src/survival/eventCatalogValidation';
 import { SomethingUnderUsPresentation } from '../src/survival/events/SomethingUnderUsPresentation';
 import { deriveEventOutcomePresentation } from '../src/survival/eventPresentationOutcome';
 import type { ItemId, ItemInstanceId } from '../src/game/ItemState';
@@ -16,17 +14,16 @@ function session(hunger = 0, ...items: ItemId[]): SurvivalSession {
 }
 
 describe('Something Under Us rules', () => {
-  it.each([[0, 2], [70, 1]])('charges one dawn energy without reducing wake-up energy below one at hunger %s, including after saving', (hunger, energy) => {
+  it.each([[0, 3], [50, 2], [70, 1]])('adds pressure and uses hunger %s for dawn energy after saving', (hunger, energy) => {
     const run = session(hunger);
     const health = run.snapshot().health;
     const hull = run.snapshot().hull;
     const result = run.resolveEvent({ kind: 'endure' });
-    expect(result).toMatchObject({ accepted: true, nextDawnEnergy: energy });
+    expect(result).toMatchObject({ accepted: true, deltas: { pressure: 1 } });
     expect(run.snapshot()).toMatchObject({ health, hull });
     const restored = SurvivalSession.restore(run.exportCheckpoint());
     expect(restored.beginDawn().accepted).toBe(true);
     expect(restored.snapshot().energy).toBe(energy);
-    expect(restored.exportCheckpoint().nextDawnEnergyOverride).toBeNull();
   });
 
   it('rejects unavailable bait without changing the event', () => {
@@ -43,14 +40,6 @@ describe('Something Under Us rules', () => {
     expect(run.snapshot()).toEqual(before);
   });
 
-  it('rejects contradictory and daytime dawn penalties', () => {
-    const event = survivalEventById('something-under-us')!;
-    const still = event.choices.find(({ id }) => id === 'sleep')!;
-    expect(() => validateSurvivalEventCatalog([{ ...event, phase: 'day', choices: [still] }])).toThrow(/outside a night/);
-    expect(() => validateSurvivalEventCatalog([{ ...event, choices: [{ ...still, outcomes: [{
-      ...still.outcomes[0]!, effects: { nextDawnEnergyReduction: 1, nextDawnEnergy: 3 },
-    }] }] }])).toThrow(/cannot combine/);
-  });
 });
 
 function presentation(movingWater = false) {

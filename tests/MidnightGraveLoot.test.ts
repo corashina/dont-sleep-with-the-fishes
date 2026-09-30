@@ -17,7 +17,7 @@ describe('Midnight grave rewards', () => {
     const reward = result.rewardSummary.rewards[0]!;
     expect(session.snapshot().chest.state).toBe('none');
     expect(session.beginDawn().accepted).toBe(true);
-    expect(session.snapshot()).toMatchObject({ day: 2, energy: 2 });
+    expect(session.snapshot()).toMatchObject({ day: 2, energy: 3 });
     if (reward.kind === 'resource') {
       expect(session.snapshot()[reward.id]).toBe(reward.quantity);
     } else if (reward.kind === 'item') {

@@ -385,7 +385,6 @@ export class SurvivalSession {
   private pendingEventId: string | null;
   private pendingEvent: SurvivalEventDefinition | null = null;
   private pendingEventTargetId: ItemInstanceId | null = null;
-  private nextDawnEnergyOverride: DawnEnergy | null = null;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private readonly appearanceCounts = new Map<string, number>();
@@ -496,7 +495,6 @@ export class SurvivalSession {
       : survivalEventById(checkpoint.pendingEventId) ?? null;
     if (this.pendingEvent !== null) this.pendingEvent = this.prepareEvent(this.pendingEvent);
     this.pendingEventTargetId = checkpoint.pendingEventTargetId;
-    this.nextDawnEnergyOverride = checkpoint.nextDawnEnergyOverride;
     this.lastEventId = checkpoint.lastEventId;
   }
 
@@ -594,7 +592,6 @@ export class SurvivalSession {
       carlitos: this.carlitos,
       pendingEventId: this.pendingEventId,
       pendingEventTargetId: this.pendingEventTargetId,
-      nextDawnEnergyOverride: this.nextDawnEnergyOverride,
       lastEventId: this.lastEventId,
       lastSeenDays: Object.fromEntries([...this.lastSeenDay].sort()),
       appearanceCounts: Object.fromEntries([...this.appearanceCounts].sort()),
@@ -1149,19 +1146,6 @@ export class SurvivalSession {
     event: SurvivalEventDefinition,
     resolved: WeightedEventOutcome,
   ): void {
-    if (resolved.effects.nextDawnEnergy !== undefined) {
-      this.nextDawnEnergyOverride = resolved.effects.nextDawnEnergy;
-    }
-    if (resolved.effects.nextDawnEnergyReduction !== undefined) {
-      this.nextDawnEnergyOverride = Math.max(
-        1, this.normalDawnEnergy() - resolved.effects.nextDawnEnergyReduction,
-      ) as DawnEnergy;
-    }
-    if (resolved.effects.maximumNextDawnEnergy !== undefined) {
-      this.nextDawnEnergyOverride = Math.min(
-        this.normalDawnEnergy(), resolved.effects.maximumNextDawnEnergy,
-      ) as DawnEnergy;
-    }
     this.resolveTerminal();
     if (!this.isTerminal() && event.id === 'kraken' && resolved.resultId === 'heart-returned') {
       this.ending = Object.freeze({ id: 'kraken', day: this.day, savedPickupCount: this.savedPickupCount });
@@ -1206,9 +1190,6 @@ export class SurvivalSession {
 
       deltas,
       cue: this.presentationCue('none'),
-      ...(this.nextDawnEnergyOverride === null
-        ? {}
-        : { nextDawnEnergy: this.nextDawnEnergyOverride }),
       ...(resolved.presentationKey === undefined
         ? {}
         : { eventPresentationKey: resolved.presentationKey }),
@@ -1324,7 +1305,7 @@ export class SurvivalSession {
     );
   }
 
-  private normalDawnEnergy(hungerIncrease = this.dawnHungerIncrease(this.day)): DawnEnergy {
+  private normalDawnEnergy(hungerIncrease: number): DawnEnergy {
     const hungerAfterDawn = Math.min(
       SURVIVAL_BALANCE.thresholds.maximum,
       this.hunger + hungerIncrease,
@@ -1342,8 +1323,7 @@ export class SurvivalSession {
       SURVIVAL_BALANCE.thresholds.maximum,
       this.hunger + hungerIncrease,
     );
-    const morningEnergy = this.nextDawnEnergyOverride ?? this.normalDawnEnergy(hungerIncrease);
-    this.nextDawnEnergyOverride = null;
+    const morningEnergy = this.normalDawnEnergy(hungerIncrease);
     const deltas: ResourceDelta = {
       hunger: hungerIncrease,
       energy: morningEnergy - this.energy,

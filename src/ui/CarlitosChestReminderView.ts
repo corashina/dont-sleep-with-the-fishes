@@ -1,5 +1,6 @@
 import type { BoatInteractionAnchor } from '../survival/BoatInteraction';
 import { uiText } from '../i18n/uiMessages';
+import { uiScaleForViewport } from './uiScale';
 
 export class CarlitosChestReminderView {
   readonly root = document.createElement('aside');
@@ -60,7 +61,8 @@ export class CarlitosChestReminderView {
     const anchor = this.anchor;
     this.root.hidden = this.remaining <= 0 || this.blocked || !anchor?.visible;
     if (this.root.hidden || anchor === null) return;
+    const scale = uiScaleForViewport(window.innerWidth, window.innerHeight);
     this.root.style.left = anchor.x + 'px';
-    this.root.style.top = Math.max(100, anchor.y - (anchor.hitArea?.height ?? 0) / 2 - 16) + 'px';
+    this.root.style.top = Math.max(100 * scale, anchor.y - (anchor.hitArea?.height ?? 0) / 2 - 16 * scale) + 'px';
   }
 }

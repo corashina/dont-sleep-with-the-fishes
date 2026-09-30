@@ -15,6 +15,7 @@ import type {
 import { runCleanupSteps, throwCleanupFailure } from './UiCleanup';
 import { returnArrowArtwork } from './uiArtwork';
 import { focusedEventPlacement, FOCUSED_EVENT_BOTTOM_RESERVE, FOCUSED_EVENT_MARGIN } from './focusedEventPlacement';
+import { uiScaleForViewport } from './uiScale';
 
 const requireElement = createElementRequirement('focused event view');
 const FOCUSED_EVENT_TITLES: Readonly<Record<InspectableEventId, string>> = Object.freeze({
@@ -275,13 +276,14 @@ export class FocusedEventView {
     const rootBounds = this.coordinateRoot.getBoundingClientRect();
     const viewportWidth = Math.max(1, rootBounds.width || this.coordinateRoot.clientWidth || window.innerWidth);
     const viewportHeight = Math.max(1, rootBounds.height || this.coordinateRoot.clientHeight || window.innerHeight);
-    const width = Math.max(1, Math.min(420, viewportWidth - FOCUSED_EVENT_MARGIN * 2));
+    const scale = uiScaleForViewport(viewportWidth, viewportHeight);
+    const width = Math.max(1, Math.min(420 * scale, viewportWidth - FOCUSED_EVENT_MARGIN * scale * 2));
     this.root.style.setProperty('--focused-event-width', `${width}px`);
     this.root.style.setProperty('--focused-event-max-height', `${Math.max(1,
-      viewportHeight - FOCUSED_EVENT_BOTTOM_RESERVE - FOCUSED_EVENT_MARGIN)}px`);
-    const height = this.card.offsetHeight || 360;
+      viewportHeight - (FOCUSED_EVENT_BOTTOM_RESERVE + FOCUSED_EVENT_MARGIN) * scale)}px`);
+    const height = this.card.offsetHeight || 360 * scale;
     const { maximumHeight, x, y, placement, anchorState } = focusedEventPlacement(
-      viewportWidth, viewportHeight, width, height, this.target,
+      viewportWidth, viewportHeight, width, height, this.target, scale,
     );
     this.setPosition(width, maximumHeight, x, y, placement, anchorState);
   }

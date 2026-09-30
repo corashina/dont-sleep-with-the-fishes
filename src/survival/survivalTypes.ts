@@ -78,7 +78,7 @@ export type RewardEntry =
       readonly quantity: 1;
     };
 
-export type DawnEnergy = 1 | 2 | 3 | 4;
+export type DawnEnergy = 1 | 2 | 3;
 
 export interface ActionOutcome {
   readonly text?: OutcomeText;
@@ -87,7 +87,6 @@ export interface ActionOutcome {
   message: string;
   deltas: Readonly<ResourceDelta>;
   cue: PresentationCue;
-  readonly nextDawnEnergy?: DawnEnergy;
   readonly rewardSummary?: RewardSummary;
   readonly eventResult?: EventResultPresentation;
   readonly eventPresentationKey?: EventPresentationKey;
@@ -116,12 +115,9 @@ export type EventInventoryMutation =
   | { readonly kind: 'loseEventTarget'; readonly quantity: 1 };
 export interface EventEffects {
   readonly grantHeartPiece?: HeartPieceId;
-  readonly maximumNextDawnEnergy?: DawnEnergy;
   readonly resources?: readonly ResourceEffect[];
   readonly items?: readonly EventInventoryMutation[];
   readonly chest?: ChestEventEffect;
-  readonly nextDawnEnergy?: DawnEnergy;
-  readonly nextDawnEnergyReduction?: 1;
   readonly followUpNight?: true;
 }
 export interface WeightedEventOutcome {

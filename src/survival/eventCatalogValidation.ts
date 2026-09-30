@@ -177,9 +177,6 @@ function validateOutcome(
   const { resources, items } = validatedEffectArrays(candidateEffects, path);
   validateResourceEffects(resources, path);
   validateNightEnergyEffects(resources, path, phase);
-  if (candidateEffects.nextDawnEnergyReduction !== undefined && phase !== 'night') {
-    throw new Error(`${path} reduces dawn energy outside a night event`);
-  }
   validateItemEffects(items, path);
   validateOutcomeLosses(outcomeEntry, items, path);
   validateOptionalEffects(candidateEffects, path);
@@ -229,7 +226,7 @@ function validateEffectRecord(value: unknown, path: string): PlainRecord {
     'effect',
     [
       'resources', 'items', 'chest', 'grantHeartPiece',
-      'nextDawnEnergy', 'nextDawnEnergyReduction', 'maximumNextDawnEnergy', 'followUpNight',
+      'followUpNight',
     ],
   );
   if (Object.hasOwn(candidateEffects, 'grantHeartPiece')
@@ -324,44 +321,12 @@ function validateOutcomeLosses(
   }
 }
 
-function validateDawnEnergyReduction(candidateEffects: PlainRecord, path: string): void {
-  if (Object.hasOwn(candidateEffects, 'nextDawnEnergyReduction') && (
-    candidateEffects.nextDawnEnergyReduction !== 1
-    || Object.hasOwn(candidateEffects, 'nextDawnEnergy')
-    || Object.hasOwn(candidateEffects, 'maximumNextDawnEnergy')
-    || Object.hasOwn(candidateEffects, 'followUpNight')
-  )) {
-    throw new Error(`${path}.nextDawnEnergyReduction must be one and cannot combine with another dawn or follow-up effect`);
-  }
-}
-
-function validateDawnEnergyCap(candidateEffects: PlainRecord, path: string): void {
-  if (Object.hasOwn(candidateEffects, 'maximumNextDawnEnergy')) {
-    const cap = candidateEffects.maximumNextDawnEnergy;
-    if (!Number.isInteger(cap) || (cap as number) < 1 || (cap as number) > 4
-      || Object.hasOwn(candidateEffects, 'nextDawnEnergy')
-      || Object.hasOwn(candidateEffects, 'nextDawnEnergyReduction')) {
-      throw new Error(`${path}.maximumNextDawnEnergy requires an exclusive integer from one through four`);
-    }
-  }
-}
-
 function validateOptionalEffects(candidateEffects: PlainRecord, path: string): void {
-  validateDawnEnergyReduction(candidateEffects, path);
-  validateDawnEnergyCap(candidateEffects, path);
   const hasChest = Object.hasOwn(candidateEffects, 'chest');
-  const hasNextDawnEnergy = Object.hasOwn(candidateEffects, 'nextDawnEnergy');
   const hasFollowUpNight = Object.hasOwn(candidateEffects, 'followUpNight');
   const chest = hasChest ? candidateEffects.chest : undefined;
   if (hasChest && !['acquire', 'close', 'destroy'].includes(chest as string)) {
     throw new Error(`${path}.chest has an invalid effect`);
-  }
-  if (hasNextDawnEnergy && (
-    !Number.isInteger(candidateEffects.nextDawnEnergy)
-    || (candidateEffects.nextDawnEnergy as number) < 1
-    || (candidateEffects.nextDawnEnergy as number) > 4
-  )) {
-    throw new Error(`${path}.nextDawnEnergy must be an integer from one through four`);
   }
   if (hasFollowUpNight && candidateEffects.followUpNight !== true) {
     throw new Error(`${path}.followUpNight must be true`);

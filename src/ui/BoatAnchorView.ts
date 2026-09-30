@@ -1,4 +1,5 @@
 import { uiDynamic } from '../i18n/uiDynamicMessages';
+import { uiScaleForViewport } from './uiScale';
 import { onLanguageChange } from '../i18n/language';
 import { refreshUiText } from './translatedText';
 import { uiText } from '../i18n/uiMessages';
@@ -1041,11 +1042,12 @@ export class BoatAnchorView {
 
   private placeAnchorTooltip(button: HTMLButtonElement, x: number, y: number): void {
     const viewportWidth = this.viewportWidth;
-    const edgeGutter = 160;
+    const scale = uiScaleForViewport(this.viewportWidth, this.viewportHeight);
+    const edgeGutter = 160 * scale;
     button.dataset.tooltipX = x < edgeGutter
       ? 'left'
       : x > viewportWidth - edgeGutter ? 'right' : 'center';
-    button.dataset.tooltipY = y < 96 ? 'below' : 'above';
+    button.dataset.tooltipY = y < 96 * scale ? 'below' : 'above';
   }
 
   private renderCarlitos(snapshot: SurvivalSnapshot): void {
@@ -1145,12 +1147,13 @@ export class BoatAnchorView {
     const rootBounds = this.host.getBoundingClientRect();
     const viewportWidth = rootBounds.width || this.host.clientWidth || window.innerWidth;
     const viewportHeight = rootBounds.height || this.host.clientHeight || window.innerHeight;
+    const scale = uiScaleForViewport(viewportWidth, viewportHeight);
     const cardBounds = this.carlitosCard.getBoundingClientRect();
-    const cardWidth = cardBounds.width || 312;
-    const cardHeight = cardBounds.height || 344;
+    const cardWidth = cardBounds.width || 312 * scale;
+    const cardHeight = cardBounds.height || 344 * scale;
     const anchorWidth = anchor.hitArea?.width ?? DEFAULT_ANCHOR_HIT_AREA.width;
-    const gutter = 16;
-    const gap = 18;
+    const gutter = 16 * scale;
+    const gap = 18 * scale;
     const right = anchor.x + anchorWidth / 2 + gap;
     const placeLeft = right + cardWidth > viewportWidth - gutter;
     const unclampedX = placeLeft

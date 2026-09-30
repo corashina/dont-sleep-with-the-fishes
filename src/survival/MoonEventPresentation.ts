@@ -14,14 +14,7 @@ import type {
 } from './eventPresentationTypes';
 import type { ActionOutcome, ItemCondition } from './survivalTypes';
 
-const MOON_FACE_REVEAL_DURATION = 9.2;
 const MOON_FACE_REACTION_DURATION = 1.1;
-const MOON_FACE_HOLD_DURATION = 2.5;
-const MOON_FACE_FADE_DURATION = 5;
-const MOON_FACE_APPEAR_START = MOON_FACE_HOLD_DURATION / MOON_FACE_REVEAL_DURATION;
-const MOON_FACE_APPEAR_END = (
-  MOON_FACE_HOLD_DURATION + MOON_FACE_FADE_DURATION
-) / MOON_FACE_REVEAL_DURATION;
 const MOON_FACE_BASE_DREAD = 0.78;
 const MOON_FACE_STAR_SCALE = 0.34;
 const MOON_FACE_MOON_SCALE = 2.8;
@@ -35,8 +28,6 @@ const MOON_ITEM_AIM_DIRECTION = Object.freeze({ x: 0, y: 0.24, z: -1 });
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value));
 const easeInOut = (value: number): number => value * value * (3 - 2 * value);
-const smootherStep = (value: number): number =>
-  value * value * value * (value * (value * 6 - 15) + 10);
 
 export interface MoonEventPresentationEnvironment {
   readonly sky: Pick<Skybox, 'resetTransient' | 'setMoonFace'>;
@@ -64,7 +55,6 @@ interface MutableMoonFacePresentation {
 }
 
 interface ActiveMoonAnimation {
-  readonly kind: 'reveal' | 'reaction';
   elapsed: number;
   readonly duration: number;
   readonly fromReveal: number;
@@ -148,30 +138,7 @@ export class MoonEventPresentation {
   reveal(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (!this.staged) this.stageMoon();
-    this.cancelAnimation();
-    this.resetValues();
-    this.applyStagedMoon();
-    return new Promise((resolve) => {
-      this.activeAnimation = {
-        kind: 'reveal',
-        elapsed: 0,
-        duration: MOON_FACE_REVEAL_DURATION,
-        fromReveal: 0,
-        fromDread: 0,
-        fromStarScale: 1,
-        fromDim: 0,
-        fromMoonScale: MOON_FACE_MOON_SCALE,
-        fromCameraLower: 0,
-        targetReveal: 1,
-        targetDread: MOON_FACE_BASE_DREAD,
-        targetStarScale: MOON_FACE_STAR_SCALE,
-        targetDim: MOON_FACE_BASE_DIM,
-        targetMoonScale: MOON_FACE_MOON_SCALE,
-        targetCameraLower: 0,
-        responseActor: null,
-        resolve,
-      };
-    });
+    return Promise.resolve();
   }
 
   react(
@@ -189,7 +156,6 @@ export class MoonEventPresentation {
     }
     return new Promise((resolve) => {
       this.activeAnimation = {
-        kind: 'reaction',
         elapsed: 0,
         duration: MOON_FACE_REACTION_DURATION,
         fromReveal: this.face.reveal,
@@ -224,11 +190,7 @@ export class MoonEventPresentation {
     if (animation !== null) {
       animation.elapsed = Math.min(animation.duration, animation.elapsed + step);
       const progress = animation.elapsed / animation.duration;
-      if (animation.kind === 'reveal') {
-        this.updateReveal(progress);
-      } else {
-        this.updateReaction(animation, progress);
-      }
+      this.updateReaction(animation, progress);
       if (progress >= 1) {
         this.finishAndApplyPresentation();
         return;
@@ -273,6 +235,10 @@ export class MoonEventPresentation {
   }
 
   private applyStagedMoon(): void {
+    this.face.reveal = 1;
+    this.face.dread = MOON_FACE_BASE_DREAD;
+    this.face.starScale = MOON_FACE_STAR_SCALE;
+    this.face.dim = MOON_FACE_BASE_DIM;
     this.face.scale = MOON_FACE_MOON_SCALE;
     this.applyPresentation();
   }
@@ -294,21 +260,6 @@ export class MoonEventPresentation {
     )) return null;
     this.environment.supplies.clearEventPose();
     return this.environment.supplies.pinEventActor(instanceId) ? actor : null;
-  }
-
-  private updateReveal(progress: number): void {
-    const faceProgress = smootherStep(clamp(
-      (progress - MOON_FACE_APPEAR_START)
-        / (MOON_FACE_APPEAR_END - MOON_FACE_APPEAR_START),
-      0,
-      1,
-    ));
-    this.face.reveal = faceProgress;
-    this.face.dread = MOON_FACE_BASE_DREAD * faceProgress;
-    this.face.starScale = 1
-      - (1 - MOON_FACE_STAR_SCALE) * faceProgress;
-    this.face.dim = MOON_FACE_BASE_DIM * faceProgress;
-    this.face.scale = MOON_FACE_MOON_SCALE;
   }
 
   private updateReaction(animation: ActiveMoonAnimation, progress: number): void {

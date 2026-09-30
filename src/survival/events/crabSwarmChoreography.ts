@@ -146,9 +146,9 @@ export class CrabPath {
     }
   }
 
-  sample(root: Group, progress: number, seconds: number, retreat = false): void {
+  sample(root: Group, progress: number, seconds: number, retreat = false, immediate = false): void {
     const walk = retreat
-      ? clamp((progress - this.retreatDelay) / this.retreatDuration)
+      ? clamp((progress - (immediate ? 0 : this.retreatDelay)) / this.retreatDuration)
       : clamp((progress - this.delay) / this.duration);
     const dashes = retreat ? this.retreatDashes : this.dashes;
     const travel = clamp(retreat ? 1 - dash(walk, dashes) : dash(walk, dashes));

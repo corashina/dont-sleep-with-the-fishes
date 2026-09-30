@@ -22,6 +22,15 @@ function use(session: SurvivalSession, type: ItemId) {
 
 // Importance: 98/100. Resource gates must charge exactly once and protect the run state.
 describe('new night event choices', () => {
+  // Importance: 95/100. A removed choice must not resolve or change the run through direct item use.
+  it('rejects the compass during the whirlpool event', () => {
+    const session = game('whirlpool', ['compass']);
+    const before = session.snapshot();
+    expect(survivalEventById('whirlpool')!.choices.some(({ id }) => id === 'compass')).toBe(false);
+    expect(use(session, 'compass').accepted).toBe(false);
+    expect(session.snapshot()).toEqual(before);
+  });
+
   it.each([0, 0.99])('spends one Food without a can and diverts sharks without damage, roll %s', (roll) => {
     const session = game('swarm-of-sharks', [], 1, 0, roll);
     const event = survivalEventById('swarm-of-sharks')!;
@@ -61,13 +70,14 @@ describe('new night event choices', () => {
     expect(session.snapshot()).toEqual(before);
   });
 
-  it('keeps the Radio and charges one Energy at dawn', () => {
+  it('keeps the Radio and adds pressure without changing dawn energy', () => {
     const session = game('eerie-melody', ['radio']);
+    const pressure = session.snapshot().pressure;
     expect(use(session, 'radio').accepted).toBe(true);
-    expect(session.snapshot()).toMatchObject({ health: 100, hull: 100 });
+    expect(session.snapshot()).toMatchObject({ health: 100, hull: 100, pressure: pressure + 1 });
     expect(session.snapshot().inventory['radio-1']?.condition).toBe('usable');
     session.beginDawn();
-    expect(session.snapshot().energy).toBe(2);
+    expect(session.snapshot().energy).toBe(3);
   });
 
   it('spends the Flare Gun to repel Death Stare without damage', () => {

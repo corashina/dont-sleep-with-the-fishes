@@ -16,7 +16,7 @@ const situations: Record<string, readonly [string, string, string]> = {
   'death-stare': ['Something huge rose from the water and stared straight at me.', 'Coś ogromnego wynurzyło się z wody i spojrzało prosto na mnie.', "Algo enorme salió del agua y me miró fijo."],
   'swarm-of-sharks': ['Shark fins were closing around the boat.', 'Rekinie płetwy zaciskały krąg wokół łodzi.', "Las aletas de tiburón cerraban el círculo alrededor del bote."],
   tornado: ['A dark funnel was churning up the sea.', 'Ciemny lej mielił morze.', "Un embudo oscuro revolvía el mar."],
-  whirlpool: ['The sea was sinking into a spinning funnel, and we were on its rim.', 'Morze zapadało się w wirujący lej, a my byliśmy na jego krawędzi.', 'El mar se hundía en un embudo que giraba, y estábamos en su borde.'],
+  whirlpool: ['I saw a whirlpool off the right side, beyond a stretch of open water.', 'Po prawej zobaczyłem wir, za pasem otwartej wody.', 'Vi un remolino a la derecha, del otro lado de una franja de agua abierta.'],
   'shower-night': ['Rain found every exposed corner of the boat.', 'Deszcz docierał w każdy odsłonięty kąt łodzi.', "La lluvia llegaba a cada rincón descubierto del bote."],
   'windy-night': ['The wind was pulling at everything I had left loose.', 'Wiatr szarpał wszystkim, czego nie przywiązałem.', "El viento tiraba de todo lo que había dejado suelto."],
   'bad-sleep': ['There was something wrong with the dark around us. I could not settle.', 'Coś było nie tak z ciemnością wokół nas. Nie mogłem się uspokoić.', "Había algo raro en la oscuridad alrededor. No podía tranquilizarme."],
@@ -47,7 +47,7 @@ const situations: Record<string, readonly [string, string, string]> = {
 // Shared outcomes need the attempted action as well as the result.
 const needsAction = new Set<EventTextId>([
   'eventText112', 'eventText116', 'eventText121', 'eventText122', 'eventText123', 'eventText134',
-  'eventText142', 'eventText152', 'eventText165', 'eventText171', 'eventText180', 'eventText181', 'eventText184',
+  'eventText142', 'nightUnease', 'eventText165', 'eventText171', 'nightTerror', 'eventText181',
 ]);
 const attempts: Record<string, readonly [string, string, string]> = {
   'face-on-the-moon.bucket': ['I put the bucket over my head to hide the moon and tried to sleep.', 'Założyłem wiadro na głowę, żeby zasłonić księżyc, i próbowałem zasnąć.', 'Me puse el balde en la cabeza para tapar la luna e intenté dormir.'],
@@ -65,7 +65,6 @@ const attempts: Record<string, readonly [string, string, string]> = {
   'tornado.anchor': ['I dropped the anchor, but it could not hold against the current.', 'Rzuciłem kotwicę, ale nie wytrzymała naporu nurtu.', "Solté el ancla, pero no aguantó la corriente."],
   'tornado.swimRing': ['I tried to use the swim ring to pull us clear. It could not take the strain.', 'Próbowałem kołem ratunkowym wyciągnąć nas z nurtu. Nie wytrzymało naporu.', "Intenté sacarnos de la corriente con el salvavidas. No aguantó la presión."],
   'whirlpool.anchor': ['I dropped the anchor to slow the pull. The chain could not take it.', 'Rzuciłem kotwicę, żeby spowolnić wir. Łańcuch nie wytrzymał.', 'Solté el ancla para frenar el remolino. La cadena no aguantó.'],
-  'whirlpool.compass': ['I tried to steer out along the rim with the compass.', 'Próbowałem kompasem wyprowadzić łódź wzdłuż krawędzi wiru.', 'Intenté salir por el borde del remolino con la brújula.'],
   'whirlpool.swimRing': ['I tied off the swim ring as a drag. The whirlpool tore it away.', 'Przywiązałem koło ratunkowe jako hamulec. Wir je wyrwał.', 'Até el salvavidas para frenar. El remolino lo arrancó.'],
   'thunderstorm.anchor': ['I dropped the anchor and held on through the thunder.', 'Rzuciłem kotwicę i trzymałem się mocno wśród grzmotów.', "Solté el ancla y me sujeté fuerte entre los truenos."],
   'thunderstorm.bucket': ['I covered my head with the bucket and braced for the storm.', 'Osłoniłem głowę wiadrem i przygotowałem się na burzę.', "Me cubrí la cabeza con el balde y me preparé para la tormenta."],

@@ -12,6 +12,7 @@ const text = defineMessages({
   bitten: { en: 'Boat bitten', pl: 'Łódź ugryziona', 'es-AR': 'Bote mordido' },
   clawed: { en: 'Clawed', pl: 'Podrapany', 'es-AR': 'Arañado' },
   destroyed: { en: 'Destroyed', pl: 'Zniszczony', 'es-AR': 'Destruido' },
+  hurt: { en: 'Hurt', pl: 'Obrażenia', 'es-AR': 'Herido' },
   hull: { en: 'Hull damaged', pl: 'Kadłub uszkodzony', 'es-AR': 'Casco dañado' },
   heavyDamage: { en: 'Heavy damage', pl: 'Poważne uszkodzenia', 'es-AR': 'Daño grave' },
   anchorBroken: { en: 'Anchor broken', pl: 'Kotwica złamana', 'es-AR': 'Ancla rota' },
@@ -37,10 +38,6 @@ const text = defineMessages({
   rainControlled: { en: 'Rain controlled', pl: 'Deszcz opanowany', 'es-AR': 'Lluvia controlada' },
   sheltered: { en: 'Sheltered', pl: 'Pod osłoną', 'es-AR': 'A resguardo' },
   rainEased: { en: 'Rain eased', pl: 'Deszcz słabnie', 'es-AR': 'Lluvia leve' },
-  energyOne: { en: 'Dawn Energy: 1', pl: 'Energia rano: 1', 'es-AR': 'Energía matinal: 1' },
-  energyTwo: { en: 'Dawn Energy: 2', pl: 'Energia rano: 2', 'es-AR': 'Energía matinal: 2' },
-  tired: { en: 'Tired', pl: 'Zmęczenie', 'es-AR': 'Cansancio' },
-  exhausted: { en: 'Exhausted', pl: 'Wyczerpanie', 'es-AR': 'Agotamiento' },
   pressureUp: { en: 'Pressure rises', pl: 'Napięcie rośnie', 'es-AR': 'Sube la tensión' },
   pressureDown: { en: 'Pressure falls', pl: 'Napięcie spada', 'es-AR': 'Baja la tensión' },
   melodyBlocked: { en: 'Melody blocked', pl: 'Melodia zagłuszona', 'es-AR': 'Melodía bloqueada' },
@@ -80,7 +77,7 @@ const resultLabels: Readonly<Record<string, Parameters<typeof text>[0]>> = {
   'crab-swarm.sleep.0': 'stolen',
   'dangerous-waters.anchor.0': 'safe',
   'dangerous-waters.anchor.1': 'anchorBroken',
-  'dangerous-waters.spyglass.0': 'tired',
+  'dangerous-waters.spyglass.0': 'pressureUp',
   'dangerous-waters.spyglass.1': 'hull',
   'dangerous-waters.map.0': 'safe',
   'dangerous-waters.map.1': 'hull',
@@ -137,25 +134,32 @@ const resultLabels: Readonly<Record<string, Parameters<typeof text>[0]>> = {
   'tornado.swimRing.1': 'hull',
   'tornado.sleep.0': 'hull',
   'tornado.sleep.1': 'heavyDamage',
+  'whirlpool.anchor.0': 'safe',
+  'whirlpool.anchor.1': 'anchorBroken',
+  'whirlpool.map.0': 'hull',
+  'whirlpool.swimRing.0': 'safe',
+  'whirlpool.swimRing.1': 'hull',
+  'whirlpool.sleep.0': 'itemLost',
+  'whirlpool.sleep.1': 'hull',
   'shower-night.bucket.0': 'rainControlled',
   'shower-night.bucket.1': 'bucketBroken',
   'shower-night.umbrella.0': 'sheltered',
   'shower-night.umbrella.1': 'umbrellaBroken',
   'shower-night.map.0': 'mapTorn',
   'shower-night.sleep.0': 'rainEased',
-  'shower-night.sleep.1': 'energyTwo',
+  'shower-night.sleep.1': 'hurt',
   'windy-night.ductTape.0': 'protected',
   'windy-night.map.0': 'mapLost',
   'windy-night.umbrella.0': 'umbrellaLost',
   'windy-night.sleep.0': 'itemsBroken',
-  'windy-night.sleep.1': 'exhausted',
+  'windy-night.sleep.1': 'hull',
   'bad-sleep.bucket.0': 'safe',
   'bad-sleep.swimRing.0': 'safe',
   'bad-sleep.umbrella.0': 'sheltered',
   'bad-sleep.umbrella.1': 'umbrellaBroken',
-  'bad-sleep.sleep.0': 'energyTwo',
+  'bad-sleep.sleep.0': 'pressureUp',
   'thunderstorm.anchor.0': 'safe',
-  'thunderstorm.anchor.1': 'energyTwo',
+  'thunderstorm.anchor.1': 'hull',
   'thunderstorm.bucket.0': 'bucketBroken',
   'thunderstorm.bucket.1': 'hull',
   'thunderstorm.bucket.2': 'itemLost',
@@ -173,7 +177,7 @@ const resultLabels: Readonly<Record<string, Parameters<typeof text>[0]>> = {
   'restless-waves.sleep.1': 'itemLost',
   'blood-ocean-salvaged': 'foodOne',
   'blood-ocean-searched': 'heartPiece',
-  'blood-ocean-waited': 'tired',
+  'blood-ocean-waited': 'pressureUp',
   'monster-in-the-fog.compass.0': 'pressureDown',
   'monster-in-the-fog.spyglass.0': 'pressureUp',
   'monster-in-the-fog.flashlight.0': 'repelled',
@@ -182,24 +186,24 @@ const resultLabels: Readonly<Record<string, Parameters<typeof text>[0]>> = {
   'monster-in-the-fog.sleep.1': 'bitten',
   'ghosts.flareGun.0': 'repelled',
   'ghosts.flashlight.0': 'repelled',
-  'ghosts.flashlight.1': 'energyOne',
+  'ghosts.flashlight.1': 'pressureUp',
   'ghosts.baitTin.0': 'attacked',
-  'ghosts.sleep.0': 'energyTwo',
-  'ghosts.sleep.1': 'energyOne',
+  'ghosts.sleep.0': 'pressureUp',
+  'ghosts.sleep.1': 'pressureUp',
   'eerie-melody.radio.0': 'melodyBlocked',
   'eerie-melody.bucket.0': 'bucketBroken',
   'eerie-melody.spyglass.0': 'attacked',
   'eerie-melody.umbrella.0': 'melodyBlocked',
   'eerie-melody.umbrella.1': 'umbrellaBroken',
   'eerie-melody.ductTape.0': 'melodyBlocked',
-  'eerie-melody.sleep.0': 'exhausted',
+  'eerie-melody.sleep.0': 'pressureUp',
   'eerie-melody.sleep.1': 'attacked',
-  'face-on-the-moon.bucket.0': 'energyTwo',
-  'face-on-the-moon.umbrella.0': 'energyTwo',
+  'face-on-the-moon.bucket.0': 'pressureUp',
+  'face-on-the-moon.umbrella.0': 'pressureUp',
   'face-on-the-moon.spyglass.0': 'binocularsBroken',
   'face-on-the-moon.spyglass.1': 'pressureUp',
-  'face-on-the-moon.sleep.0': 'energyOne',
-  'face-on-the-moon.sleep.1': 'energyTwo',
+  'face-on-the-moon.sleep.0': 'pressureUp',
+  'face-on-the-moon.sleep.1': 'pressureUp',
   'shadow-figure.flashlight.0': 'pressureUp',
   'shadow-figure.flashlight.1': 'clawed',
   'shadow-figure.knife.0': 'destroyed',
@@ -251,7 +255,7 @@ const resultLabels: Readonly<Record<string, Parameters<typeof text>[0]>> = {
   'lighthouse-shotgun': 'signaled',
   'lighthouse-sleep': 'passed',
   'under-us-diverted': 'diverted',
-  'under-us-waited': 'tired',
+  'under-us-waited': 'pressureUp',
   'starry-night-gift': 'gift',
   'starry-night-sleep': 'ignored',
   'heart-returned': 'heartReturned',
@@ -266,7 +270,6 @@ const effectText = defineMessages({
   bait: { en: 'bait', pl: 'przynęta', 'es-AR': 'carnada' },
   pressure: { en: 'pressure', pl: 'napięcie', 'es-AR': 'tensión' },
   rescueLead: { en: 'rescue', pl: 'ratunek', 'es-AR': 'rescate' },
-  dawnEnergy: { en: 'dawn energy', pl: 'energia rano', 'es-AR': 'energía matinal' },
 });
 
 export function reactionResultLabel(outcome: WeightedEventOutcome): string {
@@ -278,31 +281,27 @@ export function reactionResultLabel(outcome: WeightedEventOutcome): string {
     const sign = operation === 'add' ? '+' : operation === 'subtract' ? '−' : '=';
     return `${sign}${amount} ${effectText(resource)}`;
   });
-  if (effects.nextDawnEnergy !== undefined) {
-    details.push(`${effectText('dawnEnergy')}=${effects.nextDawnEnergy}`);
-  }
-  if (effects.nextDawnEnergyReduction !== undefined) {
-    details.push(`−${effects.nextDawnEnergyReduction} ${effectText('dawnEnergy')}`);
-  }
-  if (effects.maximumNextDawnEnergy !== undefined) {
-    details.push(`${effectText('dawnEnergy')}≤${effects.maximumNextDawnEnergy}`);
-  }
   if (details.length === 0) return text(key);
   const summary = details.join(', ');
   // These labels already name the resource effect. Show its current values once.
-  if (['foodOne', 'foodTwo', 'foodThree', 'energyOne', 'energyTwo', 'pressureUp', 'pressureDown'].includes(key)) {
+  if (['foodOne', 'foodTwo', 'foodThree', 'pressureUp', 'pressureDown'].includes(key)) {
     return summary;
   }
   return `${text(key)} (${summary})`;
 }
 
+function reactionItemLabel(itemId: Parameters<typeof itemLabel>[0]): string {
+  const label = itemLabel(itemId);
+  return label.charAt(0) + label.slice(1).toLowerCase();
+}
+
 export function reactionChoiceLabel(eventId: string, choice: EventChoiceDefinition): string {
-  if (choice.itemId !== undefined) return itemLabel(choice.itemId);
-  if (choice.companionAction !== undefined) return itemLabel('carlitos');
+  if (choice.itemId !== undefined) return reactionItemLabel(choice.itemId);
+  if (choice.companionAction !== undefined) return reactionItemLabel('carlitos');
   if (eventId === 'starry-night' && choice.id !== 'sleep') {
     const item = ITEM_IDS.find(id => id === choice.id);
     if (item === undefined) throw new Error(`Unknown gift: ${choice.id}`);
-    return itemLabel(item);
+    return reactionItemLabel(item);
   }
   if (eventId === 'something-under-us' && choice.id === 'sleep') return text('stayStill');
   if (choice.id === 'return-heart') return text('returnHeart');

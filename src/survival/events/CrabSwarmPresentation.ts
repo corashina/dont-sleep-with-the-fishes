@@ -7,6 +7,10 @@ import type {
   DedicatedEventEnvironment, DedicatedEventPresentation, EventOutcomePresentation, EventSceneContext,
 } from '../eventPresentationTypes';
 import { ItemAimTarget } from '../ItemAimTarget';
+import {
+  BUCKET_SCOOP_CONTACT_PROGRESS, eventItemActionCueProgresses,
+  eventItemUseDurationForItem, resolveEventItemUseContext,
+} from '../eventItemUseChoreography';
 import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import { mulberry32 } from '../random';
 import { CrabPath } from './crabSwarmChoreography';
@@ -51,10 +55,20 @@ export class CrabSwarmPresentation implements DedicatedEventPresentation {
   readonly boatRoot = new Group();
   readonly itemAimTarget: ItemAimTarget;
   private readonly crabs: Crab[] = [];
-  private readonly animation = new TimedPresentationAnimation<'reveal' | 'reaction'>(
-    (kind, _time, progress) => kind === 'reveal' ? this.climb(progress) : this.retreat(progress),
+  private readonly animation = new TimedPresentationAnimation<'reveal' | 'defense' | 'reaction'>(
+    (kind, _time, progress) => {
+      if (kind === 'reveal') this.climb(progress);
+      else if (kind === 'defense') {
+        const elapsed = progress * (this.defenseContactSeconds + CRAB_RETREAT_SECONDS);
+        if (elapsed >= this.defenseContactSeconds) {
+          this.retreat(clamp((elapsed - this.defenseContactSeconds) / CRAB_RETREAT_SECONDS), true);
+        }
+      } else this.retreat(progress);
+    },
     kind => { if (kind === 'reaction') this.stolenActor?.releaseOnNextSync(); },
   );
+  private defenseContactSeconds = 0;
+  private defenseRetreat: Promise<void> | null = null;
   private stolenActor: BorrowedSupplyActor | null = null;
   private readonly itemStart = new Vector3();
   private readonly itemLocalStart = new Vector3();
@@ -112,13 +126,22 @@ export class CrabSwarmPresentation implements DedicatedEventPresentation {
     return this.animation.start('reveal', CRAB_REVEAL_SECONDS);
   }
 
-  playItemUse(_choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
-    // The shared item controller moves the tool. Crabs hold their reveal pose.
+  playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
+    if (!this.staged || this.disposed
+      || (choiceId !== 'shotgun' && choiceId !== 'knife' && choiceId !== 'fishingNet' && choiceId !== 'bucket')) {
+      return Promise.resolve(false);
+    }
+    const context = resolveEventItemUseContext(this.eventId, choiceId, choiceId)!;
+    const contact = choiceId === 'bucket' ? BUCKET_SCOOP_CONTACT_PROGRESS : eventItemActionCueProgresses(context)[0]!;
+    this.defenseContactSeconds = eventItemUseDurationForItem(context, choiceId) * contact;
+    this.defenseRetreat = this.animation.start('defense', this.defenseContactSeconds + CRAB_RETREAT_SECONDS);
+    // The shared controller owns the tool while the swarm retreats in parallel.
     return Promise.resolve(false);
   }
 
   react(result: EventOutcomePresentation): Promise<void> {
     if (!this.staged || this.disposed) return Promise.resolve();
+    if (this.defenseRetreat !== null) return this.defenseRetreat;
     this.animation.cancel();
     this.releaseActor();
     const stolenId = result.lostInstanceIds[0];
@@ -147,6 +170,7 @@ export class CrabSwarmPresentation implements DedicatedEventPresentation {
     this.animation.cancel();
     this.releaseActor();
     this.staged = false;
+    this.defenseRetreat = null;
     this.boatRoot.visible = false;
   }
 
@@ -170,13 +194,13 @@ export class CrabSwarmPresentation implements DedicatedEventPresentation {
     for (const crab of this.crabs) crab.path.sample(crab.root, progress, progress * CRAB_REVEAL_SECONDS);
   }
 
-  private retreat(progress: number): void {
+  private retreat(progress: number, immediate = false): void {
     const actor = this.stolenActor;
     // The thief stays on the timber too, instead of flying with the stolen item.
     const thief = this.crabs[this.itemStart.x < 0 ? 0 : 1]!;
     for (const crab of this.crabs) {
       const retreat = actor !== null && crab === thief ? clamp((progress - 0.3) / 0.7) : progress;
-      crab.path.sample(crab.root, retreat, progress * CRAB_RETREAT_SECONDS, true);
+      crab.path.sample(crab.root, retreat, progress * CRAB_RETREAT_SECONDS, true, immediate);
     }
     if (actor === null) return;
     const approach = ease(progress / 0.3);
