@@ -9,7 +9,7 @@ import {
 } from 'three';
 import type { MenuSceneComponent } from './MenuSceneComponent';
 
-export const MENU_SURFACE_HEIGHT = 22;
+export const MENU_SURFACE_HEIGHT = 32;
 
 const SURFACE_VERTEX_SHADER = `
   varying vec3 vWorldPosition;
