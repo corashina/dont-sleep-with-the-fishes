@@ -7,34 +7,26 @@ import {
   PlaneGeometry,
   ShaderMaterial,
 } from 'three';
-import { disposeResourceSets } from '../world/SceneResources';
 
-const LIGHT_SHAFT_VERTEX_SHADER = `
+const GOD_RAY_VERTEX_SHADER = `
   uniform float uTime;
-  uniform float uPhase;
   uniform float uTaper;
-  uniform float uDrift;
   varying vec2 vUv;
 
   void main() {
     vUv = uv;
     vec3 transformed = position;
-    float top = smoothstep(0.0, 1.0, uv.y);
-    transformed.x *= mix(1.0, uTaper, top);
-    float bend = sin(uTime * uDrift + uPhase + uv.y * 2.4) * 0.018;
-    bend += sin(uTime * uDrift * 0.47 - uPhase * 0.8 + uv.y * 5.2) * 0.006;
-    transformed.x += bend * (1.0 - top * 0.55);
+    transformed.x *= mix(1.0, uTaper, uv.y);
+    transformed.x += sin(uTime * 0.11 + uv.y * 2.2) * 0.012 * (1.0 - uv.y);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
   }
 `;
 
-const LIGHT_SHAFT_FRAGMENT_SHADER = `
+// A soft beam with slow streaks. It fades out before the seabed and the surface.
+const GOD_RAY_FRAGMENT_SHADER = `
   uniform vec3 uColor;
   uniform float uOpacity;
-  uniform float uPhase;
   uniform float uTime;
-  uniform float uDensity;
-  uniform float uDrift;
   varying vec2 vUv;
 
   float hash21(vec2 point) {
@@ -53,104 +45,65 @@ const LIGHT_SHAFT_FRAGMENT_SHADER = `
   }
 
   void main() {
-    float slowTime = uTime * uDrift;
-    float broadFlow = valueNoise(vec2(vUv.y * 2.8 + uPhase, slowTime * 0.035));
-    float fineFlow = valueNoise(vec2(vUv.y * 7.5 - slowTime * 0.02, uPhase * 2.3));
-    float warpedX = vUv.x + (broadFlow - 0.5) * 0.045 + (fineFlow - 0.5) * 0.015;
-
-    float edgeNoise = valueNoise(vec2(vUv.y * 4.3 + uPhase, slowTime * 0.025));
-    float edgeWidth = mix(0.36, 0.49, edgeNoise);
-    float horizontal = 1.0 - smoothstep(
-      edgeWidth - 0.2,
-      edgeWidth,
-      abs(warpedX - 0.5)
-    );
-
-    float primaryCell = abs(fract(warpedX * uDensity + uPhase * 0.17) - 0.5) * 2.0;
-    float secondaryCell = abs(
-      fract((warpedX + 0.13) * (uDensity * 0.63) - uPhase * 0.11) - 0.5
-    ) * 2.0;
-    float primary = 1.0 - smoothstep(0.08, 0.72, primaryCell);
-    float secondary = 1.0 - smoothstep(0.12, 0.86, secondaryCell);
-    float strands = clamp(primary * 0.68 + secondary * 0.36, 0.0, 1.0);
-
-    float breakupNoise = valueNoise(vec2(
-      warpedX * 9.0 + uPhase,
-      vUv.y * 5.0 - slowTime * 0.028
-    ));
-    float breakup = mix(0.66, 1.0, smoothstep(0.16, 0.86, breakupNoise));
-    float vertical = smoothstep(0.0, 0.22, vUv.y)
-      * (1.0 - smoothstep(0.86, 1.0, vUv.y));
-    float shimmer = 0.96 + 0.04 * sin(slowTime * 0.09 + uPhase + vUv.y * 4.0);
-    float alpha = horizontal * vertical * breakup
-      * mix(0.34, 1.0, strands) * shimmer * uOpacity;
-    vec3 depthColor = mix(uColor * 0.58, uColor * 1.08, smoothstep(0.08, 0.92, vUv.y));
-    gl_FragColor = vec4(depthColor, alpha);
+    float across = (vUv.x - 0.5) * 2.0;
+    float beam = pow(1.0 - smoothstep(0.0, 1.0, abs(across)), 1.7);
+    float streaks = valueNoise(vec2(vUv.x * 9.0 + uTime * 0.04, vUv.y * 0.6 - uTime * 0.02));
+    streaks += valueNoise(vec2(vUv.x * 23.0 - uTime * 0.07, vUv.y * 1.3)) * 0.5;
+    float breakup = mix(0.45, 1.15, streaks / 1.5);
+    float vertical = smoothstep(0.1, 0.24, vUv.y) * (1.0 - smoothstep(0.84, 1.0, vUv.y));
+    float strength = mix(0.8, 1.0, vUv.y);
+    float alpha = beam * breakup * vertical * strength * uOpacity;
+    gl_FragColor = vec4(uColor * alpha, 1.0);
   }
 `;
 
-const LIGHT_SHAFT_SPECS = [
-  { position: [-8.5, 7.25, -4.5], width: 5.4, length: 30.5, roll: -0.12, opacity: 0.11, phase: 0.2, taper: 0.34, density: 3.2, drift: 0.074 },
-  { position: [5.8, 6.5, -10.5], width: 6.8, length: 32, roll: 0.09, opacity: 0.095, phase: 1.6, taper: 0.41, density: 2.7, drift: 0.061 },
-  { position: [-4.2, 3.5, -18.5], width: 8.2, length: 38, roll: -0.06, opacity: 0.12, phase: 3.1, taper: 0.29, density: 3.6, drift: 0.052 },
-  { position: [10.5, -1.5, -28], width: 10, length: 48, roll: 0.1, opacity: 0.08, phase: 4.7, taper: 0.38, density: 3.0, drift: 0.046 },
-] as const;
+// One broad ray falls from the sun glow across the wreck.
+const GOD_RAY = {
+  position: [4, 9.5, -14], width: 30, length: 27, roll: -0.26, taper: 0.4, opacity: 1.15,
+} as const;
 
 export class UnderwaterLightShafts {
   readonly root = new Group();
 
-  private readonly geometry = new PlaneGeometry(1, 1, 1, 12);
-  private readonly materials = new Set<ShaderMaterial>();
+  private readonly mesh: Mesh<PlaneGeometry, ShaderMaterial>;
   private disposed = false;
 
   constructor() {
     this.root.name = 'menu:light-shafts';
-    LIGHT_SHAFT_SPECS.forEach((spec, index) => {
-      const material = new ShaderMaterial({
-        uniforms: {
-          uTime: { value: 0 },
-          uPhase: { value: spec.phase },
-          uColor: { value: new Color(0x8fd6d8) },
-          uOpacity: { value: spec.opacity },
-          uTaper: { value: spec.taper },
-          uDensity: { value: spec.density },
-          uDrift: { value: spec.drift },
-        },
-        vertexShader: LIGHT_SHAFT_VERTEX_SHADER,
-        fragmentShader: LIGHT_SHAFT_FRAGMENT_SHADER,
-        blending: AdditiveBlending,
-        transparent: true,
-        depthWrite: false,
-        side: DoubleSide,
-        toneMapped: false,
-      });
-      this.materials.add(material);
-      const mesh = new Mesh(this.geometry, material);
-      mesh.name = `menu:light-shaft-${index + 1}`;
-      mesh.position.set(
-        spec.position[0],
-        spec.position[1],
-        spec.position[2],
-      );
-      mesh.scale.set(spec.width, spec.length, 1);
-      mesh.rotation.z = spec.roll;
-      mesh.renderOrder = 2;
-      this.root.add(mesh);
+    const material = new ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: new Color(0x9fdcda) },
+        uOpacity: { value: GOD_RAY.opacity },
+        uTaper: { value: GOD_RAY.taper },
+      },
+      vertexShader: GOD_RAY_VERTEX_SHADER,
+      fragmentShader: GOD_RAY_FRAGMENT_SHADER,
+      blending: AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      side: DoubleSide,
+      toneMapped: false,
     });
+    this.mesh = new Mesh(new PlaneGeometry(1, 1, 1, 12), material);
+    this.mesh.name = 'menu:god-ray';
+    this.mesh.position.set(...GOD_RAY.position);
+    this.mesh.scale.set(GOD_RAY.width, GOD_RAY.length, 1);
+    this.mesh.rotation.z = GOD_RAY.roll;
+    this.mesh.renderOrder = 2;
+    this.root.add(this.mesh);
   }
 
   setTime(time: number): void {
     if (this.disposed) return;
-    const safeTime = Number.isFinite(time) ? time : 0;
-    for (const material of this.materials) {
-      material.uniforms.uTime!.value = safeTime;
-    }
+    this.mesh.material.uniforms.uTime!.value = Number.isFinite(time) ? time : 0;
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.root.removeFromParent();
-    disposeResourceSets(new Set([this.geometry]), this.materials);
+    this.mesh.geometry.dispose();
+    this.mesh.material.dispose();
   }
 }
