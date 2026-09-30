@@ -4,9 +4,10 @@ import { createWreckMaterials } from './WreckMaterials';
 import { WreckGeometry } from './WreckGeometry';
 import { buildWreckHull } from './WreckHull';
 import { buildWreckSuperstructure } from './WreckSuperstructure';
+import { buildWreckGrowth } from './WreckGrowth';
 
 export const DOROTHY_WRECK_POSITION = [1.6, 1.8, -19.5] as const;
-export const DOROTHY_WRECK_ROTATION = [0.06, -1.42, -0.16] as const;
+export const DOROTHY_WRECK_ROTATION = [0.06, -1.42, -0.24] as const;
 export const DOROTHY_WRECK_SCALE = 2;
 
 export class SunkenDorothyWreck implements MenuSceneComponent {
@@ -22,6 +23,7 @@ export class SunkenDorothyWreck implements MenuSceneComponent {
     const geometry = new WreckGeometry();
     buildWreckHull(geometry, this.materials);
     buildWreckSuperstructure(geometry, this.materials);
+    buildWreckGrowth(geometry, this.materials);
     geometry.finish(this.root);
   }
 

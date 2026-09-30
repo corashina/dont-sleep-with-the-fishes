@@ -180,6 +180,7 @@ export class MainMenuPhase implements GamePhase {
     this.elapsed += delta;
     this.visualState.elapsedSeconds = this.elapsed;
     this.animator.update(this.elapsed, delta);
+    this.world.update(this.elapsed, delta);
 
     if (!this.transitioning || this.completed) return;
     this.fadeElapsed = Math.min(
@@ -292,6 +293,13 @@ export class MainMenuPhase implements GamePhase {
   }
 
   private readonly handleMenuPointerMove = (event: PointerEvent): void => {
+    const bounds = this.context.renderer.domElement.getBoundingClientRect();
+    if (bounds.width > 0 && bounds.height > 0) {
+      this.world.setCameraPointer(
+        ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
+        -((event.clientY - bounds.top) / bounds.height) * 2 + 1,
+      );
+    }
     this.pointerAction = this.menuSignAction(event);
     this.context.renderer.domElement.style.cursor = this.pointerAction
       ? 'pointer'
@@ -300,6 +308,7 @@ export class MainMenuPhase implements GamePhase {
   };
 
   private readonly handleMenuPointerLeave = (): void => {
+    this.world.setCameraPointer(0, 0);
     this.pointerAction = null;
     this.context.renderer.domElement.style.cursor = '';
     this.syncSignHighlights();

@@ -14,7 +14,7 @@ $backupRoot = Join-Path $modelsRoot ".menu-backup-$swapId"
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) "dont-sleep-menu-models-$swapId"
 $modelIds = @(
   'boat', 'rockA', 'rockB', 'rockC', 'coral', 'starfish',
-  'fishBone', 'skull', 'largeBone', 'shark'
+  'fishBone', 'skull', 'largeBone'
 )
 $expectedFiles = @($modelIds | ForEach-Object { "$_.glb" }) +
   @('menu-model-metadata.json')

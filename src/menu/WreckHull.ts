@@ -29,7 +29,7 @@ export function wreckSection(z: number): { width: number; deck: number; keel: nu
   throw new Error('Invalid wreck station');
 }
 
-function skin(side: number, z: number, depth: number, offset = 0): WreckPoint {
+export function wreckSkin(side: number, z: number, depth: number, offset = 0): WreckPoint {
   const { width, deck, keel } = wreckSection(z);
   const taper = depth < 0.53 ? 1 - depth * 0.2 : 0.894 - (depth - 0.53) * 1.37;
   return [side * (width * taper + offset), deck + (keel - deck) * depth, z];
@@ -47,19 +47,19 @@ function buildPlating(g: WreckGeometry, m: WreckMaterials): void {
         const bottom = STRAKES[row + 1]!;
         const tint = PLATE_TINTS[(column * 3 + row * 2) % PLATE_TINTS.length]!;
         g.panel([
-          skin(side, z0 + 0.009, top + 0.004), skin(side, z1 - 0.009, top + 0.004),
-          skin(side, z1 - 0.009, bottom - 0.004), skin(side, z0 + 0.009, bottom - 0.004),
+          wreckSkin(side, z0 + 0.009, top + 0.004), wreckSkin(side, z1 - 0.009, top + 0.004),
+          wreckSkin(side, z1 - 0.009, bottom - 0.004), wreckSkin(side, z0 + 0.009, bottom - 0.004),
         ], row === 3 ? m.rust : m.hull, tint);
         buildPlateSeam(g, m, side, column, row);
       }
       // Longitudinal keel closes the bottom of the shell.
       if (side === 1) g.panel([
-        skin(-1, z0, 1), skin(-1, z1, 1), skin(1, z1, 1), skin(1, z0, 1),
+        wreckSkin(-1, z0, 1), wreckSkin(-1, z1, 1), wreckSkin(1, z1, 1), wreckSkin(1, z0, 1),
       ], m.dark);
     }
   }
   for (const z of [-9, 9]) {
-    g.panel([skin(-1, z, 0), skin(1, z, 0), skin(1, z, 1), skin(-1, z, 1)], m.hull);
+    g.panel([wreckSkin(-1, z, 0), wreckSkin(1, z, 0), wreckSkin(1, z, 1), wreckSkin(-1, z, 1)], m.hull);
   }
 }
 
@@ -67,17 +67,17 @@ function buildPlateSeam(g: WreckGeometry, m: WreckMaterials, side: number, colum
   const z = -9 + column * 0.75;
   const top = STRAKES[row]!;
   const bottom = STRAKES[row + 1]!;
-  g.beam(skin(side, z, top, 0.014), skin(side, z + 0.75, top, 0.014), 0.026, m.rust);
+  g.beam(wreckSkin(side, z, top, 0.014), wreckSkin(side, z + 0.75, top, 0.014), 0.026, m.rust);
   // Runoff follows selected joints, with different lengths and widths.
   if ((column * 7 + row * 3) % 5 < 2) {
     const streakDepth = Math.min(bottom, top + 0.09 + (column % 4) * 0.04);
-    g.panel([skin(side, z + 0.025, top, 0.022),
-      skin(side, z + 0.07 + (column % 3) * 0.025, top, 0.022),
-      skin(side, z + 0.045, streakDepth, 0.022)], m.rust, 0xb9ad92);
+    g.panel([wreckSkin(side, z + 0.025, top, 0.022),
+      wreckSkin(side, z + 0.07 + (column % 3) * 0.025, top, 0.022),
+      wreckSkin(side, z + 0.045, streakDepth, 0.022)], m.rust, 0xb9ad92);
   }
   if (row < 2 && column % 2 === 0) {
     for (const depth of [top + 0.045, bottom - 0.04]) {
-      g.box([0.04, 0.045, 0.045], skin(side, z + 0.06, depth, 0.03), m.iron);
+      g.box([0.04, 0.045, 0.045], wreckSkin(side, z + 0.06, depth, 0.03), m.iron);
     }
   }
 }
@@ -86,8 +86,8 @@ function buildFrames(g: WreckGeometry, m: WreckMaterials): void {
   for (let z = -7.5; z <= 7.5; z += 0.75) {
     for (const side of [-1, 1]) {
       for (let row = 0; row < STRAKES.length - 1; row += 1) {
-        g.beam(skin(side, z, STRAKES[row]!, -0.1),
-          skin(side, z, STRAKES[row + 1]!, -0.1), 0.09, m.iron, 0.12);
+        g.beam(wreckSkin(side, z, STRAKES[row]!, -0.1),
+          wreckSkin(side, z, STRAKES[row + 1]!, -0.1), 0.09, m.iron, 0.12);
       }
     }
   }
@@ -100,14 +100,14 @@ function buildFrames(g: WreckGeometry, m: WreckMaterials): void {
   // Jagged edges curl out from the missing plating and reveal its thickness.
   for (let i = 0; i < 4; i += 1) {
     const z = -2.25 + i * 0.75;
-    const a = skin(1, z, 0.53, 0.035);
-    const b = skin(1, z + 0.73, 0.53, 0.035);
+    const a = wreckSkin(1, z, 0.53, 0.035);
+    const b = wreckSkin(1, z + 0.73, 0.53, 0.035);
     g.panel([a, b, [b[0] + 0.24, b[1] + 0.22, z + 0.55],
       [a[0] + 0.36, a[1] + 0.39, z + 0.19]], m.rust);
   }
   for (const [z, direction] of [[-2.25, 1], [0.75, -1]] as const) {
-    const a = skin(1, z, 0.05, 0.02);
-    const b = skin(1, z, 0.52, 0.02);
+    const a = wreckSkin(1, z, 0.05, 0.02);
+    const b = wreckSkin(1, z, 0.52, 0.02);
     g.panel([a, b, [b[0] + 0.24, b[1] + 0.15, z + direction * 0.21],
       [a[0] + 0.36, a[1] - 0.15, z + direction * 0.36]], m.rust);
   }
@@ -177,20 +177,23 @@ function buildWear(g: WreckGeometry, m: WreckMaterials): void {
   for (const side of [-1, 1]) {
     // Portholes sit on intact upper plates. Their iron rims cast a small contact shadow.
     for (const z of [-6.5, -5.5, -4.5, 2, 3, 4, 5, 6]) {
-      const p = skin(side, z, 0.12, 0.025);
+      const p = wreckSkin(side, z, 0.12, 0.025);
       const rim = new TorusGeometry(0.14, 0.033, 5, 12);
       rim.rotateY(Math.PI / 2);
       rim.translate(...p);
       g.add(rim, m.rust);
       g.cylinder(0.12, 0.12, 0.035, p, m.dark, [0, 0, Math.PI / 2]);
-      g.panel([[p[0] + side * 0.02, p[1] - 0.12, z - 0.09],
-        [p[0] + side * 0.02, p[1] - 0.12, z + 0.09],
-        skin(side, z + 0.015, 0.4, 0.025)], m.rust);
+      // Thin rust tears run from the rim, one long and one short.
+      for (const [offset, depth] of [[-0.05, 0.34 + Math.abs(Math.sin(z * 3.1)) * 0.12], [0.06, 0.24]] as const) {
+        g.panel([[p[0] + side * 0.02, p[1] - 0.13, z + offset - 0.025],
+          [p[0] + side * 0.02, p[1] - 0.13, z + offset + 0.025],
+          wreckSkin(side, z + offset + 0.01, depth, 0.025)], m.rust, 0x9c8c78);
+      }
     }
     for (let i = 0; i < 45; i += 1) {
       const z = -7.8 + i * 0.35;
       const depth = 0.63 + 0.06 * Math.sin(i * 1.7);
-      const p = skin(side, z, depth, 0.03);
+      const p = wreckSkin(side, z, depth, 0.03);
       const radius = 0.07 + (i % 4) * 0.025;
       g.cylinder(radius * 0.6, radius, 0.06, p, i % 4 === 0 ? m.silt : m.growth,
         [0, 0, side * Math.PI / 2]);

@@ -19,6 +19,7 @@ export function createWreckMaterials() {
     silt: material('sediment', 0x96957a, 1, 0),
     growth: material('marine-growth', 0x586f52, 1, 0),
     rope: material('rigging', 0x646350, 1, 0),
+    coral: material('coral', 0x9a7568, 0.95, 0),
   };
 }
 

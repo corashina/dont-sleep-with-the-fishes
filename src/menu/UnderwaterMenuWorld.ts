@@ -27,11 +27,9 @@ import {
   Vector3,
 } from 'three';
 import type { MenuModelInstance, MenuModelLibrary } from './MenuModelLibrary';
-import type { MenuModelId } from './menuModelManifest';
+import { isMenuSwimClipName, type MenuModelId } from './menuModelManifest';
 import { enableItemAmbientOcclusionOccluder } from '../rendering/ItemAmbientOcclusion';
 import {
-  MENU_CAMERA_POSITION,
-  MENU_CAMERA_TARGET,
   MENU_SEABED_POSITION,
   MENU_MODEL_PLACEMENTS,
   menuGroundedY,
@@ -54,6 +52,8 @@ import {
 import { UnderwaterParticles } from './UnderwaterParticles';
 import { UnderwaterLightShafts } from './UnderwaterLightShafts';
 import { UnderwaterPlantField } from './UnderwaterPlantField';
+import { UnderwaterSurface } from './UnderwaterSurface';
+import { MenuCameraRig } from './MenuCameraRig';
 import type { MenuSandAssets } from './MenuSandAssets';
 import { createMenuSeabedMaterial } from './MenuSeabedMaterial';
 import { MenuGroundBatches } from './MenuGroundBatches';
@@ -70,6 +70,13 @@ export const MENU_PLACEMENT = {
 const MENU_GROUND_MODEL_IDS: readonly MenuGroundPlacement['modelId'][] = [
   'rockA', 'rockB', 'rockC', 'coral', 'seaweed', 'starfish', 'skull',
 ];
+
+// Instance tints turn the rust-red rock models into cool, algae-stained stone.
+const ROCK_TINTS = [
+  new Color(0.62, 0.98, 1.08),
+  new Color(0.56, 0.92, 1.06),
+  new Color(0.66, 1.04, 1.02),
+] as const;
 
 const CAUSTIC_VERTEX_SHADER = `
   varying vec2 vUv;
@@ -89,7 +96,7 @@ const CAUSTIC_FRAGMENT_SHADER = `
       * sin(vUv.y * 27.0 - uTime * 0.23);
     float second = sin((vUv.x + vUv.y) * 41.0 - uTime * 0.19);
     float bands = smoothstep(0.52, 0.94, first * 0.58 + second * 0.42);
-    gl_FragColor = vec4(0.28, 0.58, 0.61, bands * 0.085 * uStrength);
+    gl_FragColor = vec4(0.36, 0.66, 0.66, bands * 0.13 * uStrength);
   }
 `;
 
@@ -112,6 +119,7 @@ export class UnderwaterMenuWorld {
   readonly plants: UnderwaterPlantField;
   readonly particles: UnderwaterParticles;
   readonly lightShafts: UnderwaterLightShafts;
+  readonly surface: UnderwaterSurface;
   readonly sharks: readonly [MenuSharkActor, MenuSharkActor];
   readonly fishSchools: readonly [Group, Group];
   readonly fish: readonly MenuFishActor[];
@@ -132,8 +140,7 @@ export class UnderwaterMenuWorld {
   private readonly previousFog: Scene['fog'];
   private readonly previousCameraPosition: Vector3;
   private readonly previousCameraQuaternion: Quaternion;
-  private readonly hadCameraFixedFlag: boolean;
-  private readonly previousCameraFixed: unknown;
+  private readonly cameraRig: MenuCameraRig;
   private readonly signs: MenuSignsComponent;
   private readonly signHitTargets: Mesh[];
   private disposed = false;
@@ -149,6 +156,7 @@ export class UnderwaterMenuWorld {
 
     let boat: MenuModelInstance;
     let groundModelRoots: Group[];
+    const groundTints = new Map<Group, Color>();
     let sharkOne: MenuModelInstance;
     let sharkTwo: MenuModelInstance;
     let fishSchools: readonly [Group, Group];
@@ -174,12 +182,17 @@ export class UnderwaterMenuWorld {
         placementsByModelId[placement.modelId].push(placement);
       }
       groundModelRoots = [];
+      let rockIndex = 0;
       for (const modelId of MENU_GROUND_MODEL_IDS) {
         for (const placement of placementsByModelId[modelId]) {
           const groundModel = this.createModel(models, modelId);
           this.placeGroundedModel(groundModel.root, placement.id, placement,
             modelId === 'skull' ? 0.04 : modelId === 'seaweed' ? 0.025 : 0.14);
           groundModelRoots.push(groundModel.root);
+          if (modelId.startsWith('rock')) {
+            groundTints.set(groundModel.root, ROCK_TINTS[rockIndex % ROCK_TINTS.length]!);
+            rockIndex += 1;
+          }
         }
       }
       sharkOne = this.createModel(models, 'shark');
@@ -205,11 +218,11 @@ export class UnderwaterMenuWorld {
 
     sharkOne.root.name = 'menu:shark-1';
     sharkTwo.root.name = 'menu:shark-2';
-    const sharkOneClip = sharkOne.animations.find(({ name }) => name === 'Armature|Swim');
-    const sharkTwoClip = sharkTwo.animations.find(({ name }) => name === 'Armature|Swim');
+    const sharkOneClip = sharkOne.animations.find(({ name }) => isMenuSwimClipName(name));
+    const sharkTwoClip = sharkTwo.animations.find(({ name }) => isMenuSwimClipName(name));
     if (!sharkOneClip || !sharkTwoClip) {
       this.rollbackConstruction();
-      throw new Error('Menu sharks require the Armature|Swim clip');
+      throw new Error('Menu sharks require a swim clip');
     }
     this.sharks = [
       { root: sharkOne.root, clip: sharkOneClip },
@@ -221,11 +234,13 @@ export class UnderwaterMenuWorld {
     this.plants = new UnderwaterPlantField();
     this.particles = new UnderwaterParticles();
     this.lightShafts = new UnderwaterLightShafts();
+    this.surface = new UnderwaterSurface(this.menuFog.color, this.menuFog.density);
+    this.components.push(this.surface);
     const seabed = this.createSeabed(sand);
     const storyProps = this.createStoryProps();
     const caustic = this.createCausticOverlay();
     this.causticMaterial = caustic.material;
-    const groundBatches = new MenuGroundBatches(groundModelRoots);
+    const groundBatches = new MenuGroundBatches(groundModelRoots, groundTints);
     this.components.push(groundBatches);
 
     this.enableShadows(boat.root);
@@ -254,8 +269,13 @@ export class UnderwaterMenuWorld {
     directionalLight.shadow.normalBias = 0.035;
     directionalLight.target.name = 'menu:directional-light-target';
     directionalLight.target.position.set(0, 0, -11);
+    // Pale sand sends a little light back up to hull bottoms and bellies.
+    const bounceLight = new DirectionalLight(0x7fa596, 1.25);
+    bounceLight.name = 'menu:sand-bounce-light';
+    bounceLight.position.set(1.5, -6, 4);
 
     this.root.add(
+      this.surface.root,
       seabed,
       boat.root,
       groundBatches.root,
@@ -273,6 +293,7 @@ export class UnderwaterMenuWorld {
       hemisphereLight,
       directionalLight,
       directionalLight.target,
+      bounceLight,
     );
     enableItemAmbientOcclusionOccluder(this.root);
 
@@ -286,7 +307,10 @@ export class UnderwaterMenuWorld {
         this.particles.setMatterTime(time);
         this.causticMaterial.uniforms.uTime!.value = time;
       },
-      setLightTime: (time) => this.lightShafts.setTime(time),
+      setLightTime: (time) => {
+        this.lightShafts.setTime(time);
+        this.surface.setTime(time);
+      },
       setCausticStrength: (strength) => {
         this.causticMaterial.uniforms.uStrength!.value = strength;
       },
@@ -296,22 +320,21 @@ export class UnderwaterMenuWorld {
     this.previousFog = scene.fog;
     this.previousCameraPosition = camera.position.clone();
     this.previousCameraQuaternion = camera.quaternion.clone();
-    this.hadCameraFixedFlag = Object.prototype.hasOwnProperty.call(
-      camera.userData,
-      'menuCameraFixed',
-    );
-    this.previousCameraFixed = camera.userData.menuCameraFixed;
 
     scene.background = this.menuBackground;
     scene.fog = this.menuFog;
-    camera.position.set(...MENU_CAMERA_POSITION);
-    camera.lookAt(
-      MENU_CAMERA_TARGET[0],
-      MENU_CAMERA_TARGET[1],
-      MENU_CAMERA_TARGET[2],
-    );
-    camera.userData.menuCameraFixed = true;
+    this.cameraRig = new MenuCameraRig(camera);
     scene.add(this.root);
+  }
+
+  update(elapsedSeconds: number, deltaSeconds: number): void {
+    if (this.disposed) return;
+    this.cameraRig.update(elapsedSeconds, deltaSeconds);
+    this.signs.update(elapsedSeconds, deltaSeconds);
+  }
+
+  setCameraPointer(ndcX: number, ndcY: number): void {
+    this.cameraRig.setPointer(ndcX, ndcY);
   }
 
   getMenuSignActionAt(ndcX: number, ndcY: number): MenuSignAction | null {
@@ -393,8 +416,8 @@ export class UnderwaterMenuWorld {
     school.name = `menu:fish-school-${schoolIndex + 1}`;
     for (let fishIndex = 0; fishIndex < 6; fishIndex += 1) {
       const instance = this.createModel(models, 'redSnapper');
-      const clip = instance.animations.find(({ name }) => name === 'Armature|Swim');
-      if (!clip) throw new Error('Menu fish require the Armature|Swim clip');
+      const clip = instance.animations.find(({ name }) => isMenuSwimClipName(name));
+      if (!clip) throw new Error('Menu fish require a swim clip');
       const slot = new Group();
       slot.name = `menu:fish-school-${schoolIndex + 1}-fish-${fishIndex + 1}`;
       slot.position.set(
@@ -545,10 +568,5 @@ export class UnderwaterMenuWorld {
     if (this.scene.fog === this.menuFog) this.scene.fog = this.previousFog;
     this.camera.position.copy(this.previousCameraPosition);
     this.camera.quaternion.copy(this.previousCameraQuaternion);
-    if (this.hadCameraFixedFlag) {
-      this.camera.userData.menuCameraFixed = this.previousCameraFixed;
-    } else {
-      delete this.camera.userData.menuCameraFixed;
-    }
   }
 }

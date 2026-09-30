@@ -15,11 +15,6 @@ import {
 
 const TOTAL_TRIANGLE_LIMIT = 10_000;
 const ATTRIBUTION_HEADING = '## Runtime underwater-menu model ledger';
-const REQUIRED_SHARK_CLIP = Object.freeze({
-  name: 'Armature|Swim',
-  duration: 1.25,
-  channels: 8,
-});
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
 function sameNumbers(first, second) {
@@ -199,17 +194,6 @@ async function measureModels(modelsDir, metadata, errors) {
   return { measurements, total };
 }
 
-function validateSharkAnimation(metadata, errors) {
-  const sharkAnimations = metadata?.shark?.animations;
-  if (
-    !Array.isArray(sharkAnimations)
-    || sharkAnimations.length !== 1
-    || JSON.stringify(sharkAnimations[0]) !== JSON.stringify(REQUIRED_SHARK_CLIP)
-  ) {
-    errors.push('shark: required Armature|Swim animation metadata is missing');
-  }
-}
-
 function reportTotal(total, errors) {
   console.log(`total: ${total} / ${TOTAL_TRIANGLE_LIMIT} triangles`);
   if (total > TOTAL_TRIANGLE_LIMIT) {
@@ -242,7 +226,6 @@ async function main() {
   await validateDirectory(modelsDir, errors);
   const metadata = await readMetadata(modelsDir, errors);
   const { measurements, total } = await measureModels(modelsDir, metadata, errors);
-  validateSharkAnimation(metadata, errors);
   reportTotal(total, errors);
   await validateLedger(assetsOnly, ledgerPath, measurements, errors);
   reportErrors(errors);

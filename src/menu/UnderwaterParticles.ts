@@ -1,194 +1,222 @@
 import {
+  AdditiveBlending,
   BufferGeometry,
   Color,
   Float32BufferAttribute,
   Group,
+  NormalBlending,
   Points,
   ShaderMaterial,
   Sphere,
   Vector3,
 } from 'three';
+import { MENU_SURFACE_HEIGHT } from './UnderwaterSurface';
 
-const BUBBLE_COUNT = 264;
-const WRECK_BUBBLE_COUNT = 48;
-const MATTER_COUNT = 180;
+// Bubbles rise from the wreck, the sunken rowboat, and seabed vents.
+const BUBBLE_SOURCES = [
+  [-6.2, 3.4, -19.4, 30],
+  [3.8, 4.6, -19.2, 36],
+  [10.4, 3.1, -19.8, 26],
+  [0.55, 0.05, -4.7, 22],
+  [-5.6, -0.3, -8.2, 16],
+  [7.6, -0.3, -13.2, 18],
+  [-9.4, -0.2, -2.8, 12],
+] as const;
+const MARINE_SNOW_COUNT = 1200;
+const MARINE_SNOW_BOUNDS = {
+  minX: -30, maxX: 30, minY: -0.6, maxY: MENU_SURFACE_HEIGHT, minZ: -42, maxZ: 6.5,
+} as const;
 
-const PARTICLE_VERTEX_SHADER = `
-  attribute vec3 basePosition;
+const BUBBLE_VERTEX_SHADER = `
   attribute float phase;
-  attribute float particleSize;
+  attribute float bubbleSize;
   attribute float riseSpeed;
+  attribute vec2 drift;
   uniform float uTime;
-  uniform float uRise;
-  uniform float uPointSize;
-  varying float vPhase;
+  uniform float uSurfaceHeight;
+  varying float vFade;
 
   void main() {
-    vec3 transformed = basePosition;
-    if (uRise > 0.5) {
-      transformed.y = mod(
-        basePosition.y + uTime * (0.13 + phase * 0.018) * riseSpeed + 0.75,
-        9.5
-      ) - 0.75;
-      transformed.x += sin(uTime * 0.42 + phase) * 0.08;
-    } else {
-      transformed.x += sin(uTime * 0.13 + phase) * 0.045;
-      transformed.y += cos(uTime * 0.11 + phase * 1.3) * 0.035;
-    }
+    float travel = uSurfaceHeight - position.y;
+    float risen = mod(phase * travel + uTime * riseSpeed, travel);
+    float progress = risen / travel;
+    vec3 transformed = position;
+    transformed.y += risen;
+    float wobble = 0.035 + progress * 0.12;
+    transformed.x += sin(uTime * 3.1 * riseSpeed + phase * 40.0) * wobble + drift.x * progress;
+    transformed.z += cos(uTime * 2.7 * riseSpeed + phase * 31.0) * wobble + drift.y * progress;
     vec4 viewPosition = modelViewMatrix * vec4(transformed, 1.0);
-    gl_PointSize = uPointSize * particleSize * (9.0 / max(1.0, -viewPosition.z));
+    float size = bubbleSize * (0.7 + progress * 0.7);
+    gl_PointSize = size * 900.0 / max(1.0, -viewPosition.z);
     gl_Position = projectionMatrix * viewPosition;
-    vPhase = phase;
+    vFade = smoothstep(0.0, 0.04, progress) * (1.0 - smoothstep(0.86, 1.0, progress));
   }
 `;
 
-const PARTICLE_FRAGMENT_SHADER = `
+const BUBBLE_FRAGMENT_SHADER = `
   uniform vec3 uColor;
-  uniform vec3 uFogColor;
-  uniform float uRing;
-  varying float vPhase;
+  varying float vFade;
 
   void main() {
-    float radius = length(gl_PointCoord - vec2(0.5));
-    float disc = 1.0 - smoothstep(0.34, 0.5, radius);
-    float ring = smoothstep(0.22, 0.34, radius) * disc;
-    float shape = mix(disc, ring, uRing);
-    if (shape < 0.02) discard;
-    float shimmer = 0.72 + 0.2 * sin(vPhase * 2.7);
-    gl_FragColor = vec4(mix(uFogColor, uColor, shimmer), shape * 0.62);
+    vec2 point = gl_PointCoord * 2.0 - 1.0;
+    float radius = length(point);
+    if (radius > 1.0) discard;
+    float rim = smoothstep(0.62, 0.94, radius) * (1.0 - smoothstep(0.94, 1.0, radius));
+    float glint = 1.0 - smoothstep(0.0, 0.3, length(point - vec2(-0.34, -0.36)));
+    float lowerGlow = (1.0 - smoothstep(0.0, 0.45, length(point - vec2(0.2, 0.42)))) * 0.25;
+    float alpha = (0.1 + rim * 0.7 + glint * 0.95 + lowerGlow) * vFade;
+    gl_FragColor = vec4(uColor * (0.8 + glint * 0.5), alpha);
   }
 `;
 
-interface ParticlePool {
-  readonly geometry: BufferGeometry;
-  readonly material: ShaderMaterial;
-  readonly points: Points<BufferGeometry, ShaderMaterial>;
+const SNOW_VERTEX_SHADER = `
+  attribute float phase;
+  attribute float flakeSize;
+  uniform float uTime;
+  uniform float uHeight;
+  uniform float uFloor;
+  varying float vAlpha;
+
+  void main() {
+    vec3 transformed = position;
+    float span = uHeight - uFloor;
+    transformed.y = uFloor + mod(position.y - uFloor - uTime * (0.05 + phase * 0.012), span);
+    transformed.x += sin(uTime * 0.17 + phase * 6.3) * 0.35;
+    transformed.z += cos(uTime * 0.13 + phase * 4.1) * 0.25;
+    vec4 viewPosition = modelViewMatrix * vec4(transformed, 1.0);
+    float depth = max(1.0, -viewPosition.z);
+    gl_PointSize = max(1.4, flakeSize * 220.0 / depth);
+    gl_Position = projectionMatrix * viewPosition;
+    vAlpha = (1.0 - smoothstep(18.0, 46.0, depth)) * smoothstep(0.0, 1.2, depth - 0.4);
+  }
+`;
+
+const SNOW_FRAGMENT_SHADER = `
+  uniform vec3 uColor;
+  varying float vAlpha;
+
+  void main() {
+    float radius = length(gl_PointCoord * 2.0 - 1.0);
+    float soft = 1.0 - smoothstep(0.1, 1.0, radius);
+    if (soft < 0.01) discard;
+    gl_FragColor = vec4(uColor, soft * vAlpha * 0.5);
+  }
+`;
+
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x1_0000_0000;
+  };
 }
 
-function createParticlePool(
-  count: number,
-  name: string,
-  color: number,
-  pointSize: number,
-  bubbles: boolean,
-): ParticlePool {
-  const basePositions = new Float32Array(count * 3);
+function createBubbleGeometry(): BufferGeometry {
+  const random = seededRandom(0x5eab);
+  const count = BUBBLE_SOURCES.reduce((total, source) => total + source[3], 0);
+  const positions = new Float32Array(count * 3);
   const phases = new Float32Array(count);
-  const particleSizes = new Float32Array(count);
-  const riseSpeeds = new Float32Array(count);
-  const columns = bubbles ? 12 : 15;
-  const ambientCount = bubbles ? count - WRECK_BUBBLE_COUNT : count;
-  const rows = Math.ceil(ambientCount / columns);
-  for (let index = 0; index < count; index += 1) {
-    const offset = index * 3;
-    if (bubbles && index >= ambientCount) {
-      const sourceIndex = index - ambientCount;
-      const sourceColumn = sourceIndex % 6;
-      const sourceRow = Math.floor(sourceIndex / 6);
-      basePositions[offset] = -8.5 + sourceColumn * 3.4
-        + ((sourceIndex * 7) % 5 - 2) * 0.08;
-      basePositions[offset + 1] = -0.4 + sourceRow / 7 * 8.6;
-      basePositions[offset + 2] = -19.1
-        + ((sourceColumn + sourceRow) % 3 - 1) * 1.4;
-    } else {
-    const column = index % columns;
-    const row = Math.floor(index / columns);
-    const horizontal = column / (columns - 1);
-    const vertical = rows === 1 ? 0.5 : row / (rows - 1);
-    const depthBand = (column * 5 + row * 7) % 8;
-    const spread = 7.5 + depthBand * 4.2;
-    const jitterX = ((index * 17) % 11 - 5) * 0.11;
-    const jitterY = ((index * 13) % 9 - 4) * 0.07;
-    basePositions[offset] = (horizontal * 2 - 1) * spread + jitterX;
-    basePositions[offset + 1] = -0.55 + vertical * 9.1 + jitterY;
-    basePositions[offset + 2] = 4.4 - depthBand * 5.1 - (row % 3) * 0.35;
+  const sizes = new Float32Array(count);
+  const speeds = new Float32Array(count);
+  const drifts = new Float32Array(count * 2);
+  let index = 0;
+  for (const [x, y, z, bubbles] of BUBBLE_SOURCES) {
+    for (let bubble = 0; bubble < bubbles; bubble += 1) {
+      positions[index * 3] = x + (random() - 0.5) * 0.3;
+      positions[index * 3 + 1] = y;
+      positions[index * 3 + 2] = z + (random() - 0.5) * 0.3;
+      phases[index] = random();
+      sizes[index] = 0.045 + Math.pow(random(), 3) * 0.13;
+      speeds[index] = 0.9 + random() * 0.8;
+      drifts[index * 2] = (random() - 0.5) * 2.2;
+      drifts[index * 2 + 1] = (random() - 0.5) * 1.4;
+      index += 1;
     }
-    phases[index] = ((index * 11) % count) / count * Math.PI * 2;
-    particleSizes[index] = bubbles
-      ? 0.65 + ((index * 37) % 106) / 105 * 1.05
-      : 1;
-    riseSpeeds[index] = bubbles
-      ? 0.7 + ((index * 53) % 91) / 90 * 0.9
-      : 1;
   }
-
   const geometry = new BufferGeometry();
-  const basePosition = new Float32BufferAttribute(basePositions, 3);
-  geometry.setAttribute('position', basePosition);
-  geometry.setAttribute('basePosition', basePosition);
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   geometry.setAttribute('phase', new Float32BufferAttribute(phases, 1));
-  geometry.setAttribute(
-    'particleSize',
-    new Float32BufferAttribute(particleSizes, 1),
-  );
-  geometry.setAttribute('riseSpeed', new Float32BufferAttribute(riseSpeeds, 1));
-  geometry.boundingSphere = new Sphere(new Vector3(0, 3.8, -23), 58);
-  const material = new ShaderMaterial({
-    uniforms: {
-      uTime: { value: 0 },
-      uColor: { value: new Color(color) },
-      uFogColor: { value: new Color(0x0b3440) },
-      uRise: { value: bubbles ? 1 : 0 },
-      uPointSize: { value: pointSize },
-      uRing: { value: bubbles ? 1 : 0 },
-    },
-    vertexShader: PARTICLE_VERTEX_SHADER,
-    fragmentShader: PARTICLE_FRAGMENT_SHADER,
-    transparent: true,
-    depthWrite: false,
-  });
-  const points = new Points(geometry, material);
-  points.name = name;
-  return { geometry, material, points };
+  geometry.setAttribute('bubbleSize', new Float32BufferAttribute(sizes, 1));
+  geometry.setAttribute('riseSpeed', new Float32BufferAttribute(speeds, 1));
+  geometry.setAttribute('drift', new Float32BufferAttribute(drifts, 2));
+  geometry.boundingSphere = new Sphere(new Vector3(0, 6.5, -12), 30);
+  return geometry;
+}
+
+function createMarineSnowGeometry(): BufferGeometry {
+  const random = seededRandom(0x0c3a);
+  const bounds = MARINE_SNOW_BOUNDS;
+  const positions = new Float32Array(MARINE_SNOW_COUNT * 3);
+  const phases = new Float32Array(MARINE_SNOW_COUNT);
+  const sizes = new Float32Array(MARINE_SNOW_COUNT);
+  for (let index = 0; index < MARINE_SNOW_COUNT; index += 1) {
+    positions[index * 3] = bounds.minX + random() * (bounds.maxX - bounds.minX);
+    positions[index * 3 + 1] = bounds.minY + random() * (bounds.maxY - bounds.minY);
+    positions[index * 3 + 2] = bounds.minZ + random() * (bounds.maxZ - bounds.minZ);
+    phases[index] = random();
+    sizes[index] = 0.012 + Math.pow(random(), 4) * 0.05;
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('phase', new Float32BufferAttribute(phases, 1));
+  geometry.setAttribute('flakeSize', new Float32BufferAttribute(sizes, 1));
+  geometry.boundingSphere = new Sphere(new Vector3(0, 6, -18), 45);
+  return geometry;
 }
 
 export class UnderwaterParticles {
   readonly root = new Group();
   readonly bubbles: Points<BufferGeometry, ShaderMaterial>;
-  readonly suspendedMatter: Points<BufferGeometry, ShaderMaterial>;
-
-  private readonly bubblePool: ParticlePool;
-  private readonly matterPool: ParticlePool;
+  readonly marineSnow: Points<BufferGeometry, ShaderMaterial>;
   private disposed = false;
 
   constructor() {
     this.root.name = 'menu:particles';
-    this.bubblePool = createParticlePool(
-      BUBBLE_COUNT,
-      'menu:bubbles',
-      0x9fcbd0,
-      11,
-      true,
-    );
-    this.matterPool = createParticlePool(
-      MATTER_COUNT,
-      'menu:suspended-matter',
-      0x8a9d87,
-      5,
-      false,
-    );
-    this.bubbles = this.bubblePool.points;
-    this.suspendedMatter = this.matterPool.points;
-    this.root.add(this.bubbles, this.suspendedMatter);
+    this.bubbles = new Points(createBubbleGeometry(), new ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uSurfaceHeight: { value: MENU_SURFACE_HEIGHT },
+        uColor: { value: new Color(0xc4e7e6) },
+      },
+      vertexShader: BUBBLE_VERTEX_SHADER,
+      fragmentShader: BUBBLE_FRAGMENT_SHADER,
+      transparent: true,
+      depthWrite: false,
+      blending: NormalBlending,
+    }));
+    this.bubbles.name = 'menu:bubbles';
+    this.marineSnow = new Points(createMarineSnowGeometry(), new ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uHeight: { value: MARINE_SNOW_BOUNDS.maxY },
+        uFloor: { value: MARINE_SNOW_BOUNDS.minY },
+        uColor: { value: new Color(0x9fbcae) },
+      },
+      vertexShader: SNOW_VERTEX_SHADER,
+      fragmentShader: SNOW_FRAGMENT_SHADER,
+      transparent: true,
+      depthWrite: false,
+      blending: AdditiveBlending,
+    }));
+    this.marineSnow.name = 'menu:marine-snow';
+    this.root.add(this.bubbles, this.marineSnow);
   }
 
   setBubbleTime(time: number): void {
-    this.bubblePool.material.uniforms.uTime!.value = time;
+    this.bubbles.material.uniforms.uTime!.value = time;
   }
 
   setMatterTime(time: number): void {
-    this.matterPool.material.uniforms.uTime!.value = time;
+    this.marineSnow.material.uniforms.uTime!.value = time;
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.root.removeFromParent();
-    this.bubblePool.geometry.dispose();
-    this.matterPool.geometry.dispose();
-    this.bubblePool.material.dispose();
-    this.matterPool.material.dispose();
+    this.bubbles.geometry.dispose();
+    this.marineSnow.geometry.dispose();
+    this.bubbles.material.dispose();
+    this.marineSnow.material.dispose();
   }
 }
-
-export { BUBBLE_COUNT, MATTER_COUNT };

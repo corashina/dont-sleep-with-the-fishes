@@ -118,14 +118,6 @@ export const POLY_PIZZA_MENU_MODEL_SOURCES = Object.freeze({
     committedSha256: '48DE96535E005B857ABC76BB5817062A06410B4F06DB8D32981D5999B2F3415C',
     sourceTriangles: 1680, maxTriangles: 1_800,
   }),
-  shark: source({
-    id: 'shark', publicId: 'AyHTK3zUSG',
-    resourceId: 'd2d374ea-eb1d-4659-8cc7-816a83b82470',
-    title: 'Shark', creator: 'Quaternius', license: 'CC0 1.0',
-    sha256: '6D5CF3CD7EA749583B622A306CFCAE4DE85432EFCC74A1EC6F52E5430CF13AFF',
-    committedSha256: '1311D6750FB737669557C45855568E8DD2D8C8D8B5C374704028C656712A4648',
-    sourceTriangles: 644, maxTriangles: 700,
-  }),
 });
 
 export const POLY_PIZZA_MENU_MODEL_IDS = Object.freeze(
