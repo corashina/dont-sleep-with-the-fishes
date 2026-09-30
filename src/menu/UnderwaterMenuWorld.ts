@@ -30,6 +30,8 @@ import type { MenuModelInstance, MenuModelLibrary } from './MenuModelLibrary';
 import { isMenuSwimClipName, type MenuModelId } from './menuModelManifest';
 import { enableItemAmbientOcclusionOccluder } from '../rendering/ItemAmbientOcclusion';
 import {
+  MENU_CAMERA_POSITION,
+  MENU_CAMERA_TARGET,
   MENU_SEABED_POSITION,
   MENU_MODEL_PLACEMENTS,
   menuGroundedY,
@@ -53,7 +55,6 @@ import { UnderwaterParticles } from './UnderwaterParticles';
 import { UnderwaterLightShafts } from './UnderwaterLightShafts';
 import { UnderwaterPlantField } from './UnderwaterPlantField';
 import { UnderwaterSurface } from './UnderwaterSurface';
-import { MenuCameraRig } from './MenuCameraRig';
 import type { MenuSandAssets } from './MenuSandAssets';
 import { createMenuSeabedMaterial } from './MenuSeabedMaterial';
 import { MenuGroundBatches } from './MenuGroundBatches';
@@ -140,7 +141,6 @@ export class UnderwaterMenuWorld {
   private readonly previousFog: Scene['fog'];
   private readonly previousCameraPosition: Vector3;
   private readonly previousCameraQuaternion: Quaternion;
-  private readonly cameraRig: MenuCameraRig;
   private readonly signs: MenuSignsComponent;
   private readonly signHitTargets: Mesh[];
   private disposed = false;
@@ -323,18 +323,14 @@ export class UnderwaterMenuWorld {
 
     scene.background = this.menuBackground;
     scene.fog = this.menuFog;
-    this.cameraRig = new MenuCameraRig(camera);
+    camera.position.set(...MENU_CAMERA_POSITION);
+    camera.lookAt(...MENU_CAMERA_TARGET);
     scene.add(this.root);
   }
 
   update(elapsedSeconds: number, deltaSeconds: number): void {
     if (this.disposed) return;
-    this.cameraRig.update(elapsedSeconds, deltaSeconds);
     this.signs.update(elapsedSeconds, deltaSeconds);
-  }
-
-  setCameraPointer(ndcX: number, ndcY: number): void {
-    this.cameraRig.setPointer(ndcX, ndcY);
   }
 
   getMenuSignActionAt(ndcX: number, ndcY: number): MenuSignAction | null {
