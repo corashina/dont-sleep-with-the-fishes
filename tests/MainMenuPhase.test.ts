@@ -28,6 +28,8 @@ function createRig(
     actors: {},
     getMenuSignActionAt: vi.fn(() => null as 'start' | 'guide' | 'settings' | null),
     setMenuSignHighlighted: vi.fn(),
+    updateCamera: vi.fn(),
+    setCameraPointer: vi.fn(),
     dispose: vi.fn(),
   };
   const animator = { update: vi.fn(), dispose: vi.fn() };

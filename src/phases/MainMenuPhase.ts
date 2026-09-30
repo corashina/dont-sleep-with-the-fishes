@@ -10,6 +10,7 @@ import { MenuUI } from '../menu/MenuUI';
 import { UnderwaterMenuAnimator } from '../menu/UnderwaterMenuAnimator';
 import { UnderwaterMenuWorld } from '../menu/UnderwaterMenuWorld';
 import type { MenuSandAssets } from '../menu/MenuSandAssets';
+import type { LifeboatAssets } from '../world/LifeboatAssets';
 import type { MenuVisualState } from '../rendering/SceneRenderer';
 import {
   ignoreCleanupError as attemptCleanup,
@@ -25,6 +26,7 @@ export interface MainMenuPhaseDependencies {
     camera: PerspectiveCamera,
     models: MenuModelLibrary,
     sand: MenuSandAssets,
+    lifeboat: LifeboatAssets,
   ): UnderwaterMenuWorld;
   createAnimator(
     actors: UnderwaterMenuWorld['actors'],
@@ -34,8 +36,8 @@ export interface MainMenuPhaseDependencies {
 
 const PRODUCTION_MAIN_MENU_DEPENDENCIES: MainMenuPhaseDependencies = {
   createUI: (mount) => new MenuUI(mount),
-  createWorld: (scene, camera, models, sand) => (
-    new UnderwaterMenuWorld(scene, camera, models, sand)
+  createWorld: (scene, camera, models, sand, lifeboat) => (
+    new UnderwaterMenuWorld(scene, camera, models, sand, lifeboat)
   ),
   createAnimator: (actors) => new UnderwaterMenuAnimator(actors),
   requestPointerLock: (canvas, options) => canvas.requestPointerLock(options),
@@ -62,6 +64,7 @@ function createMainMenuResources(
       context.camera,
       context.menuModels,
       context.menuSandAssets,
+      context.lifeboatAssets,
     );
     const animator = dependencies.createAnimator(world.actors);
     return { ui, world, animator };
@@ -180,6 +183,7 @@ export class MainMenuPhase implements GamePhase {
     this.elapsed += delta;
     this.visualState.elapsedSeconds = this.elapsed;
     this.animator.update(this.elapsed, delta);
+    this.world.updateCamera(this.elapsed, delta);
 
     if (!this.transitioning || this.completed) return;
     this.fadeElapsed = Math.min(
@@ -292,6 +296,13 @@ export class MainMenuPhase implements GamePhase {
   }
 
   private readonly handleMenuPointerMove = (event: PointerEvent): void => {
+    const bounds = this.context.renderer.domElement.getBoundingClientRect();
+    if (bounds.width > 0 && bounds.height > 0) {
+      this.world.setCameraPointer(
+        ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
+        -((event.clientY - bounds.top) / bounds.height) * 2 + 1,
+      );
+    }
     this.pointerAction = this.menuSignAction(event);
     this.context.renderer.domElement.style.cursor = this.pointerAction
       ? 'pointer'
@@ -300,6 +311,7 @@ export class MainMenuPhase implements GamePhase {
   };
 
   private readonly handleMenuPointerLeave = (): void => {
+    this.world.setCameraPointer(0, 0);
     this.pointerAction = null;
     this.context.renderer.domElement.style.cursor = '';
     this.syncSignHighlights();

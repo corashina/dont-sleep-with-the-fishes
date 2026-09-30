@@ -333,6 +333,7 @@ export class Game {
   private activateMenu(): Promise<void> {
     return this.acquirePhase(() => this.resources.acquireMenu(), (assets, generation) => {
       assets.menuSandAssets.configure(this.context.maxTextureAnisotropy);
+      assets.lifeboatAssets.configure(this.context.maxTextureAnisotropy);
       return this.factories.createMenu(
         { ...this.context, ...assets },
         () => this.startScavengeFromMenu(generation),

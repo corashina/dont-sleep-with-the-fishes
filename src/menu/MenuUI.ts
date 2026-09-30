@@ -48,7 +48,10 @@ export class MenuUI {
         <button type="button" class="menu-action-accessible" data-menu-start>START</button>
         <button type="button" class="menu-action-accessible" data-open-settings aria-haspopup="dialog">SETTINGS</button>
         <div class="underwater-menu-screen__content">
-          <h1 class="menu-title-accessible">DON'T SLEEP WITH THE FISHES</h1>
+          <h1 class="menu-title">
+            <span class="menu-title__lead">Don't sleep</span>
+            <span class="menu-title__main">with the fishes</span>
+          </h1>
           <p class="input-error illustrated-warning ui-role-narrative"
             data-menu-pointer-lock-error aria-live="polite"></p>
         </div>

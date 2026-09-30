@@ -5,13 +5,11 @@ import {
   Color,
   CylinderGeometry,
   DodecahedronGeometry,
-  Float32BufferAttribute,
   Group,
   InstancedMesh,
   LinearMipmapLinearFilter,
   Material,
   Mesh,
-  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   PlaneGeometry,
@@ -160,7 +158,6 @@ export class DistantSeabed implements MenuSceneComponent {
     stones.name = 'menu:distant-stones';
     debris.name = 'menu:distant-debris';
     nearWreckDebris.name = 'menu:near-wreck-debris';
-    const horizon = this.createHorizon();
 
     RIDGES.forEach((spec, index) => {
       const geometry = this.geometry(new PlaneGeometry(spec.width, spec.depth, 12, 6));
@@ -247,7 +244,6 @@ export class DistantSeabed implements MenuSceneComponent {
 
     this.root.name = 'menu:distant-seabed';
     this.root.add(
-      horizon,
       ridges,
       mountains,
       rocks,
@@ -391,32 +387,6 @@ export class DistantSeabed implements MenuSceneComponent {
       Math.abs(x - footprint.position[0]) < footprint.halfSize[0] + radius
       && Math.abs(z - footprint.position[2]) < footprint.halfSize[1] + radius
     ));
-  }
-
-  private createHorizon(): Mesh<PlaneGeometry, MeshBasicMaterial> {
-    const geometry = this.geometry(new PlaneGeometry(500, 260, 1, 6));
-    const position = geometry.getAttribute('position');
-    const colors = new Float32BufferAttribute(position.count * 3, 3);
-    const lower = new Color(0x315b5c);
-    const upper = new Color(0x0a252e);
-    const color = new Color();
-    for (let vertex = 0; vertex < position.count; vertex += 1) {
-      const progress = Math.min(1, Math.max(0, position.getY(vertex) / 260 + 0.5));
-      color.lerpColors(lower, upper, progress);
-      colors.setXYZ(vertex, color.r, color.g, color.b);
-    }
-    geometry.setAttribute('color', colors);
-    const material = new MeshBasicMaterial({
-      depthWrite: false,
-      fog: false,
-      vertexColors: true,
-    });
-    this.materials.add(material);
-    const horizon = new Mesh(geometry, material);
-    horizon.name = 'menu:distant-horizon';
-    horizon.position.set(0, 35, -115);
-    horizon.renderOrder = -2;
-    return horizon;
   }
 
   private material(

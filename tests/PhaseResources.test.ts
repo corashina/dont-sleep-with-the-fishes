@@ -42,7 +42,7 @@ async function flushPromises(): Promise<void> {
 
 describe('phase resource ownership', () => {
 
-  it('loads only menu assets and audio before gameplay starts', async () => {
+  it('loads only menu assets, the lifeboat, and audio before gameplay starts', async () => {
     const dependencies = loaders();
     const backend = audioBackend();
     const resources = new PhaseResources(dependencies, AudioSystem.forTest(backend), 'enabled');
@@ -50,9 +50,10 @@ describe('phase resource ownership', () => {
     expect(dependencies.loadMenuFont).toHaveBeenCalledOnce();
     expect(dependencies.loadMenuModels).toHaveBeenCalledOnce();
     expect(dependencies.loadMenuSandAssets).toHaveBeenCalledOnce();
+    expect(dependencies.loadLifeboatAssets).toHaveBeenCalledOnce();
     for (const name of [
       'loadGameplayModels', 'loadSurvivalContent', 'loadShipFurniture', 'loadSkyAssets',
-      'loadLifeboatAssets', 'loadShipAssets', 'loadPhysicsRuntime',
+      'loadShipAssets', 'loadPhysicsRuntime',
     ] as const) expect(dependencies[name]).not.toHaveBeenCalled();
     expect(backend.acquire).toHaveBeenCalledExactlyOnceWith(MENU_SOUND_IDS);
 
