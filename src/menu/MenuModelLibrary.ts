@@ -10,6 +10,7 @@ import {
 import { AssetModelLoader } from '../world/AssetLoaders';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import {
+  isMenuSwimClipName,
   MENU_MODEL_IDS,
   MENU_MODEL_SPECS,
   type MenuModelId,
@@ -120,9 +121,9 @@ function normalizeTemplate(id: MenuModelId, root: Group, spec: MenuModelSpec): v
 function validateAnimations(id: MenuModelId, animations: readonly AnimationClip[]): void {
   if (
     (id === 'shark' || id === 'redSnapper')
-    && !animations.some((clip) => clip.name === 'Armature|Swim')
+    && !animations.some((clip) => isMenuSwimClipName(clip.name))
   ) {
-    throw new MenuModelLoadError(id, 'required Armature|Swim clip is missing');
+    throw new MenuModelLoadError(id, 'required swim clip is missing');
   }
 }
 

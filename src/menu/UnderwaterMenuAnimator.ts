@@ -1,5 +1,6 @@
 import { AnimationAction, AnimationClip, AnimationMixer, Group } from 'three';
 import { createMenuMotionSample, sampleMenuMotionInto } from './menuChoreography';
+import { isMenuSwimClipName } from './menuModelManifest';
 
 export interface MenuSharkActor {
   readonly root: Group;
@@ -31,8 +32,8 @@ export class UnderwaterMenuAnimator {
 
   constructor(private readonly actors: UnderwaterMenuActors) {
     const animatedActors = [...actors.sharks, ...actors.fish];
-    if (animatedActors.some(({ clip }) => clip.name !== 'Armature|Swim')) {
-      throw new Error('Menu swimmers require the Armature|Swim clip');
+    if (animatedActors.some(({ clip }) => !isMenuSwimClipName(clip.name))) {
+      throw new Error('Menu swimmers require a swim clip');
     }
 
     this.animatedActors = animatedActors;

@@ -1,4 +1,5 @@
 import fishingMetadataJson from '../assets/models/fishing/fishing-model-metadata.json';
+import eventMetadataJson from '../assets/models/events/event-model-metadata.json';
 import menuMetadataJson from '../assets/models/menu/menu-model-metadata.json';
 import { FISHING_MODEL_SIZES } from '../game/fishingModelSizes';
 
@@ -39,7 +40,7 @@ const PRESENTATION = {
   fishBone: { targetLongestDimension: 0.75, rotation: [0, 0, 0], maxTriangles: 700 },
   skull: { targetLongestDimension: 0.52, rotation: [0, 0, 0], maxTriangles: 3500 },
   largeBone: { targetLongestDimension: 0.9, rotation: [0, 0, 0], maxTriangles: 1800 },
-  shark: { targetLongestDimension: 4.8, rotation: [0, 0, 0], maxTriangles: 700 },
+  shark: { targetLongestDimension: 4.8, rotation: [0, 0, 0], maxTriangles: 7_000 },
   redSnapper: { targetLongestDimension: FISHING_MODEL_SIZES.redSnapper, rotation: [0, 0, 0], maxTriangles: 2000 },
   seaweed: { targetLongestDimension: FISHING_MODEL_SIZES.seaweed, rotation: [0, 0, 0], maxTriangles: 2000 },
 } as const;
@@ -51,6 +52,7 @@ type SourceMetadata = Omit<GeneratedMetadata, 'animations'> & {
 
 const menuMetadata = menuMetadataJson as unknown as Readonly<Record<string, SourceMetadata>>;
 const fishingMetadata = fishingMetadataJson as unknown as Readonly<Record<string, SourceMetadata>>;
+const eventMetadata = eventMetadataJson as unknown as Readonly<Record<string, SourceMetadata>>;
 
 function metadata(source: SourceMetadata): GeneratedMetadata {
   return {
@@ -60,8 +62,8 @@ function metadata(source: SourceMetadata): GeneratedMetadata {
 }
 
 function modelUrl(id: MenuModelId): string {
-  const directory = id === 'redSnapper' || id === 'seaweed'
-    ? 'fishing' : 'menu';
+  const directory = id === 'redSnapper' || id === 'seaweed' ? 'fishing'
+    : id === 'shark' ? 'events' : 'menu';
   return new URL(`../assets/models/${directory}/${id}.glb`, import.meta.url).href;
 }
 
@@ -75,7 +77,7 @@ const GENERATED_METADATA: Readonly<Record<MenuModelId, GeneratedMetadata>> = {
   fishBone: metadata(menuMetadata.fishBone!),
   skull: metadata(menuMetadata.skull!),
   largeBone: metadata(menuMetadata.largeBone!),
-  shark: metadata(menuMetadata.shark!),
+  shark: metadata(eventMetadata.shark!),
   redSnapper: metadata(fishingMetadata.redSnapper!),
   seaweed: metadata(fishingMetadata.seaweed!),
 };
@@ -85,3 +87,8 @@ export const MENU_MODEL_SPECS = Object.freeze(Object.fromEntries(MENU_MODEL_IDS.
   ...PRESENTATION[id],
   generatedMetadata: GENERATED_METADATA[id],
 }])) as Record<MenuModelId, MenuModelSpec>);
+
+// Fish use "Armature|Swim". The event shark nests its rig name before "|Swim".
+export function isMenuSwimClipName(name: string): boolean {
+  return name.endsWith('|Swim');
+}

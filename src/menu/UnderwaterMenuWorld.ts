@@ -27,7 +27,7 @@ import {
   Vector3,
 } from 'three';
 import type { MenuModelInstance, MenuModelLibrary } from './MenuModelLibrary';
-import type { MenuModelId } from './menuModelManifest';
+import { isMenuSwimClipName, type MenuModelId } from './menuModelManifest';
 import { enableItemAmbientOcclusionOccluder } from '../rendering/ItemAmbientOcclusion';
 import {
   MENU_SEABED_POSITION,
@@ -53,9 +53,7 @@ import { UnderwaterParticles } from './UnderwaterParticles';
 import { UnderwaterLightShafts } from './UnderwaterLightShafts';
 import { UnderwaterPlantField } from './UnderwaterPlantField';
 import { UnderwaterSurface } from './UnderwaterSurface';
-import { MenuSurfaceLifeboat } from './MenuSurfaceLifeboat';
 import { MenuCameraRig } from './MenuCameraRig';
-import type { LifeboatAssets } from '../world/LifeboatAssets';
 import type { MenuSandAssets } from './MenuSandAssets';
 import { createMenuSeabedMaterial } from './MenuSeabedMaterial';
 import { MenuGroundBatches } from './MenuGroundBatches';
@@ -122,7 +120,6 @@ export class UnderwaterMenuWorld {
   readonly particles: UnderwaterParticles;
   readonly lightShafts: UnderwaterLightShafts;
   readonly surface: UnderwaterSurface;
-  readonly surfaceLifeboat: MenuSurfaceLifeboat;
   readonly sharks: readonly [MenuSharkActor, MenuSharkActor];
   readonly fishSchools: readonly [Group, Group];
   readonly fish: readonly MenuFishActor[];
@@ -153,7 +150,6 @@ export class UnderwaterMenuWorld {
     private readonly camera: PerspectiveCamera,
     models: ModelFactory,
     sand: MenuSandAssets,
-    lifeboat: LifeboatAssets,
     components: UnderwaterMenuComponentFactories = DEFAULT_COMPONENT_FACTORIES,
   ) {
     this.root.name = 'menu:underwater-world';
@@ -222,11 +218,11 @@ export class UnderwaterMenuWorld {
 
     sharkOne.root.name = 'menu:shark-1';
     sharkTwo.root.name = 'menu:shark-2';
-    const sharkOneClip = sharkOne.animations.find(({ name }) => name === 'Armature|Swim');
-    const sharkTwoClip = sharkTwo.animations.find(({ name }) => name === 'Armature|Swim');
+    const sharkOneClip = sharkOne.animations.find(({ name }) => isMenuSwimClipName(name));
+    const sharkTwoClip = sharkTwo.animations.find(({ name }) => isMenuSwimClipName(name));
     if (!sharkOneClip || !sharkTwoClip) {
       this.rollbackConstruction();
-      throw new Error('Menu sharks require the Armature|Swim clip');
+      throw new Error('Menu sharks require a swim clip');
     }
     this.sharks = [
       { root: sharkOne.root, clip: sharkOneClip },
@@ -240,8 +236,6 @@ export class UnderwaterMenuWorld {
     this.lightShafts = new UnderwaterLightShafts();
     this.surface = new UnderwaterSurface(this.menuFog.color, this.menuFog.density);
     this.components.push(this.surface);
-    this.surfaceLifeboat = new MenuSurfaceLifeboat(lifeboat);
-    this.components.push(this.surfaceLifeboat);
     const seabed = this.createSeabed(sand);
     const storyProps = this.createStoryProps();
     const caustic = this.createCausticOverlay();
@@ -282,7 +276,6 @@ export class UnderwaterMenuWorld {
 
     this.root.add(
       this.surface.root,
-      this.surfaceLifeboat.root,
       seabed,
       boat.root,
       groundBatches.root,
@@ -317,7 +310,6 @@ export class UnderwaterMenuWorld {
       setLightTime: (time) => {
         this.lightShafts.setTime(time);
         this.surface.setTime(time);
-        this.surfaceLifeboat.setTime(time);
       },
       setCausticStrength: (strength) => {
         this.causticMaterial.uniforms.uStrength!.value = strength;
@@ -335,9 +327,10 @@ export class UnderwaterMenuWorld {
     scene.add(this.root);
   }
 
-  updateCamera(elapsedSeconds: number, deltaSeconds: number): void {
+  update(elapsedSeconds: number, deltaSeconds: number): void {
     if (this.disposed) return;
     this.cameraRig.update(elapsedSeconds, deltaSeconds);
+    this.signs.update(elapsedSeconds, deltaSeconds);
   }
 
   setCameraPointer(ndcX: number, ndcY: number): void {
@@ -423,8 +416,8 @@ export class UnderwaterMenuWorld {
     school.name = `menu:fish-school-${schoolIndex + 1}`;
     for (let fishIndex = 0; fishIndex < 6; fishIndex += 1) {
       const instance = this.createModel(models, 'redSnapper');
-      const clip = instance.animations.find(({ name }) => name === 'Armature|Swim');
-      if (!clip) throw new Error('Menu fish require the Armature|Swim clip');
+      const clip = instance.animations.find(({ name }) => isMenuSwimClipName(name));
+      if (!clip) throw new Error('Menu fish require a swim clip');
       const slot = new Group();
       slot.name = `menu:fish-school-${schoolIndex + 1}-fish-${fishIndex + 1}`;
       slot.position.set(

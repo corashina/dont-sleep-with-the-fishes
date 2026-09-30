@@ -22,7 +22,7 @@ const BUBBLE_SOURCES = [
   [7.6, -0.3, -13.2, 18],
   [-9.4, -0.2, -2.8, 12],
 ] as const;
-const MARINE_SNOW_COUNT = 900;
+const MARINE_SNOW_COUNT = 1200;
 const MARINE_SNOW_BOUNDS = {
   minX: -30, maxX: 30, minY: -0.6, maxY: MENU_SURFACE_HEIGHT, minZ: -42, maxZ: 6.5,
 } as const;

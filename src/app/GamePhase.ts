@@ -39,7 +39,6 @@ export interface PhaseContext {
 export interface MenuAssets {
   menuModels: MenuModelLibrary;
   menuSandAssets: MenuSandAssets;
-  lifeboatAssets: LifeboatAssets;
 }
 export interface ShipPhaseAssets {
   survivalContent: SurvivalContent;

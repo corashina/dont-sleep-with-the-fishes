@@ -36,7 +36,7 @@ function fixture(menu: GamePhase, ship = phase()) {
     mount, onFatalError,
     resources: {
       audio: AudioSystem.silent(), physicsMode: 'off',
-      acquireMenu: async () => ({ assets: { menuSandAssets: { configure }, lifeboatAssets: { configure } } as unknown as MenuAssets, dispose: releaseMenu }),
+      acquireMenu: async () => ({ assets: { menuSandAssets: { configure } } as unknown as MenuAssets, dispose: releaseMenu }),
       acquireShip: async () => ({ assets: { shipAssets: { configure }, lifeboatAssets: { configure } } as unknown as ShipPhaseAssets, dispose: releaseShip }),
       acquireSurvival: async () => ({ assets: {} as SurvivalAssets, dispose: vi.fn() }),
       dispose: disposeResources,

@@ -13,7 +13,7 @@ function smootherStep(value: number): number {
   return progress * progress * progress * (progress * (progress * 6 - 15) + 10);
 }
 
-// The camera sinks from the lifeboat's shadow to the seabed, then breathes.
+// The camera sinks from near the surface to the seabed, then breathes.
 export class MenuCameraRig {
   private readonly pointer = new Vector2();
   private readonly smoothedPointer = new Vector2();

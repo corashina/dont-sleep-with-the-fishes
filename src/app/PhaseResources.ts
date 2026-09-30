@@ -133,11 +133,10 @@ export class PhaseResources implements PhaseResourceSource {
   }
   acquireMenu(): Promise<ResourceLease<MenuAssets>> {
     return this.acquire(async own => {
-      const [menuModels, menuSandAssets, lifeboatAssets] = await Promise.all([
-        own(this.menuModels.acquire()), own(this.menuSand.acquire()), own(this.lifeboat.acquire()),
-        own(this.menuFont.acquire()),
+      const [menuModels, menuSandAssets] = await Promise.all([
+        own(this.menuModels.acquire()), own(this.menuSand.acquire()), own(this.menuFont.acquire()),
       ]);
-      return { menuModels, menuSandAssets, lifeboatAssets };
+      return { menuModels, menuSandAssets };
     }, this.menuAudio);
   }
   acquireShip(): Promise<ResourceLease<ShipPhaseAssets>> {
