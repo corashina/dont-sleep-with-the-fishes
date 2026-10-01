@@ -281,6 +281,59 @@ function createSessionRig(
 }
 
 describe('event selection contracts', () => {
+  // Importance: 95/100. Catch rewards must stay hidden until the outgoing scene is fully covered.
+  it.each([
+    ['fishingNet', 0, 3],
+    ['fishingNet', 0.99, 2],
+    ['bucket', 0, 1],
+    ['baitTin', 0, 2],
+    ['spyglass', 0.99, 1],
+  ] as const)('reveals school-of-fish food after fade-out: %s, roll %s', async (item, roll, food) => {
+    const instanceId = `${item}-1` as ItemInstanceId;
+    const rig = createSessionRig(new SurvivalSession([{ type: item, instanceId }], {
+      seed: 41, initialEventId: 'school-of-fish', initial: { food: 0, bait: 1 },
+      random: { next: () => roll },
+    }));
+    const reaction = deferred();
+    const hold = deferred();
+    const cover = deferred();
+    const pending = rig.realSession.snapshot();
+    const expectHiddenReward = () => {
+      rig.flow.sync(rig.realSession.snapshot());
+      expect(rig.flow.presentationSnapshot(rig.realSession.snapshot())).toBe(pending);
+      expect(rig.world.syncInventory).toHaveBeenLastCalledWith(pending);
+    };
+    try {
+      await rig.flow.revealPending(pending);
+      rig.world.reactToEventOutcome.mockReturnValueOnce(reaction.promise);
+      rig.ui.holdEventOutcome.mockReturnValueOnce(hold.promise);
+      rig.ui.setSleepCovered.mockImplementation(async covered => {
+        if (covered) await cover.promise;
+      });
+      rig.ui.setSleepCovered.mockClear();
+      rig.flow.resolveItem(item, instanceId);
+      await vi.waitFor(() => expect(rig.world.reactToEventOutcome).toHaveBeenCalledOnce());
+      expect(rig.realSession.snapshot().food).toBe(food);
+      expectHiddenReward();
+      reaction.resolve();
+      await vi.waitFor(() => expect(rig.ui.holdEventOutcome).toHaveBeenCalledOnce());
+      expectHiddenReward();
+      hold.resolve();
+      await vi.waitFor(() => expect(rig.ui.setSleepCovered).toHaveBeenCalledWith(true));
+      expectHiddenReward();
+      cover.resolve();
+      await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+      rig.flow.sync(rig.realSession.snapshot());
+      expect(rig.flow.presentationSnapshot(rig.realSession.snapshot()).food).toBe(food);
+      expect(rig.world.syncInventory).toHaveBeenLastCalledWith(expect.objectContaining({ food }));
+      expect(rig.session.resolveEvent).toHaveBeenCalledOnce();
+      expect(rig.onFatalError).not.toHaveBeenCalled();
+    } finally {
+      reaction.resolve(); hold.resolve(); cover.resolve();
+      rig.flow.dispose();
+    }
+  });
+
   // Importance: 95/100. Ignoring crabs must show theft before the sleep cover hides it.
   it.each(['sleep', 'flashlight'] as const)('shows crab theft before covering the scene after %s', async choice => {
     const type = choice === 'sleep' ? 'map' : 'flashlight';

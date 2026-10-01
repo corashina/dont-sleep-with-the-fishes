@@ -1088,7 +1088,8 @@ export class SurvivalEventFlow {
     )) return;
     const resolved = this.dependencies.session.snapshot();
     this.finishDeferredChoiceSync(
-      focusedResult || eventId === 'crab-swarm' || (eventId === 'ocean-of-blood' && choiceId === 'scubaSet')
+      focusedResult || eventId === 'crab-swarm' || eventId === 'school-of-fish'
+        || (eventId === 'ocean-of-blood' && choiceId === 'scubaSet')
         || (eventId === 'eerie-melody' && choiceId === 'bucket'),
       resolved,
       generation,
