@@ -10,8 +10,8 @@ function material(name: string, color: number, roughness: number, metalness: num
 
 export function createWreckMaterials() {
   return {
-    hull: material('hull-plating', 0x708a83, 0.94, 0.12),
-    paint: material('cabin-paint', 0xb2ac8f, 0.96, 0.04),
+    hull: material('hull-plating', 0x5f7570, 0.94, 0.12),
+    paint: material('cabin-paint', 0x9c957a, 0.96, 0.04),
     timber: material('deck-timber', 0x7c7052, 1, 0),
     iron: material('ironwork', 0x525b53, 0.86, 0.3),
     rust: material('corrosion', 0x90583b, 1, 0.03),
@@ -20,6 +20,7 @@ export function createWreckMaterials() {
     growth: material('marine-growth', 0x586f52, 1, 0),
     rope: material('rigging', 0x646350, 1, 0),
     coral: material('coral', 0x9a7568, 0.95, 0),
+    buoy: material('lifebuoy', 0xa04a36, 0.85, 0),
   };
 }
 

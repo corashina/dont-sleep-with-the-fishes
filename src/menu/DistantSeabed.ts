@@ -29,6 +29,8 @@ import {
 } from './MenuSceneLayout';
 import type { MenuSceneComponent } from './MenuSceneComponent';
 import { MenuSeabedLife } from './MenuSeabedLife';
+import { applyMenuSurfaceDetail } from './MenuSurfaceDetail';
+import type { MenuCaustics } from './MenuCaustics';
 export const SEABED_ROCK_INSTANCE_COUNT = 100;
 export const SEABED_STONE_INSTANCE_COUNT = 144;
 
@@ -134,7 +136,7 @@ export class DistantSeabed implements MenuSceneComponent {
   private readonly detailFootprints: MenuGroundFootprint[] = [];
   private disposed = false;
 
-  constructor(sandTexture: Texture) {
+  constructor(sandTexture: Texture, caustics: MenuCaustics) {
     const distantSand = sandTexture.clone();
     distantSand.name = 'menu:distant-aerial-beach';
     distantSand.repeat.set(1, 1);
@@ -145,6 +147,8 @@ export class DistantSeabed implements MenuSceneComponent {
     const sand = this.terrainMaterial(0x8fa59a, distantSand);
     const rock = this.material(0xffffff, 1);
     const stone = this.material(0xffffff, 1);
+    applyMenuSurfaceDetail(rock, { cellSize: 0.8, bump: 0.25, growth: 0.8, grime: 0.5 }, caustics);
+    applyMenuSurfaceDetail(stone, { cellSize: 0.7, bump: 0.2, growth: 0.6, grime: 0.4 }, caustics);
     const wood = this.material(0x5a4938, 1);
     const ridges = new Group();
     const rocks = new Group();

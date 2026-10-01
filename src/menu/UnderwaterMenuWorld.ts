@@ -6,7 +6,6 @@ import {
   CatmullRomCurve3,
   Color,
   DirectionalLight,
-  DoubleSide,
   Float32BufferAttribute,
   FogExp2,
   Group,
@@ -20,7 +19,6 @@ import {
   Quaternion,
   Raycaster,
   Scene,
-  ShaderMaterial,
   Texture,
   TubeGeometry,
   Vector2,
@@ -55,8 +53,10 @@ import { UnderwaterParticles } from './UnderwaterParticles';
 import { UnderwaterLightShafts } from './UnderwaterLightShafts';
 import { UnderwaterPlantField } from './UnderwaterPlantField';
 import { UnderwaterSurface } from './UnderwaterSurface';
+import { applyMenuSurfaceDetail, type MenuSurfaceDetailOptions } from './MenuSurfaceDetail';
 import type { MenuSandAssets } from './MenuSandAssets';
 import { createMenuSeabedMaterial } from './MenuSeabedMaterial';
+import { MenuCaustics } from './MenuCaustics';
 import { MenuGroundBatches } from './MenuGroundBatches';
 import {
   disposeResourceSets,
@@ -72,6 +72,16 @@ const MENU_GROUND_MODEL_IDS: readonly MenuGroundPlacement['modelId'][] = [
   'rockA', 'rockB', 'rockC', 'coral', 'seaweed', 'starfish', 'skull',
 ];
 
+
+// World-space wear for the seabed props. The library materials are menu-only.
+const GROUND_DETAIL: Partial<Record<MenuGroundPlacement['modelId'] | 'boat', MenuSurfaceDetailOptions>> = {
+  rockA: { cellSize: 1.1, bump: 0.3, growth: 0.85, grime: 0.6 },
+  rockB: { cellSize: 1.1, bump: 0.3, growth: 0.85, grime: 0.6 },
+  rockC: { cellSize: 1.1, bump: 0.3, growth: 0.85, grime: 0.6 },
+  coral: { cellSize: 0.35, bump: 0.15, growth: 0, grime: 0.3 },
+  boat: { cellSize: 0.7, bump: 0.1, growth: 0.6, grime: 0.5 },
+  skull: { cellSize: 0.12, bump: 0.15, growth: 0.3, grime: 0.4 },
+};
 // Instance tints turn the rust-red rock models into cool, algae-stained stone.
 const ROCK_TINTS = [
   new Color(0.62, 0.98, 1.08),
@@ -79,40 +89,18 @@ const ROCK_TINTS = [
   new Color(0.66, 1.04, 1.02),
 ] as const;
 
-const CAUSTIC_VERTEX_SHADER = `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-
-const CAUSTIC_FRAGMENT_SHADER = `
-  uniform float uTime;
-  uniform float uStrength;
-  varying vec2 vUv;
-
-  void main() {
-    float first = sin(vUv.x * 31.0 + uTime * 0.34)
-      * sin(vUv.y * 27.0 - uTime * 0.23);
-    float second = sin((vUv.x + vUv.y) * 41.0 - uTime * 0.19);
-    float bands = smoothstep(0.52, 0.94, first * 0.58 + second * 0.42);
-    gl_FragColor = vec4(0.36, 0.66, 0.66, bands * 0.13 * uStrength);
-  }
-`;
-
 type ModelFactory = Pick<MenuModelLibrary, 'create'>;
 
 export interface UnderwaterMenuComponentFactories {
   createSigns(): MenuSignsComponent;
-  createDorothyWreck(): MenuSceneComponent;
-  createDistantSeabed(sandTexture: Texture): MenuSceneComponent;
+  createDorothyWreck(caustics: MenuCaustics): MenuSceneComponent;
+  createDistantSeabed(sandTexture: Texture, caustics: MenuCaustics): MenuSceneComponent;
 }
 
 const DEFAULT_COMPONENT_FACTORIES: UnderwaterMenuComponentFactories = {
   createSigns: () => new MenuSigns(),
-  createDorothyWreck: () => new SunkenDorothyWreck(),
-  createDistantSeabed: (sandTexture) => new DistantSeabed(sandTexture),
+  createDorothyWreck: (caustics) => new SunkenDorothyWreck(caustics),
+  createDistantSeabed: (sandTexture, caustics) => new DistantSeabed(sandTexture, caustics),
 };
 
 export class UnderwaterMenuWorld {
@@ -134,7 +122,7 @@ export class UnderwaterMenuWorld {
   private readonly components: MenuSceneComponent[] = [];
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
-  private readonly causticMaterial: ShaderMaterial;
+  private readonly caustics = new MenuCaustics();
   private readonly menuBackground = new Color(0x071b24);
   private readonly menuFog = new FogExp2(0x0b3440, 0.015);
   private readonly previousBackground: Scene['background'];
@@ -166,6 +154,7 @@ export class UnderwaterMenuWorld {
     let distantSeabed: MenuSceneComponent;
     try {
       boat = this.createModel(models, 'boat');
+      this.applyGroundDetail(boat.root, GROUND_DETAIL.boat);
       const placementsByModelId: Record<
         MenuGroundPlacement['modelId'],
         MenuGroundPlacement[]
@@ -189,6 +178,7 @@ export class UnderwaterMenuWorld {
           this.placeGroundedModel(groundModel.root, placement.id, placement,
             modelId === 'skull' ? 0.04 : modelId === 'seaweed' ? 0.025 : 0.14);
           groundModelRoots.push(groundModel.root);
+          this.applyGroundDetail(groundModel.root, GROUND_DETAIL[modelId]);
           if (modelId.startsWith('rock')) {
             groundTints.set(groundModel.root, ROCK_TINTS[rockIndex % ROCK_TINTS.length]!);
             rockIndex += 1;
@@ -203,9 +193,9 @@ export class UnderwaterMenuWorld {
       fish = [...firstFishSchool.fish, ...secondFishSchool.fish];
       signs = components.createSigns();
       this.components.push(signs);
-      dorothy = components.createDorothyWreck();
+      dorothy = components.createDorothyWreck(this.caustics);
       this.components.push(dorothy);
-      distantSeabed = components.createDistantSeabed(sand.smooth);
+      distantSeabed = components.createDistantSeabed(sand.smooth, this.caustics);
       this.components.push(distantSeabed);
     } catch (error) {
       this.rollbackConstruction();
@@ -238,8 +228,6 @@ export class UnderwaterMenuWorld {
     this.components.push(this.surface);
     const seabed = this.createSeabed(sand);
     const storyProps = this.createStoryProps();
-    const caustic = this.createCausticOverlay();
-    this.causticMaterial = caustic.material;
     const groundBatches = new MenuGroundBatches(groundModelRoots, groundTints);
     this.components.push(groundBatches);
 
@@ -289,7 +277,6 @@ export class UnderwaterMenuWorld {
       this.plants.root,
       this.lightShafts.root,
       this.particles.root,
-      caustic.mesh,
       hemisphereLight,
       directionalLight,
       directionalLight.target,
@@ -305,14 +292,14 @@ export class UnderwaterMenuWorld {
       setBubbleTime: (time) => this.particles.setBubbleTime(time),
       setMatterTime: (time) => {
         this.particles.setMatterTime(time);
-        this.causticMaterial.uniforms.uTime!.value = time;
+        this.caustics.time.value = time;
       },
       setLightTime: (time) => {
         this.lightShafts.setTime(time);
         this.surface.setTime(time);
       },
       setCausticStrength: (strength) => {
-        this.causticMaterial.uniforms.uStrength!.value = strength;
+        this.caustics.strength.value = strength;
       },
     };
 
@@ -380,6 +367,17 @@ export class UnderwaterMenuWorld {
     const instance = models.create(id);
     this.modelInstances.push(instance);
     return instance;
+  }
+
+  private applyGroundDetail(root: Group, options: MenuSurfaceDetailOptions | undefined): void {
+    if (!options) return;
+    root.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of materials) {
+        if (material instanceof MeshStandardMaterial) applyMenuSurfaceDetail(material, options, this.caustics);
+      }
+    });
   }
 
   private enableShadows(root: Group): void {
@@ -466,12 +464,12 @@ export class UnderwaterMenuWorld {
       position.setY(index, height);
       const shade = 0.88 + Math.sin(x * 0.31 + z * 0.19) * 0.055
         + Math.cos(z * 0.47) * 0.035;
-      color.setXYZ(index, 0.52 * shade, 0.48 * shade, 0.36 * shade);
+      color.setXYZ(index, 0.6 * shade, 0.56 * shade, 0.43 * shade);
     }
     position.needsUpdate = true;
     geometry.setAttribute('color', color);
     geometry.computeVertexNormals();
-    const material = createMenuSeabedMaterial(sand);
+    const material = createMenuSeabedMaterial(sand, this.caustics);
     this.ownedGeometries.add(geometry);
     this.ownedMaterials.add(material);
     const seabed = new Mesh(geometry, material);
@@ -529,32 +527,6 @@ export class UnderwaterMenuWorld {
     ropeGroup.add(rope);
     root.add(ropeGroup);
     return root;
-  }
-
-  private createCausticOverlay(): {
-    readonly mesh: Mesh<PlaneGeometry, ShaderMaterial>;
-    readonly material: ShaderMaterial;
-  } {
-    const geometry = new PlaneGeometry(139.5, 99.5, 1, 1);
-    const material = new ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0 },
-        uStrength: { value: 0.86 },
-      },
-      vertexShader: CAUSTIC_VERTEX_SHADER,
-      fragmentShader: CAUSTIC_FRAGMENT_SHADER,
-      transparent: true,
-      depthWrite: false,
-      side: DoubleSide,
-    });
-    this.ownedGeometries.add(geometry);
-    this.ownedMaterials.add(material);
-    const mesh = new Mesh(geometry, material);
-    mesh.name = 'menu:caustic-overlay';
-    mesh.position.set(0, -0.245, -25);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.renderOrder = 1;
-    return { mesh, material };
   }
 
   private restoreSceneState(): void {

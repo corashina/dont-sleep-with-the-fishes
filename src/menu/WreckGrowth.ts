@@ -38,23 +38,27 @@ function buildKelp(g: WreckGeometry, m: WreckMaterials, random: () => number): v
     const height = 1.3 + random() * 1.6;
     const bend = (random() - 0.5) * 0.7;
     const points: WreckPoint[] = [];
-    for (let step = 0; step <= 4; step += 1) {
-      const t = step / 4;
+    for (let step = 0; step <= 8; step += 1) {
+      const t = step / 8;
       points.push([
         base[0] + side * t * 0.35 + Math.sin(t * 3.1 + z) * 0.12,
         base[1] + t * height,
         base[2] + bend * t * t,
       ]);
     }
-    g.cable(points, 0.028, m.growth);
-    for (let leaf = 1; leaf < 4; leaf += 1) {
+    g.cable(points, 0.022, m.growth);
+    // Long, narrow blades hang from the stipe and droop at their tips.
+    for (let leaf = 1; leaf < points.length; leaf += 1) {
       const [x, y, leafZ] = points[leaf]!;
       const direction = leaf % 2 === 0 ? 1 : -1;
+      const length = 0.32 + random() * 0.28;
+      const twist = (random() - 0.5) * 0.3;
       g.panel([
         [x, y, leafZ],
-        [x + direction * 0.4, y + 0.26, leafZ + 0.06],
-        [x + direction * 0.08, y + 0.6, leafZ - 0.03],
-      ], m.growth, 0xc9dcc0);
+        [x + direction * length * 0.45, y + length * 0.42, leafZ + twist - 0.05],
+        [x + direction * length, y + length * 0.3, leafZ + twist * 1.6],
+        [x + direction * length * 0.5, y + length * 0.26, leafZ + twist + 0.05],
+      ], m.growth, leaf % 3 === 0 ? 0xb8cfa4 : 0xd8e4b8);
     }
   }
 }
