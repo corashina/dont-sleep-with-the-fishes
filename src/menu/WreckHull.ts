@@ -1,4 +1,4 @@
-import { TorusGeometry } from 'three';
+import { BufferGeometry, Float32BufferAttribute, type MeshStandardMaterial, TorusGeometry } from 'three';
 import { WreckGeometry, type WreckPoint } from './WreckGeometry';
 import type { WreckMaterials } from './WreckMaterials';
 
@@ -13,26 +13,66 @@ const STATIONS = [
 const STRAKES = [0, 0.24, 0.53, 0.78, 1] as const;
 const PLATE_TINTS = [0xffffff, 0xd6dfd3, 0xe4e2ce, 0xc1cec4, 0xe0e8df];
 
+// Cubic Hermite curves through the stations give a fair hull line with no kinks.
+function stationValue(index: number, column: 1 | 2 | 3, t: number): number {
+  const at = (i: number) => STATIONS[Math.max(0, Math.min(STATIONS.length - 1, i))]![column];
+  const tangent = (i: number) => (at(i + 1) - at(i - 1)) * 0.5;
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * at(index) + (t3 - 2 * t2 + t) * tangent(index)
+    + (-2 * t3 + 3 * t2) * at(index + 1) + (t3 - t2) * tangent(index + 1);
+}
+
 export function wreckSection(z: number): { width: number; deck: number; keel: number } {
   const value = Math.max(-9, Math.min(9, z));
   for (let i = 0; i < STATIONS.length - 1; i += 1) {
-    const a = STATIONS[i]!;
     const b = STATIONS[i + 1]!;
     if (value > b[0]) continue;
+    const a = STATIONS[i]!;
     const t = (value - a[0]) / (b[0] - a[0]);
     return {
-      width: a[1] + (b[1] - a[1]) * t,
-      deck: a[2] + (b[2] - a[2]) * t,
-      keel: a[3] + (b[3] - a[3]) * t,
+      width: Math.max(0.04, stationValue(i, 1, t)),
+      deck: stationValue(i, 2, t),
+      keel: stationValue(i, 3, t),
     };
   }
   throw new Error('Invalid wreck station');
 }
 
+// The topsides stay nearly upright. Lower down, the bilge rounds into the keel.
 export function wreckSkin(side: number, z: number, depth: number, offset = 0): WreckPoint {
   const { width, deck, keel } = wreckSection(z);
-  const taper = depth < 0.53 ? 1 - depth * 0.2 : 0.894 - (depth - 0.53) * 1.37;
+  const taper = 1 - 0.75 * Math.pow(depth, 2.6);
   return [side * (width * taper + offset), deck + (keel - deck) * depth, z];
+}
+
+// Old plating sags inward between the frames, so each plate is a small curved patch.
+function buildPlate(g: WreckGeometry, side: number, z0: number, z1: number,
+  top: number, bottom: number, material: MeshStandardMaterial, tint: number): void {
+  const columns = 3;
+  const rows = 3;
+  const positions: number[] = [];
+  for (let row = 0; row <= rows; row += 1) {
+    const v = row / rows;
+    for (let column = 0; column <= columns; column += 1) {
+      const u = column / columns;
+      const sag = -0.028 * Math.sin(Math.PI * u) * Math.sin(Math.PI * v);
+      positions.push(...wreckSkin(side, z0 + (z1 - z0) * u, top + (bottom - top) * v, sag));
+    }
+  }
+  const indices: number[] = [];
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const a = row * (columns + 1) + column;
+      const b = a + columns + 1;
+      indices.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  g.add(geometry, material, tint);
 }
 
 function buildPlating(g: WreckGeometry, m: WreckMaterials): void {
@@ -46,10 +86,8 @@ function buildPlating(g: WreckGeometry, m: WreckMaterials): void {
         const top = STRAKES[row]!;
         const bottom = STRAKES[row + 1]!;
         const tint = PLATE_TINTS[(column * 3 + row * 2) % PLATE_TINTS.length]!;
-        g.panel([
-          wreckSkin(side, z0 + 0.009, top + 0.004), wreckSkin(side, z1 - 0.009, top + 0.004),
-          wreckSkin(side, z1 - 0.009, bottom - 0.004), wreckSkin(side, z0 + 0.009, bottom - 0.004),
-        ], row === 3 ? m.rust : m.hull, tint);
+        buildPlate(g, side, z0 + 0.009, z1 - 0.009, top + 0.004, bottom - 0.004,
+          row === 3 ? m.rust : m.hull, tint);
         buildPlateSeam(g, m, side, column, row);
       }
       // Longitudinal keel closes the bottom of the shell.
