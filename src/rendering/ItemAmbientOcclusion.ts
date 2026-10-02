@@ -1,5 +1,6 @@
 import {
   Camera,
+  Light,
   Mesh,
   PerspectiveCamera,
   Scene,
@@ -64,6 +65,19 @@ export class ItemAmbientOcclusionPass extends GTAOPass {
   private quality: AmbientOcclusionQuality;
   private fullWidth = 1;
   private fullHeight = 1;
+  private readonly lights: Light[] = [];
+  private readonly lightMasks: number[] = [];
+  private mainCameraMask = 1;
+  private readonly includeMainLight = (object: Object3D): void => {
+    if (!(object instanceof Light)) return;
+    this.lights.push(object);
+    this.lightMasks.push(object.layers.mask);
+    if ((object.layers.mask & this.mainCameraMask) !== 0) {
+      object.layers.enable(ITEM_AMBIENT_OCCLUSION_LAYER);
+    } else {
+      object.layers.disable(ITEM_AMBIENT_OCCLUSION_LAYER);
+    }
+  };
 
   constructor(
     mode: ItemAmbientOcclusionMode = 'composite',
@@ -127,11 +141,32 @@ export class ItemAmbientOcclusionPass extends GTAOPass {
     maskActive: boolean,
   ): void {
     const originalCameraLayerMask = this.camera.layers.mask;
+    const sceneAutoUpdate = this.scene.matrixWorldAutoUpdate;
+    const cameraAutoUpdate = this.camera.matrixWorldAutoUpdate;
+    const shadowAutoUpdate = renderer.shadowMap.autoUpdate;
+    const shadowNeedsUpdate = renderer.shadowMap.needsUpdate;
+    this.mainCameraMask = originalCameraLayerMask;
+    this.scene.traverseVisible(this.includeMainLight);
+    // The normal material ignores lights. Keep the main lighting cache and existing shadows.
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = false;
     this.camera.layers.set(ITEM_AMBIENT_OCCLUSION_LAYER);
+    // The preceding color pass already updated this frame's transforms.
+    this.scene.matrixWorldAutoUpdate = false;
+    this.camera.matrixWorldAutoUpdate = false;
     try {
       super.render(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
     } finally {
+      for (let index = 0; index < this.lights.length; index++) {
+        this.lights[index]!.layers.mask = this.lightMasks[index]!;
+      }
+      this.lights.length = 0;
+      this.lightMasks.length = 0;
+      renderer.shadowMap.autoUpdate = shadowAutoUpdate;
+      renderer.shadowMap.needsUpdate = shadowNeedsUpdate;
       this.camera.layers.mask = originalCameraLayerMask;
+      this.scene.matrixWorldAutoUpdate = sceneAutoUpdate;
+      this.camera.matrixWorldAutoUpdate = cameraAutoUpdate;
     }
   }
 

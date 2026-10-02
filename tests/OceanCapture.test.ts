@@ -4,6 +4,7 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  MeshStandardMaterial,
   Camera,
   Matrix4,
   Object3D,
@@ -273,17 +274,21 @@ describe('OceanCapture', () => {
     const capture = new OceanCapture();
     const testRenderer = createRenderer();
     const { scene, water, camera } = createSceneInput();
+    const originalMaterial = new MeshStandardMaterial();
+    const prop = new Mesh(new BoxGeometry(), originalMaterial);
+    scene.add(prop);
     testRenderer.setWater(water);
     const originalTarget = new WebGLRenderTarget(7, 9);
     testRenderer.renderer.setRenderTarget(originalTarget, 3, 2);
     const error = new Error('reflection failed');
     vi.mocked(testRenderer.renderer.render)
-      .mockImplementationOnce(() => undefined)
+      .mockImplementationOnce(() => { expect(prop.material).not.toBe(originalMaterial); })
       .mockImplementationOnce(() => { throw error; });
 
     expect(() => capture.update(testRenderer.renderer, scene, camera, water)).toThrow(error);
 
     expect(water.visible).toBe(true);
+    expect(prop.material).toBe(originalMaterial);
     expect(scene.overrideMaterial).toBeNull();
     expect(testRenderer.renderer.autoClear).toBe(true);
     expect(testRenderer.renderer.xr.enabled).toBe(true);
@@ -299,5 +304,7 @@ describe('OceanCapture', () => {
     expect(testRenderer.state().scissor.toArray()).toEqual([4, 5, 80, 90]);
     originalTarget.dispose();
     capture.dispose();
+    prop.geometry.dispose();
+    originalMaterial.dispose();
   });
 });

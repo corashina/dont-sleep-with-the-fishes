@@ -19,6 +19,7 @@ import {
 } from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { sceneRefractionBackgrounds } from './refractionBackground';
+import { CaptureMaterials } from './CaptureMaterials';
 
 const MAX_CAPTURE_SIZE = 1024;
 
@@ -41,6 +42,7 @@ export class OceanCapture {
   private captureWidth = 1;
   private captureHeight = 1;
   private disposed = false;
+  private readonly materials = new CaptureMaterials();
 
   constructor() {
     this.depthTexture = new DepthTexture(1, 1, UnsignedIntType);
@@ -118,6 +120,7 @@ export class OceanCapture {
       renderer.shadowMap.autoUpdate = false;
       renderer.shadowMap.needsUpdate = false;
       renderer.autoClear = false;
+      this.materials.apply(scene);
 
       renderer.setRenderTarget(this.colorTarget);
       renderer.state.buffers.depth.setMask(true);
@@ -143,6 +146,7 @@ export class OceanCapture {
       this.reflectionMatrix.copy(this.reflectorTextureMatrix)
         .multiply(this.reflectorWorldInverse);
     } finally {
+      this.materials.restore();
       scene.matrixWorldAutoUpdate = originalSceneAutoUpdate;
       camera.matrixWorldAutoUpdate = originalCameraAutoUpdate;
       if (background !== undefined) background.visible = originalBackgroundVisible;
@@ -164,6 +168,7 @@ export class OceanCapture {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.materials.dispose();
     this.colorTarget.dispose();
     this.reflector.dispose();
     this.reflector.geometry.dispose();

@@ -192,6 +192,7 @@ export class BoatAnchorView {
   private readonly anchorLayouts = new Map<string, AnchorLayoutState>();
   private readonly anchorContents = new Map<string, AnchorContentState>();
   private readonly seenAnchorIds = new Set<string>();
+  private readonly overlapCandidateIds: string[] = [];
   private readonly nextLayout: AnchorLayoutState = {
     visible: false, x: 0, y: 0, targetKind: 'item', width: 0, height: 0, zIndex: 0, depleted: false,
   };
@@ -709,6 +710,7 @@ export class BoatAnchorView {
     clean(() => { this.onCarlitosCardChange = () => undefined; });
     clean(() => { this.onCarlitosPosition = () => undefined; });
     clean(() => this.anchorLayouts.clear());
+    clean(() => { this.overlapCandidateIds.length = 0; });
     if (failed) throw firstError;
   }
 
@@ -1759,17 +1761,17 @@ export class BoatAnchorView {
   }
 
   private syncOverlapState(): void {
+    this.overlapCandidateIds.length = 0;
+    this.anchorButtons.forEach((button, id) => {
+      if (this.isCycleCandidate(button, this.anchors.get(id))) this.overlapCandidateIds.push(id);
+    });
     let cycleIsValid = false;
     this.anchorButtons.forEach((button, id) => {
-      const anchor = this.anchors.get(id);
       let count = 0;
-      if (this.isCycleCandidate(button, anchor)) {
-        this.anchorButtons.forEach((candidate, candidateId) => {
-          if (
-            this.isCycleCandidate(candidate, this.anchors.get(candidateId))
-            && this.anchorIdsOverlap(id, candidateId)
-          ) count += 1;
-        });
+      if (this.overlapCandidateIds.includes(id)) {
+        for (const candidateId of this.overlapCandidateIds) {
+          if (this.anchorIdsOverlap(id, candidateId)) count += 1;
+        }
       }
       if (count > 1) {
         button.dataset.overlapCount = String(count);

@@ -5,6 +5,7 @@ import {
   CylinderGeometry,
   ExtrudeGeometry,
   Group,
+  InstancedMesh,
   Mesh,
   type MeshStandardMaterial,
   Shape,
@@ -238,6 +239,11 @@ function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void 
   ribs.name = 'survival-ribs';
   const frameGeometry = new RoundedBoxGeometry(0.075, 0.68, 0.09, 1, 0.012);
   mapLifeboatWoodGrain(frameGeometry, 'y', 0.075, 0.143);
+  const frames = new InstancedMesh(frameGeometry, materials.darkTimber.clone(), LIFEBOAT_FLOOR_RIB_CENTERS_Z.length * 2);
+  frames.name = 'lifeboat-side-frames';
+  // The boat owns this geometry. Release the instance buffer with it.
+  frameGeometry.addEventListener('dispose', () => frames.dispose());
+  let frameIndex = 0;
   for (const [index, z] of LIFEBOAT_FLOOR_RIB_CENTERS_Z.entries()) {
     const halfWidth = Math.max(0.48, (lifeboatHullHalfWidthAt(z) ?? 1.4) - 0.15);
     const rib = new Mesh(
@@ -250,10 +256,10 @@ function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void 
     ribs.add(rib);
     for (const sign of [-1, 1]) {
       const frame = new Mesh(frameGeometry, materials.darkTimber);
-      frame.name = `lifeboat-side-frame-${index}-${sign}`;
       frame.position.set(sign * (halfWidth - 0.015), -0.025, z);
       frame.rotation.z = -sign * 0.07;
-      ribs.add(frame);
+      frame.updateMatrix();
+      frames.setMatrixAt(frameIndex++, frame.matrix);
       const fasteningGeometry = new CylinderGeometry(0.016, 0.016, 0.008, 8);
       fasteningGeometry.rotateZ(Math.PI / 2);
       for (const y of [-0.21, 0.22]) {
@@ -263,6 +269,7 @@ function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void 
       }
     }
   }
+  ribs.add(frames);
   target.add(ribs);
 
   const benches = new Group();

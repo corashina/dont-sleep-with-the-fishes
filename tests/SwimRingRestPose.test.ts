@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { Box3, Group, Mesh, Raycaster, Texture, Triangle, Vector3 } from 'three';
+import { Box3, Group, InstancedMesh, Matrix4, Mesh, Raycaster, Texture, Triangle, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { expect, it } from 'vitest';
 import { boatSupplyTransform } from '../src/world/BoatStorage';
@@ -31,7 +31,18 @@ it('supports the ring on a floorboard and bench rail without intersecting the wo
   const obstacles: Box3[] = [];
   for (const root of [bench, boat.getObjectByName('survival-ribs')!]) {
     root.traverse((object) => {
-      if (object instanceof Mesh) obstacles.push(new Box3().setFromObject(object).expandByScalar(-0.001));
+      if (!(object instanceof Mesh)) return;
+      if (!(object instanceof InstancedMesh)) {
+        obstacles.push(new Box3().setFromObject(object).expandByScalar(-0.001));
+        return;
+      }
+      const matrix = new Matrix4();
+      object.geometry.computeBoundingBox();
+      for (let index = 0; index < object.count; index++) {
+        object.getMatrixAt(index, matrix);
+        matrix.premultiply(object.matrixWorld);
+        obstacles.push(object.geometry.boundingBox!.clone().applyMatrix4(matrix).expandByScalar(-0.001));
+      }
     });
   }
   const floorPoint = new Vector3(0, Infinity, 0);

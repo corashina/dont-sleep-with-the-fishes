@@ -79,6 +79,8 @@ export class HoverOutlinePass extends OutlinePass {
     const currentOverrideMaterial = this.renderScene.overrideMaterial;
     const shadowAutoUpdate = renderer.shadowMap.autoUpdate;
     const shadowNeedsUpdate = renderer.shadowMap.needsUpdate;
+    const sceneAutoUpdate = this.renderScene.matrixWorldAutoUpdate;
+    const cameraAutoUpdate = this.renderCamera.matrixWorldAutoUpdate;
     let nonSelectedObjectsHidden = false;
     let sourceColorModified = false;
     try {
@@ -98,6 +100,9 @@ export class HoverOutlinePass extends OutlinePass {
       this.renderScene.overrideMaterial = this.prepareMaskMaterial;
       nonSelectedObjectsHidden = true;
       internals._changeVisibilityOfNonSelectedObjects(false);
+      // Reuse the transforms from the color pass whose depth this mask uses.
+      this.renderScene.matrixWorldAutoUpdate = false;
+      this.renderCamera.matrixWorldAutoUpdate = false;
       renderer.render(this.renderScene, this.renderCamera);
 
       // Copy resolved mask color with the existing fullscreen material.
@@ -119,6 +124,8 @@ export class HoverOutlinePass extends OutlinePass {
       internals._selectionCache.clear();
       this.renderScene.background = currentBackground;
       this.renderScene.overrideMaterial = currentOverrideMaterial;
+      this.renderScene.matrixWorldAutoUpdate = sceneAutoUpdate;
+      this.renderCamera.matrixWorldAutoUpdate = cameraAutoUpdate;
       renderer.shadowMap.autoUpdate = shadowAutoUpdate;
       renderer.shadowMap.needsUpdate = shadowNeedsUpdate;
       if (maskActive) renderer.state.buffers.stencil.setTest(true);

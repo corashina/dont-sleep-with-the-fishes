@@ -64,6 +64,8 @@ function createFixture() {
     expect(renderer.autoClear).toBe(true);
     expect(renderer.shadowMap.autoUpdate).toBe(true);
     expect(renderer.shadowMap.needsUpdate).toBe(true);
+    expect(pass.renderScene.matrixWorldAutoUpdate).toBe(true);
+    expect(pass.renderCamera.matrixWorldAutoUpdate).toBe(true);
     expect(stencil).toBe(true);
     expect(target).toBe(initialTarget);
     expect(color.getHex()).toBe(0x123456);
@@ -91,6 +93,8 @@ it('saves color before clearing only source color and draws selected geometry on
     expect(f.pass.prepareMaskMaterial.depthFunc).toBe(LessEqualDepth);
     expect(f.renderer.shadowMap.autoUpdate).toBe(false);
     expect(f.renderer.shadowMap.needsUpdate).toBe(false);
+    expect(f.scene.matrixWorldAutoUpdate).toBe(false);
+    expect(f.pass.renderCamera.matrixWorldAutoUpdate).toBe(false);
   });
   f.imageRender.mockImplementationOnce(() => {
     f.events.push('save');
@@ -241,5 +245,16 @@ it('copies the scene to the screen without a captured mask', () => {
     expect(f.renderer.getRenderTarget()).toBe(null);
     expect(f.pass.materialCopy.uniforms.tDiffuse!.value).toBe(f.read.texture);
     expect(f.renderer.render).not.toHaveBeenCalled();
+  } finally { f.dispose(); }
+});
+
+it('preserves manually managed scene and camera transforms', () => {
+  const f = createFixture();
+  f.scene.matrixWorldAutoUpdate = false;
+  f.pass.renderCamera.matrixWorldAutoUpdate = false;
+  try {
+    f.runCapture();
+    expect(f.scene.matrixWorldAutoUpdate).toBe(false);
+    expect(f.pass.renderCamera.matrixWorldAutoUpdate).toBe(false);
   } finally { f.dispose(); }
 });

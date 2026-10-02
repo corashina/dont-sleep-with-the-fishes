@@ -1,7 +1,7 @@
 // Importance: 95/100. The swarm must pause for the choice and carry the exact stolen item.
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { Box3, DoubleSide, Group, Matrix4, Mesh, MeshStandardMaterial, Quaternion, Raycaster, Texture, Vector3 } from 'three';
+import { Box3, DoubleSide, Group, InstancedMesh, Matrix4, Mesh, MeshStandardMaterial, Quaternion, Raycaster, Texture, Vector3 } from 'three';
 import { boatSupplyTransform } from '../src/world/BoatStorage';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { HeartBasket } from '../src/survival/HeartBasket';
@@ -154,14 +154,23 @@ describe('Crab swarm presentation', () => {
         if (!crab.visible) continue;
         const bounds = new Box3().setFromObject(crab);
         for (const solid of solids) {
-          const box = new Box3().setFromObject(solid);
-          if (!bounds.intersectsBox(box)) continue;
+          const boxes: Box3[] = [];
+          if (solid instanceof InstancedMesh) {
+            solid.geometry.computeBoundingBox();
+            const matrix = new Matrix4();
+            for (let instance = 0; instance < solid.count; instance++) {
+              solid.getMatrixAt(instance, matrix);
+              matrix.premultiply(solid.matrixWorld);
+              boxes.push(solid.geometry.boundingBox!.clone().applyMatrix4(matrix));
+            }
+          } else boxes.push(new Box3().setFromObject(solid));
+          if (!boxes.some(box => bounds.intersectsBox(box))) continue;
           crab.traverse(object => {
             if (!(object instanceof Mesh)) return;
             const vertices = object.geometry.getAttribute('position');
             for (let index = 0; index < vertices.count; index += 3) {
               point.fromBufferAttribute(vertices, index).applyMatrix4(object.matrixWorld);
-              if (!box.containsPoint(point)) continue;
+              if (!boxes.some(box => box.containsPoint(point))) continue;
               ray.set(point, direction);
               expect(ray.intersectObject(solid, false).length % 2, `${label} ${crab.name} in ${solid.name}`).toBe(0);
             }

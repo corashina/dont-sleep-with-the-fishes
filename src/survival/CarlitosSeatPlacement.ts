@@ -6,6 +6,7 @@ import {
   lifeboatHullHalfWidthAt,
 } from '../world/Lifeboat';
 import type { EventSide } from './eventVariant';
+import { SkinnedVertexSampler } from '../rendering/SkinnedVertexSampler';
 
 interface Seat {
   readonly id: string;
@@ -74,7 +75,7 @@ function supportedSeats(boat: Object3D): readonly Seat[] {
 
 /** Selects supported seats using the current skinned body, visible geometry, and camera. */
 export class CarlitosSeatPlacement {
-  private readonly bodyMeshes: Mesh[] = [];
+  private readonly bodyMeshes: { mesh: Mesh; sampler: SkinnedVertexSampler | null }[] = [];
   private readonly seats: readonly Seat[];
   private readonly localBounds = new Box3();
   private readonly meshBounds = new Box3();
@@ -108,7 +109,12 @@ export class CarlitosSeatPlacement {
     private readonly scene: Object3D,
     private readonly camera: PerspectiveCamera,
   ) {
-    body.traverse(object => { if (object instanceof Mesh) this.bodyMeshes.push(object); });
+    body.traverse(object => {
+      if (object instanceof Mesh) this.bodyMeshes.push({
+        mesh: object,
+        sampler: object instanceof SkinnedMesh ? new SkinnedVertexSampler(object) : null,
+      });
+    });
     this.seats = supportedSeats(boat);
   }
 
@@ -199,11 +205,12 @@ export class CarlitosSeatPlacement {
   private measureBody(): void {
     this.inverseRoot.copy(this.root.matrixWorld).invert();
     this.localBounds.makeEmpty();
-    for (const mesh of this.bodyMeshes) {
+    for (const { mesh, sampler } of this.bodyMeshes) {
+      sampler?.prepare();
       this.meshToRoot.multiplyMatrices(this.inverseRoot, mesh.matrixWorld);
       const positions = mesh.geometry.getAttribute('position');
       for (let index = 0; index < positions.count; index++) {
-        mesh.getVertexPosition(index, this.point).applyMatrix4(this.meshToRoot);
+        (sampler ?? mesh).getVertexPosition(index, this.point).applyMatrix4(this.meshToRoot);
         this.localBounds.expandByPoint(this.point);
       }
     }

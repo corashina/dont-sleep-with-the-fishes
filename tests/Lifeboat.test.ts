@@ -1,5 +1,5 @@
-import { describe,expect,it } from 'vitest';
-import { Box3,Matrix4,Mesh,Quaternion,Raycaster,Texture,Vector3 } from 'three';
+import { describe,expect,it,vi } from 'vitest';
+import { Box3,InstancedMesh,Matrix4,Mesh,Quaternion,Raycaster,Texture,Vector3 } from 'three';
 import { createLifeboat, LIFEBOAT_GUNWALE_SURFACE_Y } from '../src/world/Lifeboat';
 import { LifeboatAssets } from '../src/world/LifeboatAssets';
 import { BOAT_SUPPLY_GROUP_IDS,boatSupplyTransform } from '../src/world/BoatStorage';
@@ -12,6 +12,15 @@ function buildBoat() {
 }
 
 describe('lifeboat visual geometry', () => {
+  // Importance: 95/100. Batched frames must release their GPU instance buffer with the boat.
+  it('releases frame instances when their owned geometry is disposed', () => {
+    const boat = buildBoat();
+    const frames = boat.root.getObjectByName('lifeboat-side-frames') as InstancedMesh;
+    expect(frames.isInstancedMesh).toBe(true);
+    const dispose = vi.spyOn(frames, 'dispose');
+    frames.geometry.dispose();
+    expect(dispose).toHaveBeenCalledOnce();
+  });
   // Importance: 95/100. The underside must close the hull with outward faces and a convex profile.
   it('has a closed rounded underside with raised sides and ends', () => {
     const boat = buildBoat();

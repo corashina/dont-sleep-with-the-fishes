@@ -439,6 +439,46 @@ describe('SurvivalUI', () => {
     expect(highlight).toHaveBeenLastCalledWith('bucket-overlap');
   });
 
+  // Importance: 95/100. Stale overlap groups can select hidden or disabled items.
+  it('refreshes overlap groups when anchors or their host become unavailable', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const anchors = ['first-map', 'second-map'].map(id => ({
+      id, itemType: 'map' as const, toolId: null, action: null, remainingUses: null,
+      x: 300, y: 220, visible: true, depleted: false,
+      hitArea: { width: 40, height: 40, depth: 1 },
+    }));
+    ui.setAnchors(anchors);
+    const first = mount.querySelector<HTMLButtonElement>('[data-anchor-id="first-map"]')!;
+    const second = mount.querySelector<HTMLButtonElement>('[data-anchor-id="second-map"]')!;
+    expect(first.dataset.overlapCount).toBe('2');
+
+    anchors[1]!.visible = false;
+    ui.setAnchors(anchors);
+    expect(first.dataset.overlapCount).toBeUndefined();
+    expect(second.dataset.overlapCount).toBeUndefined();
+    expect(first.hasAttribute('aria-keyshortcuts')).toBe(false);
+
+    anchors[1]!.visible = true;
+    ui.setAnchors(anchors);
+    expect(first.dataset.overlapCount).toBe('2');
+    mount.hidden = true;
+    ui.setAnchors(anchors);
+    expect(first.dataset.overlapCount).toBeUndefined();
+    mount.hidden = false;
+    ui.setAnchors(anchors);
+    expect(first.dataset.overlapCount).toBe('2');
+
+    ui.setBusy(true);
+    expect(first.dataset.overlapCount).toBeUndefined();
+    ui.setBusy(false);
+    expect(first.dataset.overlapCount).toBe('2');
+    ui.setAnchors([anchors[0]!]);
+    expect(first.dataset.overlapCount).toBeUndefined();
+    expect(second.isConnected).toBe(false);
+  });
+
   it.each([' '] as const)(
     'activates an eligible aggregate item anchor with %s',
     (key) => {
