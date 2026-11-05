@@ -1,5 +1,5 @@
 import { isMobileDevice } from '../browser/isMobileDevice';
-import { initializeAnalytics } from '../browser/GoogleAnalytics';
+import { trackVisit } from '../browser/Analytics';
 import { systemText } from '../i18n/systemMessages';
 import { createSystemScreen } from '../ui/SystemScreen';
 
@@ -21,7 +21,7 @@ export async function startApplication(mount: HTMLElement): Promise<void> {
   try {
     const { launchGame } = await import('./launchGame');
     if (cancelled) return;
-    initializeAnalytics();
+    trackVisit();
     const launch = launchGame(mount);
     cancelLaunch = () => launch.cancel();
     await launch.completion;

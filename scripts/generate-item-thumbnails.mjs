@@ -119,7 +119,7 @@ async function main() {
     await vite.listen();
     const address = vite.httpServer?.address();
     if (!address || typeof address === 'string') throw new Error('Could not determine Vite port');
-    const rendererUrl = `http://127.0.0.1:${address.port}/dont-sleep-with-the-fishes/scripts/item-thumbnail-renderer.html`;
+    const rendererUrl = `http://127.0.0.1:${address.port}/scripts/item-thumbnail-renderer.html`;
     const executable = await findBrowserPath();
     browser = spawn(executable, [
       '--headless=new',

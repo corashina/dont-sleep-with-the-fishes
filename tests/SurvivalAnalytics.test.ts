@@ -1,12 +1,12 @@
 // Importance: 95/100. Prevents duplicate endings and test scenes from corrupting live gameplay reports.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { trackGameEnding, trackGameStart } from '../src/browser/GoogleAnalytics';
+import { trackGameEnd, trackGameStart } from '../src/browser/Analytics';
 import { SurvivalPhase, type SurvivalPhaseStart } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 
-vi.mock('../src/browser/GoogleAnalytics', () => ({
+vi.mock('../src/browser/Analytics', () => ({
   trackGameStart: vi.fn(),
-  trackGameEnding: vi.fn(),
+  trackGameEnd: vi.fn(),
 }));
 
 afterEach(() => vi.clearAllMocks());
@@ -26,7 +26,7 @@ describe('survival analytics hooks', () => {
       phase.start();
       phase.update(1, 1);
       phase.update(2, 1);
-      expect(trackGameEnding).toHaveBeenCalledExactlyOnceWith(terminal.ending);
+      expect(trackGameEnd).toHaveBeenCalledExactlyOnceWith(terminal.ending);
       expect(trackGameStart).not.toHaveBeenCalled();
     } finally { phase.dispose(); }
   });
@@ -43,7 +43,7 @@ describe('survival analytics hooks', () => {
     try {
       phase.start();
       phase.update(1, 1);
-      expect(trackGameEnding).not.toHaveBeenCalled();
+      expect(trackGameEnd).not.toHaveBeenCalled();
       expect(trackGameStart).not.toHaveBeenCalled();
     } finally { phase.dispose(); }
   });
@@ -57,11 +57,11 @@ describe('survival analytics hooks', () => {
     try {
       phase.start();
       expect(trackGameStart).not.toHaveBeenCalled();
-      expect(trackGameEnding).not.toHaveBeenCalled();
+      expect(trackGameEnd).not.toHaveBeenCalled();
       current = SurvivalSession.createEndingPreview([], 41, 'death').snapshot();
       phase.update(1, 1);
       phase.update(2, 1);
-      expect(trackGameEnding).toHaveBeenCalledExactlyOnceWith(current.ending);
+      expect(trackGameEnd).toHaveBeenCalledExactlyOnceWith(current.ending);
       expect(trackGameStart).not.toHaveBeenCalled();
     } finally { phase.dispose(); }
   });

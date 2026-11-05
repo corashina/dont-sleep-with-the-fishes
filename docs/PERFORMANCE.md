@@ -33,7 +33,7 @@ Storm adds rain, lightning, spray, and larger waves. It was not slower than norm
 1. Build the baseline and changed source into separate output folders.
 2. Serve each build with Vite preview, using ports 4173 and 4174.
 3. Use fresh browser storage and the viewport above.
-4. Open `/dont-sleep-with-the-fishes/?playtest=survival&seed=123&missing=cannedFood-1&missing=baitTin-1`.
+4. Open `/?playtest=survival&seed=123&missing=cannedFood-1&missing=baitTin-1`.
 5. Wait for the loading screen to disappear, then allow five seconds of warm-up.
 6. Record 15 seconds without input. Repeat three times.
 7. Repeat with the System Tuning weather override set to Thunderstorm.

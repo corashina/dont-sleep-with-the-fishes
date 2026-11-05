@@ -17,7 +17,7 @@ bun run dev
 ```
 
 Open the URL printed by Vite. The server binds to `127.0.0.1`.
-The configured base path is `/dont-sleep-with-the-fishes/`.
+The game serves from the site root.
 
 ## Commands and checks
 
@@ -29,7 +29,7 @@ The configured base path is `/dont-sleep-with-the-fishes/`.
 | `bun run test` | Run Vitest once. |
 | `bun run test:watch` | Run Vitest in watch mode. |
 | `bun run lint` | Run ESLint with zero allowed warnings. |
-| `bun run typecheck` | Check TypeScript without emitting files. |
+| `bun run typecheck` | Check game and Pages Function TypeScript without emitting files. |
 | `bun run build` | Run lint, TypeScript checks, and the production build into `dist/`. |
 | `bun run preview` | Serve an existing production build. |
 | `bun run models:check` | Check item, ship, fishing, event, menu, and texture assets. |
@@ -103,30 +103,58 @@ bun run build
 bun run preview
 ```
 
-Deploy `dist/` to a static host. Match its URL path to `base` in [vite.config.ts](../vite.config.ts).
-The checked-in base assumes `/dont-sleep-with-the-fishes/`; change it before building for a different path.
+Cloudflare Pages hosts the game at <https://dontsleepwiththefishes.pages.dev/>. [wrangler.jsonc](../wrangler.jsonc) configures the project.
+Pages serves `dist/` as static files.
+The Pages Function in [functions/api/event.ts](../functions/api/event.ts) handles `POST /api/event`.
 
-[Deploy to GitHub Pages](../.github/workflows/deploy-pages.yml) runs on pushes to `master` and manual dispatch.
-Deployment waits for the Ubuntu build job.
-That job checks models and textures, then runs lint, TypeScript checks, and the production build.
+Run the site locally after a build:
+
+```sh
+bun run build
+bunx wrangler pages dev
+```
+
+Pages builds and deploys each push to `master`.
+It also deploys other branches as previews and posts the preview URL on the pull request.
+
+| Setting | Value |
+| --- | --- |
+| Project | `dontsleepwiththefishes` |
+| Production branch | `master` |
+| Build command | `bun install --frozen-lockfile && bun run models:check && bun run build` |
+| Output directory | `dist` |
+
+Run `bunx wrangler types functions/worker-configuration.d.ts` after you change `wrangler.jsonc`.
 
 ## Analytics
 
-Set the public `VITE_GA_MEASUREMENT_ID` before a production build.
-For GitHub Pages, use the repository Actions variable with that name.
-For another host, configure the build environment or use [.env.example](../.env.example) as the `.env.production` template.
-An empty or invalid ID disables analytics.
+The game sends events to the Pages Function with `navigator.sendBeacon`.
+The function validates each event and writes one row to the `fishes_events` Workers Analytics Engine dataset.
+The function adds the country from Cloudflare request data. The game sends no country, cookie, or user ID.
 
-| Event | Trigger | Parameters |
+| Event | Trigger | Fields |
 | --- | --- | --- |
+| `visit` | Application start, one time for each page load. | None. |
 | `game_start` | Start scavenging, including restart. | None. |
-| `game_death` | Dorothy, Health, or Hull ending. | `ending_type`, `survival_day`. |
-| `game_win` | Rescue or Kraken ending. | `ending_type`, `survival_day`. |
+| `game_end` | Any ending. | `ending`, `day`. |
 
 Ending IDs are `dorothy`, `death`, `sinking`, `rescue`, and `kraken`.
 The Dorothy ending uses day zero. Survival endings use the current day.
-Loading a save does not emit another start. Inspection runs suppress gameplay events.
-Development, playtest builds, localhost, loopback hosts, and URLs with a `playtest` parameter disable the tag.
-The tag loads without blocking startup.
+Loading a save does not send another start. Inspection runs send no gameplay events.
+Development builds, playtest builds, localhost, loopback hosts, and URLs with a `playtest` parameter send no events.
 
-Source: [GoogleAnalytics](../src/browser/GoogleAnalytics.ts), with coverage in [GoogleAnalytics tests](../tests/GoogleAnalytics.test.ts) and [SurvivalAnalytics tests](../tests/SurvivalAnalytics.test.ts).
+| Row column | Value |
+| --- | --- |
+| `index1`, `blob1` | Event name. |
+| `blob2` | Country code, or `XX` when unknown. |
+| `blob3` | Ending ID, or empty. |
+| `double1` | Day, or `0`. |
+
+Analytics Engine keeps rows for 3 months.
+
+To read the data, copy [.env.example](../.env.example) to `.env` and set the account ID and a token with "Account Analytics: Read".
+Then run `bun run analytics:report` with `7`, `30`, or `90` days. The default is 7.
+The report prints visits by country, game starts, and game ends by ending with the median day.
+
+Source: [eventContract](../src/analytics/eventContract.ts), [Analytics](../src/browser/Analytics.ts), [event function](../functions/api/event.ts), and [analytics-report](../scripts/analytics-report.mjs).
+Coverage: [AnalyticsEventContract tests](../tests/AnalyticsEventContract.test.ts), [Analytics tests](../tests/Analytics.test.ts), and [SurvivalAnalytics tests](../tests/SurvivalAnalytics.test.ts).

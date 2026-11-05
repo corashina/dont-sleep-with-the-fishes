@@ -4,6 +4,8 @@ You have one minute to escape the sinking Dorothy. Search her rooms, carry suppl
 
 At sea, spend your energy on fishing, diving, and repairs. Keep yourself fed, protect your equipment, and face whatever comes alongside after dark.
 
+**Play:** [https://dontsleepwiththefishes.pages.dev/](https://dontsleepwiththefishes.pages.dev/)
+
 ## About the game
 
 A single-player survival game for desktop browsers, with an illustrated sea world, dark comedy, and strange encounters.
