@@ -29,7 +29,7 @@ The game serves from the site root.
 | `bun run test` | Run Vitest once. |
 | `bun run test:watch` | Run Vitest in watch mode. |
 | `bun run lint` | Run ESLint with zero allowed warnings. |
-| `bun run typecheck` | Check game and Worker TypeScript without emitting files. |
+| `bun run typecheck` | Check game and Pages Function TypeScript without emitting files. |
 | `bun run build` | Run lint, TypeScript checks, and the production build into `dist/`. |
 | `bun run preview` | Serve an existing production build. |
 | `bun run models:check` | Check item, ship, fishing, event, menu, and texture assets. |
@@ -103,40 +103,34 @@ bun run build
 bun run preview
 ```
 
-A Cloudflare Worker hosts the game. [wrangler.jsonc](../wrangler.jsonc) configures it.
-The Worker serves `dist/` as static assets and handles `POST /api/event`.
-Cloudflare serves all other paths without running the Worker.
+Cloudflare Pages hosts the game at <https://dontsleepwiththefishes.pages.dev/>. [wrangler.jsonc](../wrangler.jsonc) configures the project.
+Pages serves `dist/` as static files.
+The Pages Function in [functions/api/event.ts](../functions/api/event.ts) handles `POST /api/event`.
 
-Run the Worker locally after a build:
+Run the site locally after a build:
 
 ```sh
 bun run build
-bunx wrangler dev
+bunx wrangler pages dev
 ```
 
-Cloudflare Workers Builds deploys on each push to `master`.
-It also builds pull request branches and posts a preview URL as a GitHub check.
+Pages builds and deploys each push to `master`.
+It also deploys other branches as previews and posts the preview URL on the pull request.
 
 | Setting | Value |
 | --- | --- |
+| Project | `dontsleepwiththefishes` |
 | Production branch | `master` |
 | Build command | `bun install --frozen-lockfile && bun run models:check && bun run build` |
-| Deploy command | `bunx wrangler deploy` |
-| Non-production branch deploy command | `bunx wrangler versions upload` |
+| Output directory | `dist` |
 
-To connect the repository one time:
-
-1. In the Cloudflare dashboard, open Workers & Pages and import this repository.
-2. Approve the Cloudflare GitHub app for the repository.
-3. Enter the settings in the table.
-
-Run `bunx wrangler types worker/worker-configuration.d.ts` after you change `wrangler.jsonc`.
+Run `bunx wrangler types functions/worker-configuration.d.ts` after you change `wrangler.jsonc`.
 
 ## Analytics
 
-The game sends events to the Worker with `navigator.sendBeacon`.
-The Worker validates each event and writes one row to the `fishes_events` Workers Analytics Engine dataset.
-The Worker adds the country from Cloudflare request data. The game sends no country, cookie, or user ID.
+The game sends events to the Pages Function with `navigator.sendBeacon`.
+The function validates each event and writes one row to the `fishes_events` Workers Analytics Engine dataset.
+The function adds the country from Cloudflare request data. The game sends no country, cookie, or user ID.
 
 | Event | Trigger | Fields |
 | --- | --- | --- |
@@ -162,5 +156,5 @@ To read the data, copy [.env.example](../.env.example) to `.env` and set the acc
 Then run `bun run analytics:report` with `7`, `30`, or `90` days. The default is 7.
 The report prints visits by country, game starts, and game ends by ending with the median day.
 
-Source: [eventContract](../src/analytics/eventContract.ts), [Analytics](../src/browser/Analytics.ts), [Worker](../worker/index.ts), and [analytics-report](../scripts/analytics-report.mjs).
+Source: [eventContract](../src/analytics/eventContract.ts), [Analytics](../src/browser/Analytics.ts), [event function](../functions/api/event.ts), and [analytics-report](../scripts/analytics-report.mjs).
 Coverage: [AnalyticsEventContract tests](../tests/AnalyticsEventContract.test.ts), [Analytics tests](../tests/Analytics.test.ts), and [SurvivalAnalytics tests](../tests/SurvivalAnalytics.test.ts).

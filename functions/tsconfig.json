@@ -12,5 +12,5 @@
     "noUnusedParameters": true,
     "types": []
   },
-  "include": ["index.ts", "worker-configuration.d.ts"]
+  "include": ["api", "worker-configuration.d.ts"]
 }
