@@ -14,7 +14,7 @@ vi.mock('../src/app/launchGame', () => {
   mocks.imported();
   return { launchGame: mocks.launchGame };
 });
-vi.mock('../src/browser/GoogleAnalytics', () => ({ initializeAnalytics: mocks.analytics }));
+vi.mock('../src/browser/Analytics', () => ({ trackVisit: mocks.analytics }));
 
 beforeEach(() => {
   vi.resetModules();

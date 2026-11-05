@@ -3,7 +3,7 @@ import { createTestGame,flushPhases } from './helpers/game';
 // Importance: 10/10 (scaled from 5/5). Protects full game lifecycle integration.
 
 import { describe,expect,it,vi } from 'vitest';
-import * as analytics from '../src/browser/GoogleAnalytics';
+import * as analytics from '../src/browser/Analytics';
 import {
   Box3,
   Group,
@@ -1572,7 +1572,7 @@ describe('ScavengePhase lifecycle integration', () => {
 
   // Importance: 95/100. A fatal deadline must emit one ending across repeated updates.
   it('sinks at the deadline outside the lifeboat bounds and keeps the cinematic active', () => {
-    const trackEnding = vi.spyOn(analytics, 'trackGameEnding');
+    const trackEnding = vi.spyOn(analytics, 'trackGameEnd');
     const session = new ScavengeSession();
     session.start();
     const { phase, updateWorld } = createUpdateHarness(session);

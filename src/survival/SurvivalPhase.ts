@@ -1,5 +1,5 @@
 import { COMPLETE_HEART } from './heartOfTheSea';
-import { trackGameEnding } from '../browser/GoogleAnalytics';
+import { trackGameEnd } from '../browser/Analytics';
 import type { SirenAudioCue } from './eventPresentationCue';
 import type { EventReactionPreviewRequest } from './EventReactionPreview';
 import { playEventReactionPreview, type EventReactionPreviewPorts } from './EventReactionPreviewPlayer';
@@ -265,7 +265,7 @@ export class SurvivalPhase implements GamePhase {
   private itemAnimationLabCameraControls: ItemAnimationLabCameraControls | null = null;
   private rearCameraView = false;
   private readonly endingPreviewCue: 'death' | 'sinking' | null;
-  private readonly recordEnding: typeof trackGameEnding;
+  private readonly recordEnding: typeof trackGameEnd;
 
   constructor(
     context: SurvivalPhaseContext,
@@ -284,7 +284,7 @@ export class SurvivalPhase implements GamePhase {
   ) {
     this.recordEnding = start.kind === 'restored'
       || (start.kind === 'fresh' && start.initialEventId === undefined)
-      ? trackGameEnding : () => undefined;
+      ? trackGameEnd : () => undefined;
     this.endingPreviewCue = start.kind === 'ending-preview'
       && (start.endingId === 'death' || start.endingId === 'sinking')
       ? start.endingId

@@ -5,13 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "node ./node_modules/vite/bin/vite.js",
-    "build": "bun run lint && tsc --noEmit && vite build",
+    "build": "bun run lint && bun run typecheck && vite build",
     "lint": "eslint . --max-warnings 0",
     "preview": "vite preview",
+    "deploy": "wrangler deploy",
+    "analytics:report": "node --env-file-if-exists=.env scripts/analytics-report.mjs",
     "playtest:serve": "vite-node scripts/serve-browser-playtest.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p worker",
     "balance:survival": "vite-node scripts/simulate-survival-balance.ts",
     "simulate:scenarios": "vite-node scripts/simulate-scenarios.ts",
     "simulate:scenarios:slice": "vite-node scripts/simulate-scenarios-slice.ts",
@@ -52,6 +54,7 @@
     "typescript": "^5.9.0",
     "typescript-eslint": "^8.68.0",
     "vite": "^7.1.0",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "wrangler": "^4.158.0"
   }
 }
